@@ -183,7 +183,7 @@
   (consult-customize
    consult-theme :preview-key '(:debounce 0.2 any)
    consult-ripgrep consult-git-grep consult-grep consult-man
-   consult-bookmark consult-recent-file consult-xref
+   consult-bookmark consult-recent-file
    consult--source-bookmark consult--source-file-register
    consult--source-recent-file consult--source-project-recent-file
    ;; :preview-key "M-."
@@ -211,6 +211,11 @@
 (add-to-list 'consult-preview-allowed-hooks 'global-org-modern-mode)
 (add-to-list 'consult-preview-allowed-hooks 'global-hl-todo-mode)
 
+
+
+(use-package marginalia
+  :ensure t
+  :config (marginalia-mode 1))
 
 
 ;;; Icons
@@ -233,7 +238,6 @@
               (nerd-icons-install-fonts t)))
   (use-package nerd-icons-completion
     :ensure t
-    :after marginalia
     :config
     (nerd-icons-completion-mode)
     (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
@@ -339,9 +343,6 @@
   :if window-system
   :ensure t
   :config (vertico-posframe-mode 1))
-(use-package marginalia
-  :ensure t
-  :config (marginalia-mode 1))
 
 (use-package which-key
   :ensure t
