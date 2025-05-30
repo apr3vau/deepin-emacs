@@ -228,7 +228,10 @@
     (setq company-format-margin-function #'my-company-kind-icon-margin)))
 
 (when (display-graphic-p)
-  (use-package nerd-icons :ensure t)
+  (use-package nerd-icons
+    :ensure t
+    :config (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
+              (nerd-icons-install-fonts t)))
   (use-package nerd-icons-completion
     :ensure t
     :after marginalia
@@ -489,10 +492,8 @@
   :config
   (setq sly-lisp-implementations
         '((sbcl ("sbcl"))
-          (ecl ("/usr/local/bin/ecl"))
-          (lispworks ("~/Software/lw" "-init" "~/Software/.lispworks"))
-          (lw-single ("~/Software/lw-single" "-init" "~/Software/.lispworks")))
-        inferior-lisp-program "~/Software/lw-single -init ~/Software/.lispworks"))
+          (ecl ("ecl")))
+        inferior-lisp-program "sbcl"))
 (use-package sly-asdf
   :ensure t
   :config (add-to-list 'sly-contribs 'sly-asdf 'append))
@@ -553,9 +554,6 @@
   (set-frame-parameter nil 'alpha-background 92)
   (add-to-list 'default-frame-alist '(alpha-background . 92))
   )
-
-(unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
-  (nerd-icons-install-fonts t))
 
 (provide 'init)
 
