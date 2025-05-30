@@ -1,5 +1,5 @@
 /* Pre-process emacs.exe for profiling by MSVC.
-   Copyright (C) 1999, 2001-2017 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2001-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -20,6 +20,9 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
    Andrew Innes <andrewi@harlequin.co.uk>       16-Jan-1999
      based on code from addsection.c
 */
+
+#define DEFER_MS_W32_H
+#include <config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -801,14 +804,14 @@ main (int argc, char **argv)
     nt_header = (PIMAGE_NT_HEADERS) ((char *) dos_header + dos_header->e_lfanew);
 
     nt_header->OptionalHeader.CheckSum = 0;
-//    nt_header->FileHeader.TimeDateStamp = time (NULL);
-//    dos_header->e_cp = size / 512;
-//    nt_header->OptionalHeader.SizeOfImage = size;
+   /* nt_header->FileHeader.TimeDateStamp = time (NULL); */
+   /* dos_header->e_cp = size / 512; */
+   /* nt_header->OptionalHeader.SizeOfImage = size; */
 
     pfnCheckSumMappedFile = (void *) GetProcAddress (hImagehelp, "CheckSumMappedFile");
     if (pfnCheckSumMappedFile)
       {
-//	nt_header->FileHeader.TimeDateStamp = time (NULL);
+	/* nt_header->FileHeader.TimeDateStamp = time (NULL); */
 	pfnCheckSumMappedFile (out_file.file_base,
 			       out_file.size,
 			       &headersum,

@@ -1,6 +1,6 @@
-;;; mm-bodies.el --- Functions for decoding MIME things
+;;; mm-bodies.el --- Functions for decoding MIME things  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1998-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -35,7 +35,7 @@
 ;; BS, vertical TAB, form feed, and ^_
 ;;
 ;; Note that CR is *not* included, as that would allow a non-paired CR
-;; in the body contrary to RFC 2822:
+;; in the body contrary to RFC 822 (or later):
 ;;
 ;;   - CR and LF MUST only occur together as CRLF; they MUST NOT
 ;;     appear independently in the body.
@@ -189,22 +189,8 @@ If TYPE is `text/plain' CRLF->LF translation may occur."
 	    (quoted-printable-decode-region (point-min) (point-max))
 	    t)
 	   ((eq encoding 'base64)
-	    (base64-decode-region
-	     (point-min)
-	     ;; Some mailers insert whitespace
-	     ;; junk at the end which
-	     ;; base64-decode-region dislikes.
-	     ;; Also remove possible junk which could
-	     ;; have been added by mailing list software.
-	     (save-excursion
-	       (goto-char (point-min))
-	       (while (re-search-forward "^[\t ]*\r?\n" nil t)
-		 (delete-region (match-beginning 0) (match-end 0)))
-	       (goto-char (point-max))
-	       (when (re-search-backward "^[\t ]*[A-Za-z0-9+/]+=*[\t ]*$"
-					 nil t)
-		 (forward-line))
-	       (point))))
+	    ;; MIME says to ignore any non-base64 junk
+	    (base64-decode-region (point-min) (point-max) nil t))
 	   ((memq encoding '(nil 7bit 8bit binary))
 	    ;; Do nothing.
 	    t)
@@ -236,6 +222,20 @@ If TYPE is `text/plain' CRLF->LF translation may occur."
       (while (search-forward "\r\n" nil t)
 	(replace-match "\n" t t)))))
 
+(defun mm-base64-line-p ()
+  "Say whether the current line is base64."
+  ;; This is coded in this way to avoid using regexps that may
+  ;; overflow -- a base64 line may be megabytes long.
+  (save-excursion
+    (beginning-of-line)
+    (skip-chars-forward " \t")
+    (and (looking-at "[A-Za-z0-9+/]\\{3\\}")
+         (progn
+           (skip-chars-forward "A-Za-z0-9+/")
+           (skip-chars-forward "=")
+           (skip-chars-forward " \t")
+           (eolp)))))
+
 (defun mm-decode-body (charset &optional encoding type)
   "Decode the current article that has been encoded with ENCODING to CHARSET.
 ENCODING is a MIME content transfer encoding.
@@ -262,7 +262,7 @@ decoding.  If it is nil, default to `mail-parse-charset'."
 	    (setq coding-system
 		  (mm-charset-to-coding-system mail-parse-charset)))
 	(when (and charset coding-system
-		   (mm-multibyte-p)
+		   enable-multibyte-characters
 		   (or (not (eq coding-system 'ascii))
 		       (setq coding-system mail-parse-charset)))
 	  (decode-coding-region (point-min) (point-max) coding-system))
@@ -289,7 +289,7 @@ decoding.  If it is nil, default to `mail-parse-charset'."
 	 (setq coding-system
 	       (mm-charset-to-coding-system mail-parse-charset)))
      (when (and charset coding-system
-		(mm-multibyte-p)
+		enable-multibyte-characters
 		(or (not (eq coding-system 'ascii))
 		    (setq coding-system mail-parse-charset)))
        (decode-coding-string string coding-system)))

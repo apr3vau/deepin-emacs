@@ -1,6 +1,6 @@
 ;;; info-xref.el --- check external references in an Info document -*- lexical-binding: t -*-
 
-;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author: Kevin Ryde <user42@zip.com.au>
 ;; Keywords: docs
@@ -71,7 +71,7 @@ you should set this variable to nil."
 (defun info-xref-lock-file-p (filename)
   "Return non-nil if FILENAME is an Emacs lock file.
 A lock file is \".#foo.txt\" etc per `lock-buffer'."
-  (string-match "\\(\\`\\|\\/\\)\\.#" filename))
+  (string-match "\\(\\`\\|/\\)\\.#" filename))
 
 (defun info-xref-subfile-p (filename)
   "Return t if FILENAME is an info subfile.
@@ -79,9 +79,11 @@ If removing the last \"-<NUM>\" from the filename gives a file
 which exists, then consider FILENAME a subfile.  This is an
 imperfect test, probably ought to open up the purported top file
 and see what subfiles it says."
-  (and (string-match "\\`\\(\\([^-]*-\\)*[^-]*\\)-[0-9]+\\(.*\\)\\'" filename)
-       (file-exists-p (concat (match-string 1 filename)
-                              (match-string 3 filename)))))
+  (let ((nondir (file-name-nondirectory filename)))
+    (and (string-match "\\`\\(\\([^-]*-\\)*[^-]*\\)-[0-9]+\\(.*\\)\\'" nondir)
+         (file-exists-p (concat (file-name-directory filename)
+                                (match-string 1 nondir)
+                                (match-string 3 nondir))))))
 
 (defmacro info-xref-with-file (filename &rest body)
   ;; checkdoc-params: (filename body)
@@ -95,7 +97,7 @@ about local variables or possible weirdness in a major mode.
 `lm-with-file' does a similar thing, but it sets
 `emacs-lisp-mode' which is not wanted here."
 
-  (declare (debug t) (indent 1))
+  (declare (debug (form def-body)) (indent 1))
   `(let* ((info-xref-with-file--filename ,filename)
           (info-xref-with-file--body     (lambda () ,@body))
           (info-xref-with-file--existing
@@ -242,18 +244,18 @@ buffer's line and column of point."
                                        node t t))
 
   (if (not (string-match "\\`([^)]*)" node))
-      (info-xref-output-error "no `(file)' part at start of node: %s\n" node)
+      (info-xref-output-error "No `(file)' part at start of node: %s\n" node)
     (let ((file (match-string 0 node)))
 
       (if (string-equal "()" file)
-          (info-xref-output-error "empty filename part: %s" node)
+          (info-xref-output-error "Empty filename part: %s" node)
 
         ;; see if the file exists, if haven't looked before
         (unless (assoc file info-xref-xfile-alist)
           (let ((found (info-xref-goto-node-p file)))
             (push (cons file found) info-xref-xfile-alist)
             (unless found
-              (info-xref-output-error "not available to check: %s\n    (this reported once per file)" file))))
+              (info-xref-output-error "Not available to check: %s\n    (this reported once per file)" file))))
 
         ;; if the file exists, try the node
         (cond ((not (cdr (assoc file info-xref-xfile-alist)))
@@ -262,7 +264,7 @@ buffer's line and column of point."
                (cl-incf info-xref-good))
               (t
                (cl-incf info-xref-bad)
-               (info-xref-output-error "no such node: %s" node)))))))
+               (info-xref-output-error "No such node: %s" node)))))))
 
 
 ;;-----------------------------------------------------------------------------
@@ -547,7 +549,7 @@ the sources handy."
 
              ;; skip nodes with "%" as probably `format' strings such as in
              ;; info-look.el
-             (unless (string-match "%" node)
+             (unless (string-search "%" node)
 
                ;; "(emacs)" is the default manual for docstring hyperlinks,
                ;; per `help-make-xrefs'

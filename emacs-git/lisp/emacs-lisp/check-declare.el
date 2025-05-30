@@ -1,8 +1,9 @@
-;;; check-declare.el --- Check declare-function statements
+;;; check-declare.el --- Check declare-function statements  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: Glenn Morris <rgm@gnu.org>
+;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: lisp, tools, maint
 
 ;; This file is part of GNU Emacs.
@@ -33,13 +34,13 @@
 ;;; TODO:
 
 ;; 1. Warn about functions marked as obsolete, eg
-;; password-read-and-add in smime.el.
+;; password-read-and-add in password-cache.el.
 ;; 2. defmethod, defclass argument checking.
 ;; 3. defclass also defines -p and -child-p.
 
 ;;; Code:
 
-(defconst check-declare-warning-buffer "*Check Declarations Warnings*"
+(defvar check-declare-warning-buffer "*Check Declarations Warnings*"
   "Name of buffer used to display any `check-declare' warnings.")
 
 (defun check-declare-locate (file basefile)
@@ -84,6 +85,9 @@ don't know how to recognize (e.g. some macros)."
   (let (alist)
     (with-temp-buffer
       (insert-file-contents file)
+      ;; Ensure shorthands available, as we will be `read'ing Elisp
+      ;; (bug#67523)
+      (let (enable-local-variables) (hack-local-variables))
       ;; FIXME we could theoretically be inside a string.
       (while (re-search-forward "^[ \t]*\\((declare-function\\)[ \t\n]" nil t)
         (let ((pos (match-beginning 1)))
@@ -118,7 +122,7 @@ don't know how to recognize (e.g. some macros)."
 (autoload 'byte-compile-arglist-signature "bytecomp")
 
 (defgroup check-declare nil
-  "Check declare-function statements."
+  "Check `declare-function' statements."
   :group 'tools)
 
 (defcustom check-declare-ext-errors nil
@@ -144,64 +148,70 @@ is a string giving details of the error."
     (if (file-regular-p fnfile)
         (with-temp-buffer
           (insert-file-contents fnfile)
+          (unless cflag
+            ;; If in Elisp, ensure syntax and shorthands available
+            ;; (bug#67523)
+            (set-syntax-table emacs-lisp-mode-syntax-table)
+            (let (enable-local-variables) (hack-local-variables)))
           ;; defsubst's don't _have_ to be known at compile time.
-          (setq re (format (if cflag
-                               "^[ \t]*\\(DEFUN\\)[ \t]*([ \t]*\"%s\""
-                             "^[ \t]*(\\(fset[ \t]+'\\|\
-cl-def\\(?:generic\\|method\\)\\|\
+          (setq re (if cflag
+                       (format "^[ \t]*\\(DEFUN\\)[ \t]*([ \t]*\"%s\""
+                               (regexp-opt (mapcar 'cadr fnlist) t))
+                     "^[ \t]*(\\(fset[ \t]+'\\|\
+cl-def\\(?:generic\\|method\\|un\\)\\|\
 def\\(?:un\\|subst\\|foo\\|method\\|class\\|\
 ine-\\(?:derived\\|generic\\|\\(?:global\\(?:ized\\)?-\\)?minor\\)-mode\\|\
 \\(?:ine-obsolete-function-\\)?alias[ \t]+'\\|\
 ine-overloadable-function\\)\\)\
-[ \t]*%s\\([ \t;]+\\|$\\)")
-                           (regexp-opt (mapcar 'cadr fnlist) t)))
+[ \t]*\\(\\(?:\\sw\\|\\s_\\)+\\)\\([ \t;]+\\|$\\)"))
           (while (re-search-forward re nil t)
             (skip-chars-forward " \t\n")
-            (setq fn (match-string 2)
-                  type (match-string 1)
-                  ;; (min . max) for a fixed number of arguments, or
-                  ;; arglists with optional elements.
-                  ;; (min) for arglists with &rest.
-                  ;; sig = 'err means we could not find an arglist.
-                  sig (cond (cflag
-                             (or
-                              (when (search-forward "," nil t 3)
-                                (skip-chars-forward " \t\n")
-                                ;; Assuming minargs and maxargs on same line.
-                                (when (looking-at "\\([0-9]+\\)[ \t]*,[ \t]*\
+            (setq fn (symbol-name (car (read-from-string (match-string 2)))))
+            (when (member fn (mapcar 'cadr fnlist))
+              (setq type (match-string 1)
+                    ;; (min . max) for a fixed number of arguments, or
+                    ;; arglists with optional elements.
+                    ;; (min) for arglists with &rest.
+                    ;; sig = 'err means we could not find an arglist.
+                    sig (cond (cflag
+                               (or
+                                (when (search-forward "," nil t 3)
+                                  (skip-chars-forward " \t\n")
+                                  ;; Assuming minargs and maxargs on same line.
+                                  (when (looking-at "\\([0-9]+\\)[ \t]*,[ \t]*\
 \\([0-9]+\\|MANY\\|UNEVALLED\\)")
-                                  (setq minargs (string-to-number
-                                                 (match-string 1))
-                                        maxargs (match-string 2))
-                                  (cons minargs (unless (string-match "[^0-9]"
-                                                                      maxargs)
-                                                 (string-to-number
-                                                  maxargs)))))
-                              'err))
-                            ((string-match
-                              "\\`define-\\(derived\\|generic\\)-mode\\'"
-                              type)
-                             '(0 . 0))
-                            ((string-match
-                              "\\`define\\(-global\\(ized\\)?\\)?-minor-mode\\'"
-                              type)
-                             '(0 . 1))
-                            ;; Prompt to update.
-                            ((string-match
-                              "\\`define-obsolete-function-alias\\>"
-                              type)
-                             'obsolete)
-                            ;; Can't easily check arguments in these cases.
-                            ((string-match "\\`\\(def\\(alias\\|class\\)\\|\
+                                    (setq minargs (string-to-number
+                                                   (match-string 1))
+                                          maxargs (match-string 2))
+                                    (cons minargs (unless (string-match "[^0-9]"
+                                                                        maxargs)
+                                                    (string-to-number
+                                                     maxargs)))))
+                                'err))
+                              ((string-match
+                                "\\`define-\\(derived\\|generic\\)-mode\\'"
+                                type)
+                               '(0 . 0))
+                              ((string-match
+                                "\\`define\\(-global\\(ized\\)?\\)?-minor-mode\\'"
+                                type)
+                               '(0 . 1))
+                              ;; Prompt to update.
+                              ((string-match
+                                "\\`define-obsolete-function-alias\\>"
+                                type)
+                               'obsolete)
+                              ;; Can't easily check arguments in these cases.
+                              ((string-match "\\`\\(def\\(alias\\|class\\)\\|\
 fset\\|\\(?:cl-\\)?defmethod\\)\\>" type)
-                             t)
-                            ((looking-at "\\((\\|nil\\)")
-                             (byte-compile-arglist-signature
-                              (read (current-buffer))))
-                            (t
-                             'err))
-                  ;; alist of functions and arglist signatures.
-                  siglist (cons (cons fn sig) siglist)))))
+                               t)
+                              ((looking-at "\\((\\|nil\\)")
+                               (byte-compile-arglist-signature
+                                (read (current-buffer))))
+                              (t
+                               'err))
+                    ;; alist of functions and arglist signatures.
+                    siglist (cons (cons fn sig) siglist))))))
     (dolist (e fnlist)
       (setq arglist (nth 2 e)
             type
@@ -229,8 +239,8 @@ fset\\|\\(?:cl-\\)?defmethod\\)\\>" type)
     errlist))
 
 (defun check-declare-sort (alist)
-  "Sort a list with elements FILE (FNFILE ...).
-Returned list has elements FNFILE (FILE ...)."
+  "Sort list ALIST with elements FILE (FNFILE ...).
+Return list with elements FNFILE (FILE ...)."
   (let (file fnfile rest sort a)
     (dolist (e alist)
       (setq file (car e))
@@ -248,7 +258,7 @@ TYPE is a string giving the nature of the error.
 Optional LINE is the claim's line number; otherwise, search for the claim.
 Display warning in `check-declare-warning-buffer'."
   (let ((warning-prefix-function
-         (lambda (level entry)
+         (lambda (_level entry)
 	   (insert (format "%s:%d:" (file-relative-name file) (or line 0)))
            entry))
         (warning-fill-prefix "    "))
@@ -318,13 +328,15 @@ Returns non-nil if any false statements are found."
   (setq root (directory-file-name (file-relative-name root)))
   (or (file-directory-p root)
       (error "Directory `%s' not found" root))
-  (let ((files (process-lines find-program root
-                              "-name" "*.el"
-                              "-exec" grep-program
-                              "-l" "^[ \t]*(declare-function" "{}" "+")))
-    (when files
-      (apply #'check-declare-files files))))
+  (when-let* ((files (directory-files-recursively root "\\.el\\'"))
+              (files (mapcan (lambda (file)
+                               ;; Filter out lock files.
+                               (and (not (string-prefix-p
+                                          ".#" (file-name-nondirectory file)))
+                                    (list file)))
+                               files)))
+    (apply #'check-declare-files files)))
 
 (provide 'check-declare)
 
-;;; check-declare.el ends here.
+;;; check-declare.el ends here

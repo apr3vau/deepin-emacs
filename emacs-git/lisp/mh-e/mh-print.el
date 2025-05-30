@@ -1,6 +1,6 @@
-;;; mh-print.el --- MH-E printing support
+;;; mh-print.el --- MH-E printing support  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author: Jeffrey C Honig <jch@honig.net>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -23,8 +23,6 @@
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
-;;; Change Log:
 
 ;;; Code:
 
@@ -81,8 +79,7 @@ commands \\[mh-ps-print-toggle-color] and
 This is the function that actually does the work.
 If FILE is nil, then the messages are spooled to the printer."
   (mh-iterate-on-range msg range
-    (unwind-protect
-        (mh-ps-spool-msg msg))
+    (mh-ps-spool-msg msg)
     (mh-notate msg mh-note-printed mh-cmd-note))
   (ps-despool file))
 
@@ -207,8 +204,9 @@ Consider using \\[mh-ps-print-msg] instead."
     ;; Print scan listing if we have more than one message.
     (if (> (length msgs) 1)
         (let* ((msgs-string
-                (mapconcat 'identity (mh-list-to-string
-                                      (mh-coalesce-msg-list msgs)) " "))
+                (mapconcat #'identity (mh-list-to-string
+                                       (mh-coalesce-msg-list msgs))
+                           " "))
                (lpr-command
                 (format mh-lpr-command-format
                         (cond ((listp range)
@@ -243,7 +241,6 @@ Consider using \\[mh-ps-print-msg] instead."
 (provide 'mh-print)
 
 ;; Local Variables:
-;; indent-tabs-mode: nil
 ;; sentence-end-double-space: nil
 ;; End:
 

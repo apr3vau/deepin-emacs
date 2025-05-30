@@ -1,10 +1,9 @@
 ;;; which-func.el --- print current function in mode line  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1994, 1997-1998, 2001-2017 Free Software Foundation,
-;; Inc.
+;; Copyright (C) 1994-2025 Free Software Foundation, Inc.
 
-;; Author:   Alex Rezinsky <alexr@msil.sps.mot.com>
-;;           (doesn't seem to be responsive any more)
+;; Author: Alex Rezinsky <alexr@msil.sps.mot.com>
+;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: mode-line, imenu, tools
 
 ;; This file is part of GNU Emacs.
@@ -25,18 +24,8 @@
 ;;; Commentary:
 
 ;; This package prints name of function where your current point is
-;; located in mode line. It assumes that you work with imenu package
-;; and imenu--index-alist is up to date.
-
-;; KNOWN BUGS
-;; ----------
-;; Really this package shows not "function where the current point is
-;; located now", but "nearest function which defined above the current
-;; point". So if your current point is located after end of function
-;; FOO but before begin of function BAR, FOO will be displayed in mode
-;; line.
-;; - if two windows display the same buffer, both windows
-;;   show the same `which-func' information.
+;; located in mode line.  It assumes that you work with the imenu
+;; package and `imenu--index-alist' is up to date.
 
 ;; TODO LIST
 ;; ---------
@@ -44,15 +33,15 @@
 ;; function determination mechanism should be used to determine the end
 ;; of a function as well as the beginning of a function.
 ;;     2. This package should be realized with the help of overlay
-;; properties instead of imenu--index-alist variable.
+;; properties instead of the `imenu--index-alist' variable.
 
 ;;; History:
 
 ;; THANKS TO
 ;; ---------
 ;; Per Abrahamsen   <abraham@iesd.auc.dk>
-;;     Some ideas (inserting  in mode-line,  using of post-command  hook
-;;     and toggling this  mode) have  been   borrowed from  his  package
+;;     Some ideas (inserting in mode-line, using of post-command hook
+;;     and toggling this mode) have been borrowed from his package
 ;;     column.el
 ;; Peter Eisenhauer <pipe@fzi.de>
 ;;     Bug fixing in case nested indexes.
@@ -65,7 +54,7 @@
 ;; Variables for customization
 ;; ---------------------------
 ;;
-(defvar which-func-unknown "???"
+(defvar which-func-unknown "n/a"
   "String to display in the mode line when current function is unknown.")
 
 (defgroup which-func nil
@@ -89,13 +78,46 @@ then Which Function mode is enabled in any major mode that supports it."
 This means that Which Function mode won't really do anything
 until you use Imenu, in these modes.  Note that files
 larger than `which-func-maxout' behave in this way too;
-Which Function mode doesn't do anything until you use Imenu."
+Which Function mode doesn't do anything until you use Imenu.
+
+If Which Function delays the initial display of buffers too much,
+e.g., when it is used with Eglot, and the language server takes a
+long time to send the information, you can use this option to delay
+activation of Which Function until Imenu is used for the first time."
   :type '(repeat (symbol :tag "Major mode")))
+
+(defcustom which-func-display 'mode
+  "Where to display the function name.
+
+If `mode', display in the mode line.  If `header', display in the
+header line.  If `mode-and-header', display in both."
+  :type '(choice (const :tag "Display in mode line" mode)
+                 (const :tag "Display in header line" header)
+                 (const :tag "Display in both header and mode line"
+                        mode-and-header))
+  :version "30.1")
 
 (defcustom which-func-maxout 500000
   "Don't automatically compute the Imenu menu if buffer is this big or bigger.
-Zero means compute the Imenu menu regardless of size."
+Zero means compute the Imenu menu regardless of size.
+
+If Which Function delays the initial display of buffers too much,
+e.g., when it is used with Eglot, and the language server takes a
+long time to send the information, you can use this option to delay
+activation of Which Function until Imenu is used for the first time."
   :type 'integer)
+
+(defcustom which-func-update-delay
+  ;; Backwards-compatibility: if users had changed this before
+  ;; `idle-update-delay' was declared obsolete, let's respect that.
+  (with-suppressed-warnings ((obsolete idle-update-delay))
+    idle-update-delay) ; 0.5
+  "Idle time delay before `which-function-mode` updates its display.
+When point moves, wait this many seconds after Emacs becomes idle before
+doing an update."
+  :type 'number
+  :group 'display
+  :version "30.1")
 
 (defvar which-func-keymap
   (let ((map (make-sparse-keymap)))
@@ -142,12 +164,14 @@ Zero means compute the Imenu menu regardless of size."
 		 local-map ,which-func-keymap
 		 face which-func
 		 mouse-face mode-line-highlight
-		 help-echo "mouse-1: go to beginning\n\
-mouse-2: toggle rest visibility\n\
-mouse-3: go to end")
+                 help-echo ,(concat
+                             "Current function\n"
+                             "mouse-1: go to beginning\n"
+                             "mouse-2: toggle rest visibility\n"
+                             "mouse-3: go to end"))
     "]")
   "Format for displaying the function in the mode line."
-  :version "24.2"                  ; added mouse-face; 24point2 is correct
+  :version "28.1"
   :type 'sexp)
 ;;;###autoload (put 'which-func-format 'risky-local-variable t)
 
@@ -176,47 +200,74 @@ and you want to simplify them for the mode line
 (defvar which-func-table (make-hash-table :test 'eq :weakness 'key))
 
 (defconst which-func-current
-  '(:eval (replace-regexp-in-string
+  '(:eval (string-replace
 	   "%" "%%"
 	   (or (gethash (selected-window) which-func-table)
                which-func-unknown))))
 ;;;###autoload (put 'which-func-current 'risky-local-variable t)
 
 (defvar-local which-func-mode nil
-  "Non-nil means display current function name in mode line.
-This makes a difference only if `which-function-mode' is non-nil.")
+  "Non-nil means display current function name in mode or header line.
+This makes a difference only if variable `which-function-mode' is
+non-nil.")
 
-(add-hook 'find-file-hook 'which-func-ff-hook t)
+(defvar-local which-func--use-header-line nil
+  "If non-nil, display the function name in the header line.")
+
+(defvar-local which-func--use-mode-line nil
+  "If non-nil, display the function name in the mode line.")
+
+(add-hook 'after-change-major-mode-hook #'which-func-ff-hook t)
 
 (defun which-func-try-to-enable ()
-  (unless (or (not which-function-mode)
-              (local-variable-p 'which-func-mode))
-    (setq which-func-mode (or (eq which-func-modes t)
-                              (member major-mode which-func-modes)))))
+  (when which-function-mode
+    (unless (local-variable-p 'which-func-mode)
+      (setq which-func-mode (or (eq which-func-modes t)
+                                (derived-mode-p which-func-modes)))
+      (setq which-func--use-mode-line
+            (member which-func-display '(mode mode-and-header)))
+      (setq which-func--use-header-line
+            (member which-func-display '(header mode-and-header))))
+    ;; We might need to re-add which-func-format to the header line,
+    ;; if which-function-mode was toggled off and on.
+    (when (and which-func-mode which-func--use-header-line
+               (listp header-line-format))
+      (add-to-list 'header-line-format '("" which-func-format " ")))))
+
+(defun which-func--header-line-remove ()
+  (when (and which-func-mode which-func--use-header-line
+             (listp header-line-format))
+    (setq header-line-format
+          (delete '("" which-func-format " ") header-line-format))))
+
+(defun which-func--disable ()
+  (which-func--header-line-remove)
+  (setq which-func-mode nil))
 
 (defun which-func-ff-hook ()
-  "File find hook for Which Function mode.
+  "`after-change-major-mode-hook' for Which Function mode.
 It creates the Imenu index for the buffer, if necessary."
   (which-func-try-to-enable)
 
   (condition-case err
       (if (and which-func-mode
-	       (not (member major-mode which-func-non-auto-modes))
+               (not (derived-mode-p which-func-non-auto-modes))
 	       (or (null which-func-maxout)
 		   (< buffer-saved-size which-func-maxout)
 		   (= which-func-maxout 0)))
 	  (setq imenu--index-alist
                 (save-excursion (funcall imenu-create-index-function))))
     (imenu-unavailable
-     (setq which-func-mode nil))
+     (which-func--disable))
     (error
      (message "which-func-ff-hook error: %S" err)
-     (setq which-func-mode nil))))
+     (which-func--disable))))
 
 (defun which-func-update ()
-  ;; "Update the Which-Function mode display for all windows."
+  "Update the Which-Function mode display in the current window."
   ;; (walk-windows 'which-func-update-1 nil 'visible))
-  (which-func-update-1 (selected-window)))
+  (let ((non-essential t))
+    (which-func-update-1 (selected-window))))
 
 (defun which-func-update-1 (window)
   "Update the Which Function mode display for window WINDOW."
@@ -228,11 +279,8 @@ It creates the Imenu index for the buffer, if necessary."
 	      (puthash window current which-func-table)
 	      (force-mode-line-update)))
 	(error
-	 (setq which-func-mode nil)
+	 (which-func--disable)
 	 (error "Error in which-func-update: %S" info))))))
-
-;;;###autoload
-(define-obsolete-function-alias 'which-func-mode 'which-function-mode "24.1")
 
 (defvar which-func-update-timer nil)
 
@@ -241,15 +289,13 @@ It creates the Imenu index for the buffer, if necessary."
   (add-to-list 'mode-line-misc-info
                '(which-function-mode    ;Only display if mode is enabled.
                  (which-func-mode       ;Only display if buffer supports it.
-                  ("" which-func-format " ")))))
+                  (which-func--use-mode-line
+                   ("" which-func-format " "))))))
 
 ;; This is the name people would normally expect.
 ;;;###autoload
 (define-minor-mode which-function-mode
   "Toggle mode line display of current function (Which Function mode).
-With a prefix argument ARG, enable Which Function mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-the mode if ARG is omitted or nil.
 
 Which Function mode is a global minor mode.  When enabled, the
 current function name is continuously displayed in the mode line,
@@ -259,11 +305,13 @@ in certain major modes."
     (cancel-timer which-func-update-timer))
   (setq which-func-update-timer nil)
   (when which-function-mode
-    ;;Turn it on.
+    ;; Turn it on.
     (setq which-func-update-timer
-          (run-with-idle-timer idle-update-delay t #'which-func-update))
-    (dolist (buf (buffer-list))
-      (with-current-buffer buf (which-func-try-to-enable)))))
+          (run-with-idle-timer which-func-update-delay t #'which-func-update)))
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (which-func--header-line-remove)
+      (which-func-ff-hook))))
 
 (defvar which-function-imenu-failed nil
   "Locally t in a buffer if `imenu--make-index-alist' found nothing there.")
@@ -275,61 +323,65 @@ It calls them sequentially, and if any returns non-nil,
 
 (defun which-function ()
   "Return current function name based on point.
-Uses `which-func-functions', `imenu--index-alist'
-or `add-log-current-defun'.
+Uses `which-func-functions', `add-log-current-defun'.
+or `imenu--index-alist'
 If no function name is found, return nil."
   (let ((name
 	 ;; Try the `which-func-functions' functions first.
 	 (run-hook-with-args-until-success 'which-func-functions)))
-
-    ;; If Imenu is loaded, try to make an index alist with it.
-    (when (and (null name)
-	       (boundp 'imenu--index-alist) (null imenu--index-alist)
-	       (null which-function-imenu-failed))
-      (ignore-errors (imenu--make-index-alist t))
-      (unless imenu--index-alist
-        (set (make-local-variable 'which-function-imenu-failed) t)))
-    ;; If we have an index alist, use it.
-    (when (and (null name)
-	       (boundp 'imenu--index-alist) imenu--index-alist)
-      (let ((alist imenu--index-alist)
-            (minoffset (point-max))
-            offset pair mark imstack namestack)
-        ;; Elements of alist are either ("name" . marker), or
-        ;; ("submenu" ("name" . marker) ... ). The list can be
-        ;; arbitrarily nested.
-        (while (or alist imstack)
-          (if (null alist)
-              (setq alist     (car imstack)
-                    namestack (cdr namestack)
-                    imstack   (cdr imstack))
-
-            (setq pair (car-safe alist)
-                  alist (cdr-safe alist))
-
-            (cond
-             ((atom pair))              ; Skip anything not a cons.
-
-             ((imenu--subalist-p pair)
-              (setq imstack   (cons alist imstack)
-                    namestack (cons (car pair) namestack)
-                    alist     (cdr pair)))
-
-             ((or (number-or-marker-p (setq mark (cdr pair)))
-		  (and (overlayp mark)
-		       (setq mark (overlay-start mark))))
-              (when (and (>= (setq offset (- (point) mark)) 0)
-                         (< offset minoffset)) ; Find the closest item.
-                (setq minoffset offset
-                      name (if (null which-func-imenu-joiner-function)
-                               (car pair)
-                             (funcall
-                              which-func-imenu-joiner-function
-                              (reverse (cons (car pair) namestack))))))))))))
-
     ;; Try using add-log support.
     (when (null name)
       (setq name (add-log-current-defun)))
+    ;; If Imenu is loaded, try to make an index alist with it.
+    ;; If `add-log-current-defun' ran and gave nil, accept that.
+    (when (and (null name)
+               (null add-log-current-defun-function))
+      (when (and (null name)
+	         (boundp 'imenu--index-alist)
+                 (or (null imenu--index-alist)
+                     ;; Update if outdated
+                     (/= (buffer-chars-modified-tick) imenu-menubar-modified-tick))
+	         (null which-function-imenu-failed))
+        (ignore-errors (imenu--make-index-alist t))
+        (unless imenu--index-alist
+          (setq-local which-function-imenu-failed t)))
+      ;; If we have an index alist, use it.
+      (when (and (null name)
+	         (boundp 'imenu--index-alist) imenu--index-alist)
+        (let ((alist imenu--index-alist)
+              (minoffset (point-max))
+              offset pair mark imstack namestack)
+          ;; Elements of alist are either ("name" . marker), or
+          ;; ("submenu" ("name" . marker) ... ). The list can be
+          ;; arbitrarily nested.
+          (while (or alist imstack)
+            (if (null alist)
+                (setq alist     (car imstack)
+                      namestack (cdr namestack)
+                      imstack   (cdr imstack))
+
+              (setq pair (car-safe alist)
+                    alist (cdr-safe alist))
+
+              (cond
+               ((atom pair))            ; Skip anything not a cons.
+
+               ((imenu--subalist-p pair)
+                (setq imstack   (cons alist imstack)
+                      namestack (cons (car pair) namestack)
+                      alist     (cdr pair)))
+
+               ((or (number-or-marker-p (setq mark (cdr pair)))
+		    (and (overlayp mark)
+		         (setq mark (overlay-start mark))))
+                (when (and (>= (setq offset (- (point) mark)) 0)
+                           (< offset minoffset)) ; Find the closest item.
+                  (setq minoffset offset
+                        name (if (null which-func-imenu-joiner-function)
+                                 (car pair)
+                               (funcall
+                                which-func-imenu-joiner-function
+                                (reverse (cons (car pair) namestack)))))))))))))
     ;; Filter the name if requested.
     (when name
       (if which-func-cleanup-function
@@ -355,7 +407,7 @@ This function is meant to be called from `ediff-select-hook'."
     (when ediff-window-C
       (which-func-update-1 ediff-window-C))))
 
-(add-hook 'ediff-select-hook 'which-func-update-ediff-windows)
+(add-hook 'ediff-select-hook #'which-func-update-ediff-windows)
 
 (provide 'which-func)
 

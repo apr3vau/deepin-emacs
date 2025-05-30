@@ -8,11 +8,13 @@ Maintainer: Ognyan Kulev <ogi@tower.3.bg>
 * TUTORIAL.cn:
 Author:     Sun Yijiang <sunyijiang@gmail.com>
 Maintainer: Xue Fuqiao <xfq.free@gmail.com>
+            Ruijie Yu <ruijie@netyu.xyz>
 
 * TUTORIAL.cs:
 Author:     Milan Zamazal <pdm@zamazal.org>
             Pavel Janík <Pavel@Janik.cz>
-Maintainer: Maintainer needed.
+
+Maintainer: Jakub Ječmínek <kuba@kubajecminek.cz>
 
 * TUTORIAL.de:
 Author:     Werner Lemberg <wl@gnu.org>
@@ -25,6 +27,14 @@ Maintainer: Dale Gulledge <dsplat@rochester.rr.com>
 * TUTORIAL.es:
 Author:     Rafael Sepúlveda <drs@gnulinux.org.mx>
 Maintainer: Rafael Sepúlveda <drs@gnulinux.org.mx>
+
+* TUTORIAL.el_GR:
+Author:     Protesilaos Stavrou <info@protesilaos.com>
+Maintainer: Protesilaos Stavrou <info@protesilaos.com>
+
+* TUTORIAL.fa:
+Author:     Mohsen BANAN <emacs@mohsen.1.banan.byname.net>
+Maintainer: Mohsen BANAN <emacs@mohsen.1.banan.byname.net>
 
 * TUTORIAL.fr:
 Author:     Éric Jacoboni <jaco@teaser.fr>
@@ -41,8 +51,8 @@ Maintainer: Alfredo Finelli <alfredofnl@tiscali.it>
 	    Italian GNU Translation Group <tp@lists.linux.it>
 
 * TUTORIAL.ja:
-Author:     Kenichi Handa <handa@m17n.org>
-Maintainer: Kenichi Handa <handa@m17n.org>
+Author:     Kenichi Handa <handa@gnu.org>
+Maintainer: Kenichi Handa <handa@gnu.org>
 
 * TUTORIAL.ko:
 Author:     Koaunghi Un <koaunghi@ling.cnu.ac.kr>
@@ -86,6 +96,10 @@ Maintainer: Mats Lidell <matsl@contactor.se>
 Author:     Virach Sornlertlamvanich <virach@nectec.or.th>
 Maintainer: Virach Sornlertlamvanich <virach@nectec.or.th>
 
+* TUTORIAL.uk:
+Author:     Denys Nykula <vegan@libre.net.ua>
+Maintainer: Denys Nykula <vegan@libre.net.ua>
+
 * TUTORIAL.zh:
 Author:     Chao-Hong Liu <chliu@gnu.org>
 Maintainer: Chao-Hong Liu <chliu@gnu.org>
@@ -94,4 +108,3 @@ Maintainer: Chao-Hong Liu <chliu@gnu.org>
 ;;; Local Variables:
 ;;; coding: utf-8
 ;;; End:
-

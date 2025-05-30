@@ -1,6 +1,6 @@
 ;;; kmacro-tests.el --- Tests for kmacro.el       -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; Author: Gemini Lasswell <gazally@runbox.com>
 
@@ -91,33 +91,30 @@ body in KEYS-AND-BODY."
        ,docstring ,@keys
        (kmacro-tests-with-kmacro-clean-slate ,@body))))
 
-(defvar kmacro-tests-keymap
-  (let ((map (make-sparse-keymap)))
-    (dotimes (i 26)
-      (define-key map (string (+ ?a i)) 'self-insert-command))
-    (dotimes (i 10)
-      (define-key map (string (+ ?0 i)) 'self-insert-command))
-    ;; Define a few key sequences of different lengths.
-    (dolist (item '(("\C-a"     . beginning-of-line)
-                    ("\C-b"     . backward-char)
-                    ("\C-e"     . end-of-line)
-                    ("\C-f"     . forward-char)
-                    ("\C-r"     . isearch-backward)
-                    ("\C-u"     . universal-argument)
-                    ("\C-w"     . kill-region)
-                    ("\C-SPC"   . set-mark-command)
-                    ("\M-w"     . kill-ring-save)
-                    ("\M-x"     . execute-extended-command)
-                    ("\C-cd"    . downcase-word)
-                    ("\C-cxu"   . upcase-word)
-                    ("\C-cxq"   . quoted-insert)
-                    ("\C-cxi"   . kmacro-insert-counter)
-                    ("\C-x\C-k" . kmacro-keymap)))
-      (define-key map (car item) (cdr item)))
-    map)
-  "Keymap to use for testing keyboard macros.
+(defvar-keymap kmacro-tests-keymap
+  :doc "Keymap to use for testing keyboard macros.
 This is used to obtain consistent results even if tests are run
-in an environment with rebound keys.")
+in an environment with rebound keys."
+  ;; Define a few key sequences of different lengths.
+  "C-a"     'beginning-of-line
+  "C-b"     'backward-char
+  "C-e"     'end-of-line
+  "C-f"     'forward-char
+  "C-r"     'isearch-backward
+  "C-u"     'universal-argument
+  "C-w"     'kill-region
+  "C-SPC"   'set-mark-command
+  "M-w"     'kill-ring-save
+  "M-x"     'execute-extended-command
+  "C-c d"   'downcase-word
+  "C-c x u" 'upcase-word
+  "C-c x q" 'quoted-insert
+  "C-c x i" 'kmacro-insert-counter
+  "C-x C-k" 'kmacro-keymap)
+(dotimes (i 26)
+  (keymap-set kmacro-tests-keymap (string (+ ?a i)) 'self-insert-command))
+(dotimes (i 10)
+  (keymap-set kmacro-tests-keymap (string (+ ?0 i)) 'self-insert-command))
 
 (defvar kmacro-tests-events nil
   "Input events used by the kmacro test in progress.")
@@ -278,6 +275,219 @@ cause the current test to fail."
     ;;  Verify that the recording state has changed.
     (should (equal defining-kbd-macro 'append))))
 
+
+(kmacro-tests-deftest kmacro-tests-test-reg-load ()
+  "`kmacro-reg-load-counter' loads the value of a register into the counter."
+  (set-register ?\C-r 4) ;; Should be safe as a register name
+  (kmacro-tests-simulate-command '(kmacro-set-counter 1))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              "\C-x\C-k\C-i"
+                              ;; Load from register
+                              "\C-x\C-k\C-rl\C-r"
+                              ))
+  (kmacro-tests-should-insert "1245"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 2)))
+    (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-save ()
+  "`kmacro-reg-save-counter' saves the counter to a register."
+  (set-register ?\C-r nil) ;; Should be safe as a register name
+  (kmacro-tests-simulate-command '(kmacro-set-counter 1))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Save to register
+                              "\C-x\C-k\C-rs\C-r"
+                              ;; Add to counter
+                              "\C-u2\C-x\C-k\C-a"
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Insert register
+                              "\C-xri\C-r"
+                              ))
+  (kmacro-tests-should-insert "142586"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 2)))
+  (set-register ?\C-r nil))
+
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-equal-01 ()
+  "`kmacro-reg-add-counter-equal' increments counter by one if equal to register."
+  (set-register ?\C-r 2) ;; Should be safe as a register name
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Increment counter if it matches
+                              "\C-x\C-k\C-ra=\C-r"
+                              ))
+  (kmacro-tests-should-insert "0134"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-equal-02 ()
+  "`kmacro-reg-add-counter-equal' increments counter by prefix if equal to register."
+  (set-register ?\C-r 2) ;; Should be safe as a register name
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Add two to counter if it matches
+                              "\C-u2\C-x\C-k\C-ra=\C-r"
+                              ))
+  (kmacro-tests-should-insert "0145"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-equal-03 ()
+  "`kmacro-reg-add-counter-equal' increments counter by universal arg if equal to register."
+  (set-register ?\C-r 2) ;; Should be safe as a register name
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Add four to counter if it matches
+                              "\C-u\C-x\C-k\C-ra=\C-r"
+                              ))
+  (kmacro-tests-should-insert "0167"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-equal-04 ()
+  "`kmacro-reg-add-counter-equal' decrements counter by one if equal to register."
+  (set-register ?\C-r 2) ;; Should be safe as a register name
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Decrement counter if it matches
+                              "\C-u-\C-x\C-k\C-ra=\C-r"
+                              ))
+  (kmacro-tests-should-insert "0111"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-less ()
+  "`kmacro-reg-add-counter-less' decrements counter if less than register."
+  (set-register ?\C-r 6) ;; Should be safe as a register name
+  (kmacro-tests-simulate-command '(kmacro-set-counter 7))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Decrement counter if it's
+                              ;; less than the register
+                              "\C-u-\C-x\C-k\C-ra<\C-r"
+                              ;; Insert and decrement counter
+                              "\C-u-\C-x\C-k\C-i"
+                              ))
+  (kmacro-tests-should-insert "7642"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+    (set-register ?\C-r nil))
+
+(kmacro-tests-deftest kmacro-tests-test-reg-add-counter-greater ()
+  "`kmacro-reg-add-counter-greater' increments counter if greater than register."
+  (set-register ?\C-r 1) ;; Should be safe as a register name
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Increment counter if it's greater
+                              ;; than the register
+                              "\C-x\C-k\C-ra>\C-r"
+                              ))
+  (kmacro-tests-should-insert "0135"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (set-register ?\C-r nil))
+
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-equal-01 ()
+  "`kmacro-quit-counter-equal' stops macro if counter is equal to positive prefix."
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Stop if the counter is at 5
+                              "\C-u5\C-x\C-k\C-q="
+                              ))
+  (kmacro-tests-should-insert "0123"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should (= 4 kmacro-counter))
+  (should (condition-case abort
+            (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+            (quit abort))))
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-equal-02 ()
+  "`kmacro-quit-counter-equal' stops macro if counter is equal to zero."
+  (kmacro-tests-simulate-command '(kmacro-set-counter 5))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and decrement counter
+                              "\C-u-\C-x\C-k\C-i"
+                              ;; Stop if the counter is at 0
+                              "\C-x\C-k\C-q="
+                              ))
+  (kmacro-tests-should-insert "5432"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should (= 1 kmacro-counter))
+  (should (condition-case abort
+              (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+            (quit abort))))
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-equal-03 ()
+  "`kmacro-quit-counter-equal' stops macro if counter is equal to negative prefix."
+  (kmacro-tests-simulate-command '(kmacro-set-counter 4))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and decrement counter
+                              "\C-u-\C-x\C-k\C-i"
+                              ;; Stop if the counter is at -1
+                              "\C-u-\C-x\C-k\C-q="
+                              ))
+  (kmacro-tests-should-insert "4321"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should (= 0 kmacro-counter))
+  (should (condition-case abort
+              (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+            (quit abort))))
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-equal-04 ()
+  "`kmacro-quit-counter-equal' doesn't stop macro if counter doesn't equal prefix."
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-u2\C-x\C-k\C-i"
+                              ;; Stop if the counter is at 7
+                              "\C-u7\C-x\C-k\C-q="
+                              ))
+  (kmacro-tests-should-insert "0246"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should-not (condition-case abort
+              (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+              (quit abort)))
+  (should (= 10 kmacro-counter)))
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-less ()
+  "`kmacro-quit-counter-less' stops macro if counter is less than prefix."
+  (kmacro-tests-simulate-command '(kmacro-set-counter 8))
+  (kmacro-tests-define-macro (vconcat
+                              ;; Stop if the counter is less than 5
+                              "\C-u5\C-x\C-k\C-q<"
+                              ;; Insert and decrement counter
+                              "\C-u-\C-x\C-k\C-i"
+                              ))
+  (kmacro-tests-should-insert "8765"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should (condition-case abort
+              (should (= 4 kmacro-counter))
+              (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+            (quit abort))))
+
+(kmacro-tests-deftest kmacro-tests-test-quit-counter-greater ()
+  "`kmacro-quit-counter-greater' stops macro if counter is greater than prefix."
+  (kmacro-tests-define-macro (vconcat
+                              ;; Insert and increment counter
+                              "\C-x\C-k\C-i"
+                              ;; Stop if the counter is greater than 4
+                              "\C-u4\C-x\C-k\C-q>"
+                              ))
+  (kmacro-tests-should-insert "0123"
+    (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 4)))
+  (should (condition-case abort
+              (should (= 4 kmacro-counter))
+              (kmacro-tests-simulate-command '(kmacro-end-or-call-macro 1))
+            (quit abort))))
+
+
 (kmacro-tests-deftest kmacro-tests-end-call-macro-prefix-args ()
   "kmacro-end-call-macro changes behavior based on prefix arg."
   ;; "Record" two macros.
@@ -312,7 +522,6 @@ cause the current test to fail."
 (kmacro-tests-deftest kmacro-tests-end-and-call-macro-mouse ()
   "Commands to end and call macro work under various conditions.
 This is a regression test for Bug#24992."
-  (:expected-result :failed)
   (cl-letf (((symbol-function #'mouse-set-point) #'ignore))
     ;; First, try it with no macro to record.
     (setq kmacro-tests-macros '(""))
@@ -520,7 +729,7 @@ This is a regression test for: Bug#3412, Bug#11817."
     (should (eq saved-binding (key-binding "\C-a")))))
 
 (kmacro-tests-deftest kmacro-tests-name-or-bind-to-key-when-no-macro ()
-  "Bind to key, symbol or register fails when when no macro exists."
+  "Bind to key, symbol or register fails when no macro exists."
   (should-error (kmacro-bind-to-key nil))
   (should-error (kmacro-name-last-macro 'kmacro-tests-symbol-for-test))
   (should-error (kmacro-to-register)))
@@ -584,8 +793,10 @@ This is a regression test for: Bug#3412, Bug#11817."
     ;; Check the bound key and run it and verify correct counter
     ;; and format.
     (should (equal (string-to-vector "\C-cxi")
-                   (car (kmacro-extract-lambda
-                         (key-binding "\C-x\C-kA")))))
+                   (car (with-suppressed-warnings
+                            ((obsolete kmacro-extract-lambda))
+                          (kmacro-extract-lambda
+                           (key-binding "\C-x\C-kA"))))))
     (kmacro-tests-should-insert "<5>"
       (funcall (key-binding "\C-x\C-kA")))))
 
@@ -609,11 +820,25 @@ This is a regression test for: Bug#3412, Bug#11817."
   (dotimes (i 2)
     (kmacro-tests-define-macro (make-vector (1+ i) (+ ?a i)))
     (kmacro-name-last-macro 'kmacro-tests-symbol-for-test)
-    (should (fboundp 'kmacro-tests-symbol-for-test)))
+    (should (commandp 'kmacro-tests-symbol-for-test)))
 
   ;; Now run the function bound to the symbol. Result should be the
   ;; second macro.
   (kmacro-tests-should-insert "bb"
+    (kmacro-tests-simulate-command '(kmacro-tests-symbol-for-test))))
+
+;; Bug#61700 inserting named macro when the definition contains things
+;; that `key-parse' thinks are named keys
+(kmacro-tests-deftest kmacro-tests-name-last-macro-key-parse-syntax ()
+  "Name last macro can rebind a symbol it binds."
+  ;; Make sure our symbol is unbound.
+  (when (fboundp 'kmacro-tests-symbol-for-test)
+    (fmakunbound 'kmacro-tests-symbol-for-test))
+  (setplist 'kmacro-tests-symbol-for-test nil)
+  (kmacro-tests-define-macro "<b> hello </>")
+  (kmacro-name-last-macro 'kmacro-tests-symbol-for-test)
+  ;; Now run the function bound to the symbol.
+  (kmacro-tests-should-insert "<b> hello </>"
     (kmacro-tests-simulate-command '(kmacro-tests-symbol-for-test))))
 
 (kmacro-tests-deftest kmacro-tests-store-in-register ()
@@ -818,7 +1043,6 @@ This is a regression for item 7 in Bug#24991."
 
 (kmacro-tests-deftest kmacro-tests-step-edit-cleans-up-hook ()
   "Step-editing properly cleans up `post-command-hook.' (Bug #18708)"
-  (:expected-result :failed)
   (let (post-command-hook)
     (setq-local post-command-hook '(t))
     (kmacro-tests-run-step-edit "x"
@@ -826,6 +1050,15 @@ This is a regression for item 7 in Bug#24991."
                                 :result "x"
                                 :macro-result "x")
     (kmacro-tests-simulate-command '(beginning-of-line))))
+
+(ert-deftest kmacro-tests--cl-print ()
+  (should (equal (cl-prin1-to-string
+                  (kmacro [?a ?b backspace backspace]))
+                 "#f(kmacro \"a b <backspace> <backspace>\")"))
+  (should (equal (cl-prin1-to-string
+                  (with-suppressed-warnings ((obsolete kmacro-lambda-form))
+                    (kmacro-lambda-form [?a ?b backspace backspace] 1 "%d")))
+                 "#f(kmacro \"a b <backspace> <backspace>\" 1 \"%d\")")))
 
 (cl-defun kmacro-tests-run-step-edit
     (macro &key events sequences result macro-result)
@@ -836,7 +1069,7 @@ and `read-event' and `read-key-sequence' set up to return items from
 EVENTS and SEQUENCES respectively.  SEQUENCES may be nil, but
 EVENTS should not be.  EVENTS should be a list of symbols bound
 in `kmacro-step-edit-map' or `query-replace' map, and this function
-will do the keymap lookup for you. SEQUENCES should contain
+will do the keymap lookup for you.  SEQUENCES should contain
 return values for `read-key-sequence'.
 
 Before running the macro, the current buffer will be erased.

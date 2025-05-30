@@ -1,6 +1,6 @@
 ;;; esh-ext.el --- commands external to Eshell  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -31,17 +31,12 @@
 
 ;;; Code:
 
-(provide 'esh-ext)
-
-(require 'esh-util)
-
-(eval-when-compile
-  (require 'cl-lib)
-  (require 'esh-io)
-  (require 'esh-cmd))
+(eval-when-compile (require 'cl-lib))
+(require 'esh-io)
 (require 'esh-arg)
 (require 'esh-opt)
 (require 'esh-proc)
+(require 'esh-util)
 
 (defgroup eshell-ext nil
   "External commands are invoked when operating system executables are
@@ -79,12 +74,10 @@ but Eshell will be able to understand
   "Search the environment path for NAME."
   (if (file-name-absolute-p name)
       name
-    (let ((list (eshell-parse-colon-path eshell-path-env))
+    (let ((list (eshell-get-path))
 	  suffixes n1 n2 file)
-      (if (eshell-under-windows-p)
-          (push "." list))
       (while list
-	(setq n1 (concat (car list) name))
+	(setq n1 (file-name-concat (car list) name))
 	(setq suffixes eshell-binary-suffixes)
 	(while suffixes
 	  (setq n2 (concat n1 (car suffixes)))
@@ -96,10 +89,6 @@ but Eshell will be able to understand
 	  (setq suffixes (cdr suffixes)))
 	(setq list (cdr list)))
       file)))
-
-;; This file provides itself then eval-when-compile loads files that require it.
-;; This causes spurious "might not be defined at runtime" warnings.
-(declare-function eshell-search-path "esh-ext" (name))
 
 (defcustom eshell-windows-shell-file
   (if (eshell-under-windows-p)
@@ -117,7 +106,7 @@ wholly ignored."
 (autoload 'eshell-parse-command "esh-cmd")
 
 (defsubst eshell-invoke-batch-file (&rest args)
-  "Invoke a .BAT or .CMD file on DOS/Windows systems."
+  "Invoke a .BAT or .CMD file on MS-DOS/MS-Windows systems."
   ;; since CMD.EXE can't handle forward slashes in the initial
   ;; argument...
   (setcar args (subst-char-in-string ?/ ?\\ (car args)))
@@ -170,19 +159,37 @@ by the user on the command line."
 
 (defcustom eshell-explicit-command-char ?*
   "If this char occurs before a command name, call it externally.
-That is, although `vi' may be an alias, `\vi' will always call the
+That is, although `vi' may be an alias, `*vi' will always call the
 external version."
   :type 'character
   :group 'eshell-ext)
 
+(defcustom eshell-explicit-remote-commands t
+  "If non-nil, support explicitly-remote commands.
+These are commands with a full remote file name, such as
+\"/ssh:host:whoami\".  If this is enabled, you can also explicitly run
+commands on your local host by using the \"/local:\" prefix, like
+\"/local:whoami\"."
+  :type 'boolean
+  :version "30.1"
+  :group 'eshell-ext)
+
 ;;; Functions:
 
-(defun eshell-ext-initialize ()
+(defconst eshell--local-prefix "/local:")
+
+(defun eshell-ext-initialize ()     ;Called from `eshell-mode' via intern-soft!
   "Initialize the external command handling code."
-  (add-hook 'eshell-named-command-hook 'eshell-explicit-command nil t))
+  (add-hook 'eshell-named-command-hook #'eshell-quoted-file-command nil t)
+  (add-hook 'eshell-named-command-hook #'eshell-explicit-command nil t))
+
+(defun eshell-explicit-command--which (command)
+  (when (and (> (length command) 1)
+             (eq (aref command 0) eshell-explicit-command-char))
+    (eshell-external-command--which (substring command 1))))
 
 (defun eshell-explicit-command (command args)
-  "If a command name begins with `*', call it externally always.
+  "If a command name begins with \"*\", always call it externally.
 This bypasses all Lisp functions and aliases."
   (when (and (> (length command) 1)
 	     (eq (aref command 0) eshell-explicit-command-char))
@@ -193,36 +200,46 @@ This bypasses all Lisp functions and aliases."
 	(error "%s: external command not found"
 	       (substring command 1))))))
 
-(autoload 'eshell-close-handles "esh-io")
+(put 'eshell-explicit-command 'eshell-which-function
+     #'eshell-explicit-command--which)
+
+(defun eshell-quoted-file-command--which (command)
+  (when (file-name-quoted-p command)
+    (eshell-external-command--which (file-name-unquote command))))
+
+(defun eshell-quoted-file-command (command args)
+  "If a command name begins with \"/:\", always call it externally.
+Similar to `eshell-explicit-command', this bypasses all Lisp functions
+and aliases, but it also ignores file name handlers."
+  (when (file-name-quoted-p command)
+    (eshell-external-command (file-name-unquote command) args)))
+
+(put 'eshell-quoted-file-command 'eshell-which-function
+     #'eshell-quoted-file-command--which)
 
 (defun eshell-remote-command (command args)
   "Insert output from a remote COMMAND, using ARGS.
-A remote command is something that executes on a different machine.
-An external command simply means external to Emacs.
+A \"remote\" command in Eshell is something that executes on a different
+machine.  If COMMAND is a remote file name, run it on the host for that
+file; if COMMAND is a local file name, run it locally."
+  (let* ((cwd-connection (file-remote-p default-directory))
+         (command-connection (file-remote-p command))
+         (default-directory (if (equal cwd-connection command-connection)
+                                default-directory
+                              (or command-connection (expand-file-name "~"))))
+         ;; Never use the remote connection here.  We don't want to
+         ;; expand the local name!  Instead, we want it as the user
+         ;; typed, so that if COMMAND is "/ssh:host:cat", we just get
+         ;; "cat" as the result.
+         (command-localname (or (file-remote-p command 'localname 'never)
+                                command)))
+    (eshell-connection-local-command command-localname args)))
 
-Note that this function is very crude at the moment.  It gathers up
-all the output from the remote command, and sends it all at once,
-causing the user to wonder if anything's really going on..."
-  (let ((outbuf (generate-new-buffer " *eshell remote output*"))
-	(errbuf (generate-new-buffer " *eshell remote error*"))
-	(command (file-local-name command))
-	(exitcode 1))
-    (unwind-protect
-	(progn
-	  (setq exitcode
-		(shell-command
-		 (mapconcat 'shell-quote-argument
-			    (append (list command) args) " ")
-		 outbuf errbuf))
-	  (eshell-print (with-current-buffer outbuf (buffer-string)))
-	  (eshell-error (with-current-buffer errbuf (buffer-string))))
-      (eshell-close-handles exitcode 'nil)
-      (kill-buffer outbuf)
-      (kill-buffer errbuf))))
-
-(defun eshell-external-command (command args)
-  "Insert output from an external COMMAND, using ARGS."
-  (setq args (eshell-stringify-list (eshell-flatten-list args)))
+(defun eshell-connection-local-command (command args)
+  "Insert output from an external COMMAND, using ARGS.
+This always runs COMMAND using the connection associated with the
+current working directory."
+  (setq args (eshell-stringify-list (flatten-tree args)))
   (let ((interp (eshell-find-interpreter
 		 command
 		 args
@@ -238,27 +255,45 @@ causing the user to wonder if anything's really going on..."
       (eshell-gather-process-output
        (car interp) (append (cdr interp) args)))))
 
+(defun eshell-external-command--which (command)
+  (or (eshell-search-path command)
+      (error "no %s in (%s)" command
+             (string-join (eshell-get-path t) (path-separator)))))
+
+(defun eshell-external-command (command args)
+  "Insert output from an external COMMAND, using ARGS."
+  (cond
+   ((and eshell-explicit-remote-commands
+         (file-remote-p command))
+    (eshell-remote-command command args))
+   ((and eshell-explicit-remote-commands
+         (string-prefix-p eshell--local-prefix command))
+    (eshell-remote-command
+     (substring command (length eshell--local-prefix)) args))
+   (t
+    (eshell-connection-local-command command args))))
+
 (defun eshell/addpath (&rest args)
   "Add a set of paths to PATH."
   (eshell-eval-using-options
    "addpath" args
-   '((?b "begin" nil prepend "add path element at beginning")
+   '((?b "begin" nil prepend "add to beginning of $PATH")
      (?h "help" nil nil  "display this usage message")
-     :usage "[-b] PATH
-Adds the given PATH to $PATH.")
-   (if args
-       (progn
-	 (setq eshell-path-env (getenv "PATH")
-	       args (mapconcat 'identity args path-separator)
-	       eshell-path-env
-	       (if prepend
-		   (concat args path-separator eshell-path-env)
-		 (concat eshell-path-env path-separator args)))
-	 (setenv "PATH" eshell-path-env))
-     (dolist (dir (parse-colon-path (getenv "PATH")))
-       (eshell-printn dir)))))
+     :usage "[-b] DIR...
+Adds the given DIR to $PATH.")
+   (let ((path (eshell-get-path t)))
+     (if args
+         (progn
+           (setq path (if prepend
+                          (append args path)
+                        (append path args)))
+           (eshell-set-path path)
+           (string-join path (path-separator)))
+       (dolist (dir path)
+         (eshell-printn dir))))))
 
 (put 'eshell/addpath 'eshell-no-numeric-conversions t)
+(put 'eshell/addpath 'eshell-filename-arguments t)
 
 (defun eshell-script-interpreter (file)
   "Extract the script to run from FILE, if it has #!<interp> in it.
@@ -267,7 +302,17 @@ Return nil, or a list of the form:
   (INTERPRETER [ARGS] FILE)"
   (let ((maxlen eshell-command-interpreter-max-length))
     (if (and (file-readable-p file)
-	     (file-regular-p file))
+	     (file-regular-p file)
+             ;; If the file is zero bytes, it can't possibly have a
+             ;; shebang.  This check may seem redundant, but we can
+             ;; encounter files that Emacs considers both readable and
+             ;; regular, but which aren't *actually* readable.  This can
+             ;; happen, for example, with certain kinds of reparse
+             ;; points like APPEXECLINK on NTFS filesystems (MS-Windows
+             ;; uses these for "app execution aliases").  In these
+             ;; cases, the file size is 0, so this check protects us
+             ;; from errors.
+             (> (file-attribute-size (file-attributes file)) 0))
 	(with-temp-buffer
 	  (insert-file-contents-literally file nil 0 maxlen)
 	  (if (looking-at "#![ \t]*\\([^ \r\t\n]+\\)\\([ \t]+\\(.+\\)\\)?")
@@ -335,4 +380,5 @@ line of the form #!<interp>."
 			    (cdr interp)))))
 	  (or interp (list fullname)))))))
 
+(provide 'esh-ext)
 ;;; esh-ext.el ends here

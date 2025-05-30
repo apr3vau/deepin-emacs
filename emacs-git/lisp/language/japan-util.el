@@ -1,6 +1,6 @@
-;;; japan-util.el --- utilities for Japanese -*- coding: iso-2022-7bit; -*-
+;;; japan-util.el --- utilities for Japanese  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -29,36 +29,34 @@
 
 ;;;###autoload
 (defun setup-japanese-environment-internal ()
-  ;; By default, we use 'japanese-iso-8bit for file names.  But, the
-  ;; following prefer-coding-system will override it.
-  (if (memq system-type '(windows-nt ms-dos cygwin))
-      (prefer-coding-system 'japanese-shift-jis)
-    (prefer-coding-system 'japanese-iso-8bit))
+  (prefer-coding-system (if (memq system-type '(windows-nt ms-dos))
+			    'japanese-cp932
+			  'utf-8))
   (use-cjk-char-width-table 'ja_JP))
 
 (defconst japanese-kana-table
-  '((?$B$"(B ?$B%"(B ?(I1(B) (?$B$$(B ?$B%$(B ?(I2(B) (?$B$&(B ?$B%&(B ?(I3(B) (?$B$((B ?$B%((B ?(I4(B) (?$B$*(B ?$B%*(B ?(I5(B)
-    (?$B$+(B ?$B%+(B ?(I6(B) (?$B$-(B ?$B%-(B ?(I7(B) (?$B$/(B ?$B%/(B ?(I8(B) (?$B$1(B ?$B%1(B ?(I9(B) (?$B$3(B ?$B%3(B ?(I:(B)
-    (?$B$5(B ?$B%5(B ?(I;(B) (?$B$7(B ?$B%7(B ?(I<(B) (?$B$9(B ?$B%9(B ?(I=(B) (?$B$;(B ?$B%;(B ?(I>(B) (?$B$=(B ?$B%=(B ?(I?(B)
-    (?$B$?(B ?$B%?(B ?(I@(B) (?$B$A(B ?$B%A(B ?(IA(B) (?$B$D(B ?$B%D(B ?(IB(B) (?$B$F(B ?$B%F(B ?(IC(B) (?$B$H(B ?$B%H(B ?(ID(B)
-    (?$B$J(B ?$B%J(B ?(IE(B) (?$B$K(B ?$B%K(B ?(IF(B) (?$B$L(B ?$B%L(B ?(IG(B) (?$B$M(B ?$B%M(B ?(IH(B) (?$B$N(B ?$B%N(B ?(II(B)
-    (?$B$O(B ?$B%O(B ?(IJ(B) (?$B$R(B ?$B%R(B ?(IK(B) (?$B$U(B ?$B%U(B ?(IL(B) (?$B$X(B ?$B%X(B ?(IM(B) (?$B$[(B ?$B%[(B ?(IN(B)
-    (?$B$^(B ?$B%^(B ?(IO(B) (?$B$_(B ?$B%_(B ?(IP(B) (?$B$`(B ?$B%`(B ?(IQ(B) (?$B$a(B ?$B%a(B ?(IR(B) (?$B$b(B ?$B%b(B ?(IS(B)
-    (?$B$d(B ?$B%d(B ?(IT(B) (?$B$f(B ?$B%f(B ?(IU(B) (?$B$h(B ?$B%h(B ?(IV(B)
-    (?$B$i(B ?$B%i(B ?(IW(B) (?$B$j(B ?$B%j(B ?(IX(B) (?$B$k(B ?$B%k(B ?(IY(B) (?$B$l(B ?$B%l(B ?(IZ(B) (?$B$m(B ?$B%m(B ?(I[(B)
-    (?$B$o(B ?$B%o(B ?(I\(B) (?$B$p(B ?$B%p(B "(I2(B") (?$B$q(B ?$B%q(B "(I4(B") (?$B$r(B ?$B%r(B ?(I&(B)
-    (?$B$s(B ?$B%s(B ?(I](B)
-    (?$B$,(B ?$B%,(B "(I6^(B") (?$B$.(B ?$B%.(B "(I7^(B") (?$B$0(B ?$B%0(B "(I8^(B") (?$B$2(B ?$B%2(B "(I9^(B") (?$B$4(B ?$B%4(B "(I:^(B")
-    (?$B$6(B ?$B%6(B "(I;^(B") (?$B$8(B ?$B%8(B "(I<^(B") (?$B$:(B ?$B%:(B "(I=^(B") (?$B$<(B ?$B%<(B "(I>^(B") (?$B$>(B ?$B%>(B "(I?^(B")
-    (?$B$@(B ?$B%@(B "(I@^(B") (?$B$B(B ?$B%B(B "(IA^(B") (?$B$E(B ?$B%E(B "(IB^(B") (?$B$G(B ?$B%G(B "(IC^(B") (?$B$I(B ?$B%I(B "(ID^(B")
-    (?$B$P(B ?$B%P(B "(IJ^(B") (?$B$S(B ?$B%S(B "(IK^(B") (?$B$V(B ?$B%V(B "(IL^(B") (?$B$Y(B ?$B%Y(B "(IM^(B") (?$B$\(B ?$B%\(B "(IN^(B")
-    (?$B$Q(B ?$B%Q(B "(IJ_(B") (?$B$T(B ?$B%T(B "(IK_(B") (?$B$W(B ?$B%W(B "(IL_(B") (?$B$Z(B ?$B%Z(B "(IM_(B") (?$B$](B ?$B%](B "(IN_(B")
-    (?$B$!(B ?$B%!(B ?(I'(B) (?$B$#(B ?$B%#(B ?(I((B) (?$B$%(B ?$B%%(B ?(I)(B) (?$B$'(B ?$B%'(B ?(I*(B) (?$B$)(B ?$B%)(B ?(I+(B)
-    (?$B$C(B ?$B%C(B ?(I/(B)
-    (?$B$c(B ?$B%c(B ?(I,(B) (?$B$e(B ?$B%e(B ?(I-(B) (?$B$g(B ?$B%g(B ?(I.(B)
-    (?$B$n(B ?$B%n(B "(I\(B")
-    (?$B!5(B ?$B!3(B) (?$B!6(B ?$B!4(B)
-    ("$B$&!+(B" ?$B%t(B "(I3^(B") (nil ?$B%u(B "(I6(B") (nil ?$B%v(B "(I9(B"))
+  '((?あ ?ア ?ｱ) (?い ?イ ?ｲ) (?う ?ウ ?ｳ) (?え ?エ ?ｴ) (?お ?オ ?ｵ)
+    (?か ?カ ?ｶ) (?き ?キ ?ｷ) (?く ?ク ?ｸ) (?け ?ケ ?ｹ) (?こ ?コ ?ｺ)
+    (?さ ?サ ?ｻ) (?し ?シ ?ｼ) (?す ?ス ?ｽ) (?せ ?セ ?ｾ) (?そ ?ソ ?ｿ)
+    (?た ?タ ?ﾀ) (?ち ?チ ?ﾁ) (?つ ?ツ ?ﾂ) (?て ?テ ?ﾃ) (?と ?ト ?ﾄ)
+    (?な ?ナ ?ﾅ) (?に ?ニ ?ﾆ) (?ぬ ?ヌ ?ﾇ) (?ね ?ネ ?ﾈ) (?の ?ノ ?ﾉ)
+    (?は ?ハ ?ﾊ) (?ひ ?ヒ ?ﾋ) (?ふ ?フ ?ﾌ) (?へ ?ヘ ?ﾍ) (?ほ ?ホ ?ﾎ)
+    (?ま ?マ ?ﾏ) (?み ?ミ ?ﾐ) (?む ?ム ?ﾑ) (?め ?メ ?ﾒ) (?も ?モ ?ﾓ)
+    (?や ?ヤ ?ﾔ) (?ゆ ?ユ ?ﾕ) (?よ ?ヨ ?ﾖ)
+    (?ら ?ラ ?ﾗ) (?り ?リ ?ﾘ) (?る ?ル ?ﾙ) (?れ ?レ ?ﾚ) (?ろ ?ロ ?ﾛ)
+    (?わ ?ワ ?ﾜ) (?ゐ ?ヰ "ｲ") (?ゑ ?ヱ "ｴ") (?を ?ヲ ?ｦ)
+    (?ん ?ン ?ﾝ)
+    (?が ?ガ "ｶﾞ") (?ぎ ?ギ "ｷﾞ") (?ぐ ?グ "ｸﾞ") (?げ ?ゲ "ｹﾞ") (?ご ?ゴ "ｺﾞ")
+    (?ざ ?ザ "ｻﾞ") (?じ ?ジ "ｼﾞ") (?ず ?ズ "ｽﾞ") (?ぜ ?ゼ "ｾﾞ") (?ぞ ?ゾ "ｿﾞ")
+    (?だ ?ダ "ﾀﾞ") (?ぢ ?ヂ "ﾁﾞ") (?づ ?ヅ "ﾂﾞ") (?で ?デ "ﾃﾞ") (?ど ?ド "ﾄﾞ")
+    (?ば ?バ "ﾊﾞ") (?び ?ビ "ﾋﾞ") (?ぶ ?ブ "ﾌﾞ") (?べ ?ベ "ﾍﾞ") (?ぼ ?ボ "ﾎﾞ")
+    (?ぱ ?パ "ﾊﾟ") (?ぴ ?ピ "ﾋﾟ") (?ぷ ?プ "ﾌﾟ") (?ぺ ?ペ "ﾍﾟ") (?ぽ ?ポ "ﾎﾟ")
+    (?ぁ ?ァ ?ｧ) (?ぃ ?ィ ?ｨ) (?ぅ ?ゥ ?ｩ) (?ぇ ?ェ ?ｪ) (?ぉ ?ォ ?ｫ)
+    (?っ ?ッ ?ｯ)
+    (?ゃ ?ャ ?ｬ) (?ゅ ?ュ ?ｭ) (?ょ ?ョ ?ｮ)
+    (?ゎ ?ヮ "ﾜ")
+    (?ゝ ?ヽ) (?ゞ ?ヾ)
+    ("う゛" ?ヴ "ｳﾞ") (nil ?ヵ "ｶ") (nil ?ヶ "ｹ"))
   "Japanese JISX0208 Kana character table.
 Each element is of the form (HIRAGANA KATAKANA HANKAKU-KATAKANA), where
 HIRAGANA and KATAKANA belong to `japanese-jisx0208',
@@ -98,19 +96,19 @@ HANKAKU-KATAKANA belongs to `japanese-jisx0201-kana'.")
 	  (put-char-code-property jisx0201 'jisx0208 katakana)))))
 
 (defconst japanese-symbol-table
-  '((?\$B!!(B ?\ ) (?$B!$(B ?, ?(I$(B) (?$B!%(B ?. ?(I!(B) (?$B!"(B ?, ?(I$(B) (?$B!#(B ?. ?(I!(B) (?$B!&(B nil ?(I%(B)
-    (?$B!'(B ?:) (?$B!((B ?\;) (?$B!)(B ??) (?$B!*(B ?!) (?$B!+(B nil ?(I^(B) (?$B!,(B nil ?(I_(B)
-    (?$B!-(B ?') (?$B!.(B ?`) (?$B!0(B ?^) (?$B!2(B ?_) (?$B!<(B ?- ?(I0(B) (?$B!=(B ?-) (?$B!>(B ?-)
-    (?$B!?(B ?/) (?$B!@(B ?\\) (?$B!A(B ?~)  (?$B!C(B ?|) (?$B!F(B ?`) (?$B!G(B ?') (?$B!H(B ?\") (?$B!I(B ?\")
-    (?\$B!J(B ?\() (?\$B!K(B ?\)) (?\$B!N(B ?\[) (?\$B!O(B ?\]) (?\$B!P(B ?{) (?\$B!Q(B ?})
-    (?$B!R(B ?<) (?$B!S(B ?>) (?\$B!V(B nil ?\(I"(B) (?\$B!W(B nil ?\(I#(B)
-    (?$B!\(B ?+) (?$B!](B ?-) (?$B!a(B ?=) (?$B!c(B ?<) (?$B!d(B ?>)
-    (?$B!l(B ?') (?$B!m(B ?\") (?$B!o(B ?\\) (?$B!p(B ?$) (?$B!s(B ?%) (?$B!t(B ?#) (?$B!u(B ?&) (?$B!v(B ?*)
-    (?$B!w(B ?@)
+  '((?\　 ?\ ) (?， ?,) (?． ?.) (?、 nil ?､) (?。 nil ?｡) (?・ nil ?･)
+    (?： ?:) (?； ?\;) (?？ ??) (?！ ?!) (?゛ nil ?ﾞ) (?゜ nil ?ﾟ)
+    (?´ ?') (?｀ ?`) (?＾ ?^) (?＿ ?_) (?ー nil ?ｰ) (?— ?-) (?‐ ?-)
+    (?／ ?/) (?＼ ?\\) (?〜 ?~)  (?｜ ?|) (?‘ ?`) (?’ ?') (?“ ?\") (?” ?\")
+    (?\（ ?\() (?\） ?\)) (?\［ ?\[) (?\］ ?\]) (?\｛ ?{) (?\｝ ?})
+    (?〈 ?<) (?〉 ?>) (?\「 nil ?\｢) (?\」 nil ?\｣)
+    (?＋ ?+) (?− ?-) (?＝ ?=) (?＜ ?<) (?＞ ?>)
+    (?′ ?') (?″ ?\") (?￥ ?\\) (?＄ ?$) (?％ ?%) (?＃ ?#) (?＆ ?&) (?＊ ?*)
+    (?＠ ?@)
     ;; cp932-2-byte
     (#x2015 ?-) (#xFF5E ?~) (#xFF0D ?-))
   "Japanese JISX0208 and CP932 symbol character table.
-  Each element is of the form (SYMBOL ASCII HANKAKU), where SYMBOL
+Each element is of the form (SYMBOL ASCII HANKAKU), where SYMBOL
 belongs to `japanese-jisx0208' or `cp932', ASCII belongs to `ascii',
 and HANKAKU belongs to `japanese-jisx0201-kana'.")
 
@@ -134,20 +132,20 @@ and HANKAKU belongs to `japanese-jisx0201-kana'.")
 	      (put-char-code-property jisx0201 'jisx0208 jisx0208))))))
 
 (defconst japanese-alpha-numeric-table
-  '((?$B#0(B . ?0) (?$B#1(B . ?1) (?$B#2(B . ?2) (?$B#3(B . ?3) (?$B#4(B . ?4)
-    (?$B#5(B . ?5) (?$B#6(B . ?6) (?$B#7(B . ?7) (?$B#8(B . ?8) (?$B#9(B . ?9)
-    (?$B#A(B . ?A) (?$B#B(B . ?B) (?$B#C(B . ?C) (?$B#D(B . ?D) (?$B#E(B . ?E)
-    (?$B#F(B . ?F) (?$B#G(B . ?G) (?$B#H(B . ?H) (?$B#I(B . ?I) (?$B#J(B . ?J)
-    (?$B#K(B . ?K) (?$B#L(B . ?L) (?$B#M(B . ?M) (?$B#N(B . ?N) (?$B#O(B . ?O)
-    (?$B#P(B . ?P) (?$B#Q(B . ?Q) (?$B#R(B . ?R) (?$B#S(B . ?S) (?$B#T(B . ?T)
-    (?$B#U(B . ?U) (?$B#V(B . ?V) (?$B#W(B . ?W) (?$B#X(B . ?X) (?$B#Y(B . ?Y) (?$B#Z(B . ?Z)
-    (?$B#a(B . ?a) (?$B#b(B . ?b) (?$B#c(B . ?c) (?$B#d(B . ?d) (?$B#e(B . ?e)
-    (?$B#f(B . ?f) (?$B#g(B . ?g) (?$B#h(B . ?h) (?$B#i(B . ?i) (?$B#j(B . ?j)
-    (?$B#k(B . ?k) (?$B#l(B . ?l) (?$B#m(B . ?m) (?$B#n(B . ?n) (?$B#o(B . ?o)
-    (?$B#p(B . ?p) (?$B#q(B . ?q) (?$B#r(B . ?r) (?$B#s(B . ?s) (?$B#t(B . ?t)
-    (?$B#u(B . ?u) (?$B#v(B . ?v) (?$B#w(B . ?w) (?$B#x(B . ?x) (?$B#y(B . ?y) (?$B#z(B . ?z))
+  '((?０ . ?0) (?１ . ?1) (?２ . ?2) (?３ . ?3) (?４ . ?4)
+    (?５ . ?5) (?６ . ?6) (?７ . ?7) (?８ . ?8) (?９ . ?9)
+    (?Ａ . ?A) (?Ｂ . ?B) (?Ｃ . ?C) (?Ｄ . ?D) (?Ｅ . ?E)
+    (?Ｆ . ?F) (?Ｇ . ?G) (?Ｈ . ?H) (?Ｉ . ?I) (?Ｊ . ?J)
+    (?Ｋ . ?K) (?Ｌ . ?L) (?Ｍ . ?M) (?Ｎ . ?N) (?Ｏ . ?O)
+    (?Ｐ . ?P) (?Ｑ . ?Q) (?Ｒ . ?R) (?Ｓ . ?S) (?Ｔ . ?T)
+    (?Ｕ . ?U) (?Ｖ . ?V) (?Ｗ . ?W) (?Ｘ . ?X) (?Ｙ . ?Y) (?Ｚ . ?Z)
+    (?ａ . ?a) (?ｂ . ?b) (?ｃ . ?c) (?ｄ . ?d) (?ｅ . ?e)
+    (?ｆ . ?f) (?ｇ . ?g) (?ｈ . ?h) (?ｉ . ?i) (?ｊ . ?j)
+    (?ｋ . ?k) (?ｌ . ?l) (?ｍ . ?m) (?ｎ . ?n) (?ｏ . ?o)
+    (?ｐ . ?p) (?ｑ . ?q) (?ｒ . ?r) (?ｓ . ?s) (?ｔ . ?t)
+    (?ｕ . ?u) (?ｖ . ?v) (?ｗ . ?w) (?ｘ . ?x) (?ｙ . ?y) (?ｚ . ?z))
   "Japanese JISX0208 alpha numeric character table.
-Each element is of the form (ALPHA-NUMERIC . ASCII), where ALPHA-NUMERIC
+Each element is of the form (ALPHANUMERIC . ASCII), where ALPHANUMERIC
 belongs to `japanese-jisx0208', ASCII belongs to `ascii'.")
 
 ;; Put properties 'jisx0208 and 'ascii to each Japanese alpha numeric
@@ -238,7 +236,7 @@ of which charset is `japanese-jisx0201-kana'."
 	       (composition
 		(and (not hankaku)
 		     (get-char-code-property kana 'kana-composition)))
-	       next slot)
+	       slot) ;; next
 	  (if (and composition (setq slot (assq (following-char) composition)))
 	      (japanese-replace-region (match-beginning 0) (1+ (point))
 				       (cdr slot))
@@ -260,7 +258,7 @@ of which charset is `japanese-jisx0201-kana'."
       (while (re-search-forward "\\cK\\|\\ck" nil t)
 	(let* ((kata (preceding-char))
 	       (composition (get-char-code-property kata 'kana-composition))
-	       next slot)
+	       slot) ;; next
 	  (if (and composition (setq slot (assq (following-char) composition)))
 	      (japanese-replace-region (match-beginning 0) (1+ (point))
 				       (get-char-code-property
@@ -307,7 +305,7 @@ Optional argument KATAKANA-ONLY non-nil means to convert only KATAKANA char."
 		      (re-search-forward "\\ca\\|\\ck" nil t)))
 	(let* ((hankaku (preceding-char))
 	       (composition (get-char-code-property hankaku 'kana-composition))
-	       next slot)
+	       slot) ;; next
 	  (if (and composition (setq slot (assq (following-char) composition)))
 	      (japanese-replace-region (match-beginning 0) (1+ (point))
 				       (cdr slot))
@@ -319,7 +317,8 @@ Optional argument KATAKANA-ONLY non-nil means to convert only KATAKANA char."
 ;;;###autoload
 (defun read-hiragana-string (prompt &optional initial-input)
   "Read a Hiragana string from the minibuffer, prompting with string PROMPT.
-If non-nil, second arg INITIAL-INPUT is a string to insert before reading."
+If non-nil, second arg INITIAL-INPUT is a string to insert before reading.
+Return the string read from the minibuffer."
   (read-multilingual-string prompt initial-input "japanese-hiragana"))
 
 ;;

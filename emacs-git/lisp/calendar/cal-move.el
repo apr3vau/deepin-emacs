@@ -1,9 +1,9 @@
-;;; cal-move.el --- calendar functions for movement in the calendar
+;;; cal-move.el --- calendar functions for movement in the calendar  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1995, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
-;; Maintainer: Glenn Morris <rgm@gnu.org>
+;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: calendar
 ;; Human-Keywords: calendar
 ;; Package: calendar
@@ -157,9 +157,9 @@ EVENT is an event like `last-nonmenu-event'."
   (interactive (list (prefix-numeric-value current-prefix-arg)
                      last-nonmenu-event))
   (unless arg (setq arg 1))
-  (save-selected-window
-    ;; Nil if called from menu-bar.
-    (if (setq event (event-start event)) (select-window (posn-window event)))
+  (save-current-buffer
+    (when (event-start event)
+      (set-buffer (calendar-event-buffer event)))
     (calendar-cursor-to-nearest-date)
     (unless (zerop arg)
       (let ((old-date (calendar-cursor-to-date))
@@ -384,17 +384,19 @@ Moves forward if ARG is negative."
 ;;;###cal-autoload
 (defun calendar-goto-day-of-year (year day &optional noecho)
   "Move cursor to YEAR, DAY number; echo DAY/YEAR unless NOECHO is non-nil.
-Negative DAY counts backward from end of year."
+Negative DAY counts backward from end of year.
+Interactively, prompt for YEAR and DAY number."
   (interactive
-   (let* ((year (calendar-read
-                 "Year (>0): "
+   (let* ((year (calendar-read-sexp
+                 "Year (>0)"
                  (lambda (x) (> x 0))
-                 (number-to-string (calendar-extract-year
-                                 (calendar-current-date)))))
+                 (calendar-extract-year (calendar-current-date))))
           (last (if (calendar-leap-year-p year) 366 365))
-          (day (calendar-read
-                (format "Day number (+/- 1-%d): " last)
-                (lambda (x) (and (<= 1 (abs x)) (<= (abs x) last))))))
+          (day (calendar-read-sexp
+                "Day number (+/- 1-%d)"
+                (lambda (x) (and (<= 1 (abs x)) (<= (abs x) last)))
+                (calendar-day-number (calendar-current-date))
+                last)))
      (list year day)))
   (calendar-goto-date
    (calendar-gregorian-from-absolute

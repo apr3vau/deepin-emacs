@@ -1,5 +1,5 @@
 .\" See section COPYING for copyright and redistribution information.
-.TH etags 1 "23nov2001" "GNU Tools" "GNU Tools"
+.TH ETAGS 1 "2024-12-15" "GNU Tools" "GNU"
 .de BP
 .sp
 .ti -.2i
@@ -50,9 +50,9 @@ format understood by
 .BR vi ( 1 )\c
 \&.  Both forms of the program understand
 the syntax of C, Objective C, C++, Java, Fortran, Ada, Cobol, Erlang,
-Forth, Go, HTML, LaTeX, Emacs Lisp/Common Lisp, Lua, Makefile, Pascal, Perl,
-Ruby, PHP, PostScript, Python, Prolog, Scheme and
-most assembler\-like syntaxes.
+Forth, Go, HTML, LaTeX, Emacs Lisp/Common Lisp, Lua, Makefile, Mercury, Pascal,
+Perl, Ruby, Rust, PHP, PostScript, Python, Prolog, Scheme and most
+assembler\-like syntaxes.
 Both forms read the files specified on the command line, and write a tag
 table (defaults: \fBTAGS\fP for \fBetags\fP, \fBtags\fP for
 \fBctags\fP) in the current working directory.
@@ -64,7 +64,7 @@ Files specified with absolute file names will be recorded
 with absolute file names.  Files generated from a source file\-\-like
 a C file generated from a source Cweb file\-\-will be recorded with
 the name of the source file.
-Compressed files are supported using gzip, bzip2, and xz.
+Compressed files are supported using gzip, bzip2, xz, and zstd.
 The programs recognize the language used in an input file based on its
 file name and contents.  The \fB\-\-language\fP switch can be used to force
 parsing of the file names following the switch according to the given
@@ -91,6 +91,9 @@ Only \fBctags\fP accepts this option.
 In C and derived languages, create tags for function declarations,
 and create tags for extern variables unless \-\-no\-globals is used.
 In Lisp, create tags for (defvar foo) declarations.
+In Mercury, declarations start a line with "\|\fB:-\fP\|" and are always
+tagged.  In addition, this option tags predicates or functions in first
+rules of clauses, as in Prolog.
 .TP
 .B \-D, \-\-no\-defines
 Do not create tag entries for C preprocessor constant definitions
@@ -119,16 +122,22 @@ current file.  Only \fBetags\fP accepts this option.
 .B \-I, \-\-ignore\-indentation
 Don't rely on indentation as much as we normally do.  Currently, this
 means not to assume that a closing brace in the first column is the
-final brace of a function or structure definition in C and C++.
+final brace of a function or structure definition in C and C++.  This
+is important for code that doesn't observe the GNU Coding conventions
+of placing only top-level braces in column zero.
 .TP
 \fB\-l\fP \fIlanguage\fP, \fB\-\-language=\fIlanguage\fP
 Parse the following files according to the given language.  More than
 one such options may be intermixed with filenames.  Use \fB\-\-help\fP
 to get a list of the available languages and their default filename
-extensions.  The "auto" language can be used to restore automatic
-detection of language based on the file name.  The "none"
-language may be used to disable language parsing altogether; only
-regexp matching is done in this case (see the \fB\-\-regex\fP option).
+extensions.  For example, as Mercury and Objective-C have same
+filename extension \fI.m\fP, a test based on contents tries to detect
+the language.  If this test fails, \fB\-\-language=\fP\fImercury\fP or
+\fB\-\-language=\fP\fIobjc\fP should be used.
+The "auto" language can be used to restore automatic detection of language
+based on the file name.  The "none" language may be used to disable language
+parsing altogether; only regexp matching is done in this case (see the
+\fB\-\-regex\fP option).
 .TP
 .B \-\-members
 Create tag entries for variables that are members of structure-like
@@ -145,7 +154,7 @@ May be used (only once) in place of a file name on the command line.
 \fBetags\fP will read from standard input and mark the produced tags
 as belonging to the file \fBFILE\fP.
 .TP
-\fB \-Q, \-\-class\-qualify\fP
+\fB\-Q, \-\-class\-qualify\fP
 Qualify tag names with their class name in C++, ObjC, Java, and Perl.
 This produces tag names of the form \fIclass\fP\fB::\fP\fImember\fP
 for C++ and Perl,
@@ -162,7 +171,7 @@ of \- means standard output; overrides default \fBTAGS\fP or \fBtags\fP.
 
 Make tags based on regexp matching for the files following this option,
 in addition to the tags made with the standard parsing based on
-language. May be freely intermixed with filenames and the \fB\-R\fP
+language.  May be freely intermixed with filenames and the \fB\-R\fP
 option.  The regexps are cumulative, i.e., each such option will add to
 the previous ones.  The regexps are of one of the forms:
 .br
@@ -176,10 +185,13 @@ useless characters.  If the match is such that more characters than
 needed are unavoidably matched by \fItagregexp\fP, it may be useful to
 add a \fInameregexp\fP, to narrow down the tag scope.  \fBctags\fP
 ignores regexps without a \fInameregexp\fP.  The syntax of regexps is
-the same as in emacs.  The following character escape sequences are
-supported: \\a, \\b, \\d, \\e, \\f, \\n, \\r, \\t, \\v, which
-respectively stand for the ASCII characters BEL, BS, DEL, ESC, FF, NL,
-CR, TAB, VT.
+the same as in Emacs, except that backslash escapes are the same
+as GNU grep (which means, for example, that shy groups are not supported),
+and \fB[:ascii:]\fP, \fB[:multibyte:]\fP, \fB[:nonascii:]\fP,
+\fB[:word:]\fP, and \fB[:unibyte:]\fP are not supported.
+The following character escape sequences are supported:
+\\a, \\b, \\d, \\e, \\f, \\n, \\r, \\t, \\v, which respectively
+stand for the ASCII characters BEL, BS, DEL, ESC, FF, NL, CR, TAB, VT.
 .br
 The \fImodifiers\fP are a sequence of 0 or more characters among
 \fIi\fP, which means to ignore case when matching; \fIm\fP, which means
@@ -200,7 +212,7 @@ otherwise.  This is particularly useful when storing many predefined
 regexps in a file.
 .br
 In its second form, \fIregexfile\fP is the name of a file that contains
-a number of arguments to the \fI\-\-regex\=\fP option,
+a number of arguments to the \fI\-\-regex=\fP option,
 one per line.  Lines beginning with a space or tab are assumed
 to be comments, and ignored.
 
@@ -211,22 +223,22 @@ from shell interpretation.
 
 Tag the DEFVAR macros in the emacs source files:
 .br
-\fI\-\-regex\='/[ \\t]*DEFVAR_[A-Z_ \\t(]+"\\([^"]+\\)"/'\fP
+\fI\-\-regex='/[ \\t]*DEFVAR_[A-Z_ \\t(]+"\\([^"]+\\)"/'\fP
 .\"" This comment is to avoid confusion to Emacs syntax highlighting
 .br
 
 Tag VHDL files (this example is a single long line, broken here for
 formatting reasons):
 .br
-\fI\-\-language\=none\ \-\-regex='/[\ \\t]*\\(ARCHITECTURE\\|\\
-CONFIGURATION\\)\ +[^\ ]*\ +OF/'\ \-\-regex\='/[\ \\t]*\\
+\fI\-\-language=none\ \-\-regex='/[\ \\t]*\\(ARCHITECTURE\\|\\
+CONFIGURATION\\)\ +[^\ ]*\ +OF/'\ \-\-regex='/[\ \\t]*\\
 \\(ATTRIBUTE\\|ENTITY\\|FUNCTION\\|PACKAGE\\(\ BODY\\)?\\
 \\|PROCEDURE\\|PROCESS\\|TYPE\\)[\ \\t]+\\([^\ \\t(]+\\)/\\3/'\fP
 .br
 
-Tag TCL files (this last example shows the usage of a \fItagregexp\fP):
+Tag Tcl files (this last example shows the usage of a \fItagregexp\fP):
 .br
-\fI\-\-lang\=none \-\-regex\='/proc[\ \\t]+\\([^\ \\t]+\\)/\\1/'\fP
+\fI\-\-lang=none \-\-regex='/proc[\ \\t]+\\([^\ \\t]+\\)/\\1/'\fP
 
 .br
 A regexp can be preceded by {\fIlang\fP}, thus restricting it to match
@@ -281,10 +293,7 @@ Stallman.
 .BR vi ( 1 ).
 
 .SH COPYING
-Copyright
-.if t \(co
-.if n (C)
-1992, 1999, 2001-2017 Free Software Foundation, Inc.
+Copyright 1992, 1999, 2001\(en2025 Free Software Foundation, Inc.
 .PP
 Permission is granted to make and distribute verbatim copies of this
 document provided the copyright notice and this permission notice are
@@ -299,3 +308,9 @@ Permission is granted to copy and distribute translations of this
 document into another language, under the above conditions for
 modified versions, except that this permission notice may be stated
 in a translation approved by the Free Software Foundation.
+
+.\" Local Variables:
+.\" eval: (add-hook 'before-save-hook 'time-stamp nil t)
+.\" time-stamp-pattern: "3/.TH ETAGS 1 \"%Y-%02m-%02d\" \"GNU Tools\" \"GNU\"$"
+.\" time-stamp-time-zone: "UTC0"
+.\" End:

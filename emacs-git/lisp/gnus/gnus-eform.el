@@ -1,6 +1,6 @@
-;;; gnus-eform.el --- a mode for editing forms for Gnus
+;;; gnus-eform.el --- a mode for editing forms for Gnus  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -37,12 +37,10 @@
 
 (defcustom gnus-edit-form-mode-hook nil
   "Hook run in `gnus-edit-form-mode' buffers."
-  :group 'gnus-edit-form
   :type 'hook)
 
 (defcustom gnus-edit-form-menu-hook nil
   "Hook run when creating menus in `gnus-edit-form-mode' buffers."
-  :group 'gnus-edit-form
   :type 'hook)
 
 ;;; Internal variables
@@ -50,13 +48,10 @@
 (defvar gnus-edit-form-buffer "*Gnus edit form*")
 (defvar gnus-edit-form-done-function nil)
 
-(defvar gnus-edit-form-mode-map nil)
-(unless gnus-edit-form-mode-map
-  (setq gnus-edit-form-mode-map (make-sparse-keymap))
-  (set-keymap-parent gnus-edit-form-mode-map emacs-lisp-mode-map)
-  (gnus-define-keys gnus-edit-form-mode-map
-    "\C-c\C-c" gnus-edit-form-done
-    "\C-c\C-k" gnus-edit-form-exit))
+(defvar-keymap gnus-edit-form-mode-map
+  :parent emacs-lisp-mode-map
+  "C-c C-c" #'gnus-edit-form-done
+  "C-c C-k" #'gnus-edit-form-exit)
 
 (defun gnus-edit-form-make-menu-bar ()
   (unless (boundp 'gnus-edit-form-menu)
@@ -67,25 +62,28 @@
        ["Exit" gnus-edit-form-exit t]))
     (gnus-run-hooks 'gnus-edit-form-menu-hook)))
 
-(define-derived-mode gnus-edit-form-mode fundamental-mode "Edit Form"
+(define-derived-mode gnus-edit-form-mode lisp-data-mode "Edit Form"
   "Major mode for editing forms.
-It is a slightly enhanced emacs-lisp-mode.
+It is a slightly enhanced `lisp-data-mode'.
 
 \\{gnus-edit-form-mode-map}"
   (when (gnus-visual-p 'group-menu 'menu)
     (gnus-edit-form-make-menu-bar))
   (make-local-variable 'gnus-edit-form-done-function)
-  (make-local-variable 'gnus-prev-winconf))
+  (make-local-variable 'gnus-prev-winconf)
+  (make-local-variable 'gnus-prev-cwc))
 
 (defun gnus-edit-form (form documentation exit-func &optional layout)
   "Edit FORM in a new buffer.
 Call EXIT-FUNC on exit.  Display DOCUMENTATION in the beginning
 of the buffer.
 The optional LAYOUT overrides the `edit-form' window layout."
-  (let ((winconf (current-window-configuration)))
+  (let ((winconf (current-window-configuration))
+        (cwc gnus-current-window-configuration))
     (set-buffer (gnus-get-buffer-create gnus-edit-form-buffer))
     (gnus-configure-windows (or layout 'edit-form))
     (gnus-edit-form-mode)
+    (setq gnus-prev-cwc cwc)
     (setq gnus-prev-winconf winconf)
     (setq gnus-edit-form-done-function exit-func)
     (erase-buffer)
@@ -97,7 +95,7 @@ The optional LAYOUT overrides the `edit-form' window layout."
       (insert ";;; ")
       (forward-line 1))
     (insert (substitute-command-keys
-	     ";; Type `C-c C-c' after you've finished editing.\n"))
+             ";; Type \\`C-c C-c' after you've finished editing.\n"))
     (insert "\n")
     (let ((p (point)))
       (gnus-pp form)
@@ -106,7 +104,7 @@ The optional LAYOUT overrides the `edit-form' window layout."
 
 (defun gnus-edit-form-done ()
   "Update changes and kill the current buffer."
-  (interactive)
+  (interactive nil gnus-edit-form-mode)
   (goto-char (point-min))
   (let ((form (condition-case nil
 		  (read (current-buffer))
@@ -117,10 +115,12 @@ The optional LAYOUT overrides the `edit-form' window layout."
 
 (defun gnus-edit-form-exit ()
   "Kill the current buffer."
-  (interactive)
-  (let ((winconf gnus-prev-winconf))
+  (interactive nil gnus-edit-form-mode)
+  (let ((winconf gnus-prev-winconf)
+        (cwc gnus-prev-cwc))
     (kill-buffer (current-buffer))
-    (set-window-configuration winconf)))
+    (set-window-configuration winconf)
+    (setq gnus-current-window-configuration cwc)))
 
 (provide 'gnus-eform)
 

@@ -1,6 +1,6 @@
-;;; deeper-blue-theme.el --- Custom theme for faces
+;;; deeper-blue-theme.el --- Custom theme for faces  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Author: Scott Frazer <frazer.scott@gmail.com>
 
@@ -21,8 +21,11 @@
 
 ;;; Code:
 
+;;;###theme-autoload
 (deftheme deeper-blue
-  "Face colors using a deep blue background.")
+  "Face colors using a deep blue background."
+  :background-mode 'dark
+  :kind 'color-scheme)
 
 (let ((class '((class color) (min-colors 89))))
   (custom-theme-set-faces
@@ -61,14 +64,13 @@
    `(ediff-fine-diff-B ((,class (:background "cyan4" :foreground "white"))))
    `(ediff-odd-diff-A ((,class (:background "Grey50" :foreground "White"))))
    `(error ((,class (:foreground "red"))))
-   `(flymake-errline ((,class (:background nil :underline "red"))))
-   `(flymake-warnline ((,class (:background nil :underline "magenta3"))))
+   `(flymake-errline ((,class (:background unspecified :underline "red"))))
+   `(flymake-warnline ((,class (:background unspecified :underline "magenta3"))))
    `(font-lock-builtin-face ((,class (:foreground "LightCoral"))))
    `(font-lock-comment-delimiter-face ((,class (:foreground "gray50"))))
    `(font-lock-comment-face ((,class (:foreground "gray50"))))
    `(font-lock-constant-face ((,class (:foreground "DarkOliveGreen3"))))
    `(font-lock-doc-face ((,class (:foreground "moccasin"))))
-   `(font-lock-doc-string-face ((,class (:foreground "moccasin"))))
    `(font-lock-function-name-face ((,class (:foreground "goldenrod"))))
    `(font-lock-keyword-face ((,class (:foreground "DeepSkyBlue1"))))
    `(font-lock-preprocessor-face ((,class (:foreground "gold"))))
@@ -82,7 +84,9 @@
    `(highlight ((,class (:background "DodgerBlue4"))))
    `(ido-first-match ((,class (:weight normal :foreground "orange"))))
    `(ido-only-match ((,class (:foreground "green"))))
-   `(ido-subdir ((,class (:foreground nil :inherit font-lock-keyword-face))))
+   `(ido-subdir ((,class (:foreground unspecified :inherit font-lock-keyword-face))))
+   `(image-dired-thumb-flagged ((,class (:background "Red1"))))
+   `(image-dired-thumb-mark ((,class (:background "dodgerblue3"))))
    `(info-header-node ((,class (:foreground "DeepSkyBlue1"))))
    `(info-header-xref ((,class (:foreground "SeaGreen2"))))
    `(info-menu-header ((,class (:family "helv" :weight bold))))
@@ -94,7 +98,7 @@
    `(match ((,class (:background "DeepPink4"))))
    `(minibuffer-prompt ((,class (:foreground "CadetBlue1"))))
    `(mode-line ((,class (:background "gray75" :foreground "black" :box (:line-width 1 :style released-button)))))
-   `(mode-line-buffer-id ((,class (:weight bold :background nil :foreground "blue4"))))
+   `(mode-line-buffer-id ((,class (:weight bold :background unspecified :foreground "blue4"))))
    `(mode-line-inactive ((,class (:background "gray40" :foreground "black" :box (:line-width 1 :color "gray40" :style nil)))))
    `(outline-1 ((,class (:foreground "SkyBlue1"))))
    `(outline-2 ((,class (:foreground "CadetBlue1"))))
@@ -109,9 +113,5 @@
    `(warning ((,class (:foreground "Yellow"))))))
 
 (provide-theme 'deeper-blue)
-
-;; Local Variables:
-;; no-byte-compile: t
-;; End:
 
 ;;; deeper-blue-theme.el ends here

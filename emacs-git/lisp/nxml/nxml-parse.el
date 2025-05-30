@@ -1,9 +1,9 @@
 ;;; nxml-parse.el --- XML parser, sharing infrastructure with nxml-mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: James Clark
-;; Keywords: wp, hypermedia, languages, XML
+;; Keywords: text, hypermedia, languages, XML
 
 ;; This file is part of GNU Emacs.
 
@@ -246,7 +246,7 @@ same way as well-formedness error."
 		    parsed-attributes)))
       (setq atts (cdr atts)))
     ;; We want to end up with the attributes followed by the
-    ;; the namespace attributes in the same order as
+    ;; namespace attributes in the same order as
     ;; xmltok-attributes and xmltok-namespace-attributes respectively.
     (when parsed-namespace-attributes
       (setq parsed-attributes

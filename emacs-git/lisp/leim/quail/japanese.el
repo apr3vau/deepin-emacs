@@ -1,6 +1,6 @@
-;;; japanese.el --- Quail package for inputting Japanese  -*-coding: iso-2022-7bit;-*-
+;;; japanese.el --- Quail package for inputting Japanese  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
 ;;   2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -31,7 +31,7 @@
 (require 'kkc)
 
 (defvar quail-japanese-use-double-n nil
-  "If non-nil, use type \"nn\" to insert $B$s(B.")
+  "If non-nil, use type \"nn\" to insert ん.")
 
 ;; Update Quail translation region while considering Japanese bizarre
 ;; translation rules.
@@ -47,14 +47,14 @@
 		 (setq quail-current-str (aref quail-current-key 0)
 		       control-flag t))
 		((= (aref quail-current-key 0) ?n)
-		 (setq quail-current-str ?$B$s(B)
+		 (setq quail-current-str ?ん)
 		 (if (and quail-japanese-use-double-n
 			  (> keylen 0)
 			  (= (aref quail-current-key 1) ?n))
 		     (setq control-flag t)))
 		((and (> keylen 1)
 		      (= (aref quail-current-key 0) (aref quail-current-key 1)))
-		 (setq quail-current-str ?$B$C(B))
+		 (setq quail-current-str ?っ))
 		(t
 		 (setq quail-current-str (aref quail-current-key 0))))
 	  (if (integerp control-flag)
@@ -84,10 +84,10 @@
 (defun quail-japanese-kanji-kkc ()
   (interactive)
   (when (= (char-before (overlay-end quail-conv-overlay)) ?n)
-    ;; The last char is `n'.  We had better convert it to `$B$s(B'
+    ;; The last char is `n'.  We had better convert it to `ん'
     ;; before kana-kanji conversion.
     (goto-char (1- (overlay-end quail-conv-overlay)))
-    (insert ?$B$s(B)
+    (insert ?ん)
     (delete-char 1))
   (let* ((from (copy-marker (overlay-start quail-conv-overlay)))
 	 (len (- (overlay-end quail-conv-overlay) from)))
@@ -113,8 +113,7 @@
     (?h . "japanese")
     (?q . ("japanese-ascii"))))
 
-(defvar quail-japanese-package-saved nil)
-(make-variable-buffer-local 'quail-japanese-package-saved)
+(defvar-local quail-japanese-package-saved nil)
 (put 'quail-japanese-package-saved 'permanent-local t)
 
 (defun quail-japanese-switch-package (key idx)
@@ -135,113 +134,113 @@
   (throw 'quail-tag nil))
 
 (defvar quail-japanese-transliteration-rules
-  '(( "a" "$B$"(B") ( "i" "$B$$(B") ( "u" "$B$&(B") ( "e" "$B$((B") ( "o" "$B$*(B")
-    ("ka" "$B$+(B") ("ki" "$B$-(B") ("ku" "$B$/(B") ("ke" "$B$1(B") ("ko" "$B$3(B")
-    ("sa" "$B$5(B") ("si" "$B$7(B") ("su" "$B$9(B") ("se" "$B$;(B") ("so" "$B$=(B")
-    ("ta" "$B$?(B") ("ti" "$B$A(B") ("tu" "$B$D(B") ("te" "$B$F(B") ("to" "$B$H(B")
-    ("na" "$B$J(B") ("ni" "$B$K(B") ("nu" "$B$L(B") ("ne" "$B$M(B") ("no" "$B$N(B")
-    ("ha" "$B$O(B") ("hi" "$B$R(B") ("hu" "$B$U(B") ("he" "$B$X(B") ("ho" "$B$[(B")
-    ("ma" "$B$^(B") ("mi" "$B$_(B") ("mu" "$B$`(B") ("me" "$B$a(B") ("mo" "$B$b(B")
-    ("ya" "$B$d(B")             ("yu" "$B$f(B")             ("yo" "$B$h(B")
-    ("ra" "$B$i(B") ("ri" "$B$j(B") ("ru" "$B$k(B") ("re" "$B$l(B") ("ro" "$B$m(B")
-    ("la" "$B$i(B") ("li" "$B$j(B") ("lu" "$B$k(B") ("le" "$B$l(B") ("lo" "$B$m(B")
-    ("wa" "$B$o(B") ("wi" "$B$p(B") ("wu" "$B$&(B") ("we" "$B$q(B") ("wo" "$B$r(B")
-    ("n'" "$B$s(B")
-    ("ga" "$B$,(B") ("gi" "$B$.(B") ("gu" "$B$0(B") ("ge" "$B$2(B") ("go" "$B$4(B")
-    ("za" "$B$6(B") ("zi" "$B$8(B") ("zu" "$B$:(B") ("ze" "$B$<(B") ("zo" "$B$>(B")
-    ("da" "$B$@(B") ("di" "$B$B(B") ("du" "$B$E(B") ("de" "$B$G(B") ("do" "$B$I(B")
-    ("ba" "$B$P(B") ("bi" "$B$S(B") ("bu" "$B$V(B") ("be" "$B$Y(B") ("bo" "$B$\(B")
-    ("pa" "$B$Q(B") ("pi" "$B$T(B") ("pu" "$B$W(B") ("pe" "$B$Z(B") ("po" "$B$](B")
+  '(( "a" "あ") ( "i" "い") ( "u" "う") ( "e" "え") ( "o" "お")
+    ("ka" "か") ("ki" "き") ("ku" "く") ("ke" "け") ("ko" "こ")
+    ("sa" "さ") ("si" "し") ("su" "す") ("se" "せ") ("so" "そ")
+    ("ta" "た") ("ti" "ち") ("tu" "つ") ("te" "て") ("to" "と")
+    ("na" "な") ("ni" "に") ("nu" "ぬ") ("ne" "ね") ("no" "の")
+    ("ha" "は") ("hi" "ひ") ("hu" "ふ") ("he" "へ") ("ho" "ほ")
+    ("ma" "ま") ("mi" "み") ("mu" "む") ("me" "め") ("mo" "も")
+    ("ya" "や")             ("yu" "ゆ")             ("yo" "よ")
+    ("ra" "ら") ("ri" "り") ("ru" "る") ("re" "れ") ("ro" "ろ")
+    ("la" "ら") ("li" "り") ("lu" "る") ("le" "れ") ("lo" "ろ")
+    ("wa" "わ") ("wi" "ゐ") ("wu" "う") ("we" "ゑ") ("wo" "を")
+    ("n'" "ん")
+    ("ga" "が") ("gi" "ぎ") ("gu" "ぐ") ("ge" "げ") ("go" "ご")
+    ("za" "ざ") ("zi" "じ") ("zu" "ず") ("ze" "ぜ") ("zo" "ぞ")
+    ("da" "だ") ("di" "ぢ") ("du" "づ") ("de" "で") ("do" "ど")
+    ("ba" "ば") ("bi" "び") ("bu" "ぶ") ("be" "べ") ("bo" "ぼ")
+    ("pa" "ぱ") ("pi" "ぴ") ("pu" "ぷ") ("pe" "ぺ") ("po" "ぽ")
 
-    ("kya" ["$B$-$c(B"]) ("kyu" ["$B$-$e(B"]) ("kye" ["$B$-$'(B"]) ("kyo" ["$B$-$g(B"])
-    ("sya" ["$B$7$c(B"]) ("syu" ["$B$7$e(B"]) ("sye" ["$B$7$'(B"]) ("syo" ["$B$7$g(B"])
-    ("sha" ["$B$7$c(B"]) ("shu" ["$B$7$e(B"]) ("she" ["$B$7$'(B"]) ("sho" ["$B$7$g(B"])
-    ("cha" ["$B$A$c(B"]) ("chu" ["$B$A$e(B"]) ("che" ["$B$A$'(B"]) ("cho" ["$B$A$g(B"])
-    ("tya" ["$B$A$c(B"]) ("tyu" ["$B$A$e(B"]) ("tye" ["$B$A$'(B"]) ("tyo" ["$B$A$g(B"])
-    ("nya" ["$B$K$c(B"]) ("nyu" ["$B$K$e(B"]) ("nye" ["$B$K$'(B"]) ("nyo" ["$B$K$g(B"])
-    ("hya" ["$B$R$c(B"]) ("hyu" ["$B$R$e(B"]) ("hye" ["$B$R$'(B"]) ("hyo" ["$B$R$g(B"])
-    ("mya" ["$B$_$c(B"]) ("myu" ["$B$_$e(B"]) ("mye" ["$B$_$'(B"]) ("myo" ["$B$_$g(B"])
-    ("rya" ["$B$j$c(B"]) ("ryu" ["$B$j$e(B"]) ("rye" ["$B$j$'(B"]) ("ryo" ["$B$j$g(B"])
-    ("lya" ["$B$j$c(B"]) ("lyu" ["$B$j$e(B"]) ("lye" ["$B$j$'(B"]) ("lyo" ["$B$j$g(B"])
-    ("gya" ["$B$.$c(B"]) ("gyu" ["$B$.$e(B"]) ("gye" ["$B$.$'(B"]) ("gyo" ["$B$.$g(B"])
-    ("zya" ["$B$8$c(B"]) ("zyu" ["$B$8$e(B"]) ("zye" ["$B$8$'(B"]) ("zyo" ["$B$8$g(B"])
-    ("jya" ["$B$8$c(B"]) ("jyu" ["$B$8$e(B"]) ("jye" ["$B$8$'(B"]) ("jyo" ["$B$8$g(B"])
-    ( "ja" ["$B$8$c(B"]) ( "ju" ["$B$8$e(B"]) ( "je" ["$B$8$'(B"]) ( "jo" ["$B$8$g(B"])
-    ("bya" ["$B$S$c(B"]) ("byu" ["$B$S$e(B"]) ("bye" ["$B$S$'(B"]) ("byo" ["$B$S$g(B"])
-    ("pya" ["$B$T$c(B"]) ("pyu" ["$B$T$e(B"]) ("pye" ["$B$T$'(B"]) ("pyo" ["$B$T$g(B"])
+    ("kya" ["きゃ"]) ("kyu" ["きゅ"]) ("kye" ["きぇ"]) ("kyo" ["きょ"])
+    ("sya" ["しゃ"]) ("syu" ["しゅ"]) ("sye" ["しぇ"]) ("syo" ["しょ"])
+    ("sha" ["しゃ"]) ("shu" ["しゅ"]) ("she" ["しぇ"]) ("sho" ["しょ"])
+    ("cha" ["ちゃ"]) ("chu" ["ちゅ"]) ("che" ["ちぇ"]) ("cho" ["ちょ"])
+    ("tya" ["ちゃ"]) ("tyu" ["ちゅ"]) ("tye" ["ちぇ"]) ("tyo" ["ちょ"])
+    ("nya" ["にゃ"]) ("nyu" ["にゅ"]) ("nye" ["にぇ"]) ("nyo" ["にょ"])
+    ("hya" ["ひゃ"]) ("hyu" ["ひゅ"]) ("hye" ["ひぇ"]) ("hyo" ["ひょ"])
+    ("mya" ["みゃ"]) ("myu" ["みゅ"]) ("mye" ["みぇ"]) ("myo" ["みょ"])
+    ("rya" ["りゃ"]) ("ryu" ["りゅ"]) ("rye" ["りぇ"]) ("ryo" ["りょ"])
+    ("lya" ["りゃ"]) ("lyu" ["りゅ"]) ("lye" ["りぇ"]) ("lyo" ["りょ"])
+    ("gya" ["ぎゃ"]) ("gyu" ["ぎゅ"]) ("gye" ["ぎぇ"]) ("gyo" ["ぎょ"])
+    ("zya" ["じゃ"]) ("zyu" ["じゅ"]) ("zye" ["じぇ"]) ("zyo" ["じょ"])
+    ("jya" ["じゃ"]) ("jyu" ["じゅ"]) ("jye" ["じぇ"]) ("jyo" ["じょ"])
+    ( "ja" ["じゃ"]) ( "ju" ["じゅ"]) ( "je" ["じぇ"]) ( "jo" ["じょ"])
+    ("bya" ["びゃ"]) ("byu" ["びゅ"]) ("bye" ["びぇ"]) ("byo" ["びょ"])
+    ("pya" ["ぴゃ"]) ("pyu" ["ぴゅ"]) ("pye" ["ぴぇ"]) ("pyo" ["ぴょ"])
 
-    ("kwa" ["$B$/$n(B"]) ("kwi" ["$B$/$#(B"]) ("kwe" ["$B$/$'(B"]) ("kwo" ["$B$/$)(B"])
-    ("tsa" ["$B$D$!(B"]) ("tsi" ["$B$D$#(B"]) ("tse" ["$B$D$'(B"]) ("tso" ["$B$D$)(B"])
-    ( "fa" ["$B$U$!(B"]) ( "fi" ["$B$U$#(B"]) ( "fe" ["$B$U$'(B"]) ( "fo" ["$B$U$)(B"])
-    ("gwa" ["$B$0$n(B"]) ("gwi" ["$B$0$#(B"]) ("gwe" ["$B$0$'(B"]) ("gwo" ["$B$0$)(B"])
+    ("kwa" ["くゎ"]) ("kwi" ["くぃ"]) ("kwe" ["くぇ"]) ("kwo" ["くぉ"])
+    ("tsa" ["つぁ"]) ("tsi" ["つぃ"]) ("tse" ["つぇ"]) ("tso" ["つぉ"])
+    ( "fa" ["ふぁ"]) ( "fi" ["ふぃ"]) ( "fe" ["ふぇ"]) ( "fo" ["ふぉ"])
+    ("gwa" ["ぐゎ"]) ("gwi" ["ぐぃ"]) ("gwe" ["ぐぇ"]) ("gwo" ["ぐぉ"])
 
-    ("dyi" ["$B$G$#(B"]) ("dyu" ["$B$I$%(B"]) ("dye" ["$B$G$'(B"]) ("dyo" ["$B$I$)(B"])
-    ("xwi" ["$B$&$#(B"])                  ("xwe" ["$B$&$'(B"]) ("xwo" ["$B$&$)(B"])
+    ("dyi" ["でぃ"]) ("dyu" ["どぅ"]) ("dye" ["でぇ"]) ("dyo" ["どぉ"])
+    ("xwi" ["うぃ"])                  ("xwe" ["うぇ"]) ("xwo" ["うぉ"])
 
-    ("shi" "$B$7(B") ("tyi" ["$B$F$#(B"]) ("chi" "$B$A(B") ("tsu" "$B$D(B") ("ji" "$B$8(B")
-    ("fu"  "$B$U(B")
-    ("ye" ["$B$$$'(B"])
+    ("shi" "し") ("tyi" ["てぃ"]) ("chi" "ち") ("tsu" "つ") ("ji" "じ")
+    ("fu"  "ふ")
+    ("ye" ["いぇ"])
 
-    ("va" ["$B%t$!(B"]) ("vi" ["$B%t$#(B"]) ("vu" "$B%t(B") ("ve" ["$B%t$'(B"]) ("vo" ["$B%t$)(B"])
+    ("va" ["ヴぁ"]) ("vi" ["ヴぃ"]) ("vu" "ヴ") ("ve" ["ヴぇ"]) ("vo" ["ヴぉ"])
 
-    ("xa"  "$B$!(B") ("xi"  "$B$#(B") ("xu"  "$B$%(B") ("xe"  "$B$'(B") ("xo"  "$B$)(B")
-    ("xtu" "$B$C(B") ("xya" "$B$c(B") ("xyu" "$B$e(B") ("xyo" "$B$g(B") ("xwa" "$B$n(B")
-    ("xka" "$B%u(B") ("xke" "$B%v(B")
+    ("xa"  "ぁ") ("xi"  "ぃ") ("xu"  "ぅ") ("xe"  "ぇ") ("xo"  "ぉ")
+    ("xtu" "っ") ("xya" "ゃ") ("xyu" "ゅ") ("xyo" "ょ") ("xwa" "ゎ")
+    ("xka" "ヵ") ("xke" "ヶ")
 
-    ("1" "$B#1(B") ("2" "$B#2(B") ("3" "$B#3(B") ("4" "$B#4(B") ("5" "$B#5(B")
-    ("6" "$B#6(B") ("7" "$B#7(B") ("8" "$B#8(B") ("9" "$B#9(B") ("0" "$B#0(B")
+    ("1" "１") ("2" "２") ("3" "３") ("4" "４") ("5" "５")
+    ("6" "６") ("7" "７") ("8" "８") ("9" "９") ("0" "０")
 
-    ("!" "$B!*(B") ("@" "$B!w(B") ("#" "$B!t(B") ("$" "$B!p(B") ("%" "$B!s(B")
-    ("^" "$B!0(B") ("&" "$B!u(B") ("*" "$B!v(B") ("(" "$B!J(B") (")" "$B!K(B")
-    ("-" "$B!<(B") ("=" "$B!a(B") ("`" "$B!.(B") ("\\" "$B!o(B") ("|" "$B!C(B")
-    ("_" "$B!2(B") ("+" "$B!\(B") ("~" "$B!1(B") ("[" "$B!V(B") ("]" "$B!W(B")
-    ("{" "$B!P(B") ("}" "$B!Q(B") (":" "$B!'(B") (";" "$B!((B") ("\""  "$B!I(B")
-    ("'" "$B!G(B") ("." "$B!#(B") ("," "$B!"(B") ("<" "$B!c(B") (">" "$B!d(B")
-    ("?" "$B!)(B") ("/" "$B!?(B")
+    ("!" "！") ("@" "＠") ("#" "＃") ("$" "＄") ("%" "％")
+    ("^" "＾") ("&" "＆") ("*" "＊") ("(" "（") (")" "）")
+    ("-" "ー") ("=" "＝") ("`" "｀") ("\\" "￥") ("|" "｜")
+    ("_" "＿") ("+" "＋") ("~" "￣") ("[" "「") ("]" "」")
+    ("{" "｛") ("}" "｝") (":" "：") (";" "；") ("\""  "”")
+    ("'" "’") ("." "。") ("," "、") ("<" "＜") (">" "＞")
+    ("?" "？") ("/" "／")
 
-    ("z1" "$B!{(B") ("z!" "$B!|(B")
-    ("z2" "$B"&(B") ("z@" "$B"'(B")
-    ("z3" "$B"$(B") ("z#" "$B"%(B")
-    ("z4" "$B""(B") ("z$" "$B"#(B")
-    ("z5" "$B!~(B") ("z%" "$B"!(B")
-    ("z6" "$B!y(B") ("z^" "$B!z(B")
-    ("z7" "$B!}(B") ("z&" "$B!r(B")
-    ("z8" "$B!q(B") ("z*" "$B!_(B")
-    ("z9" "$B!i(B") ("z(" "$B!Z(B")
-    ("z0" "$B!j(B") ("z)" "$B![(B")
-    ("z-" "$B!A(B") ("z_" "$B!h(B")
-    ("z=" "$B!b(B") ("z+" "$B!^(B")
-    ("z\\" "$B!@(B") ("z|" "$B!B(B")
-    ("z`" "$B!-(B") ("z~" "$B!/(B")
+    ("z1" "○") ("z!" "●")
+    ("z2" "▽") ("z@" "▼")
+    ("z3" "△") ("z#" "▲")
+    ("z4" "□") ("z$" "■")
+    ("z5" "◇") ("z%" "◆")
+    ("z6" "☆") ("z^" "★")
+    ("z7" "◎") ("z&" "£")
+    ("z8" "¢") ("z*" "×")
+    ("z9" "♂") ("z(" "【")
+    ("z0" "♀") ("z)" "】")
+    ("z-" "〜") ("z_" "∴")
+    ("z=" "≠") ("z+" "±")
+    ("z\\" "＼") ("z|" "‖")
+    ("z`" "´") ("z~" "¨")
 
-    ("zq" "$B!T(B") ("zQ" "$B!R(B")
-    ("zw" "$B!U(B") ("zW" "$B!S(B")
-    ("zr" "$B!9(B") ("zR" "$B!8(B")
-    ("zt" "$B!:(B") ("zT" "$B!x(B")
-    ("zp" "$B")(B") ("zP" "$B",(B")
-    ("z[" "$B!X(B") ("z{" "$B!L(B")
-    ("z]" "$B!Y(B") ("z}" "$B!M(B")
+    ("zq" "《") ("zQ" "〈")
+    ("zw" "》") ("zW" "〉")
+    ("zr" "々") ("zR" "仝")
+    ("zt" "〆") ("zT" "§")
+    ("zp" "〒") ("zP" "↑")
+    ("z[" "『") ("z{" "〔")
+    ("z]" "』") ("z}" "〕")
 
-    ("zs" "$B!3(B") ("zS" "$B!4(B")
-    ("zd" "$B!5(B") ("zD" "$B!6(B")
-    ("zf" "$B!7(B") ("zF" "$B"*(B")
-    ("zg" "$B!>(B") ("zG" "$B!=(B")
-    ("zh" "$B"+(B")
-    ("zj" "$B"-(B")
-    ("zk" "$B",(B")
-    ("zl" "$B"*(B")
-    ("z;" "$B!+(B") ("z:" "$B!,(B")
-    ("z'" "$B!F(B") ("z\"" "$B!H(B")
+    ("zs" "ヽ") ("zS" "ヾ")
+    ("zd" "ゝ") ("zD" "ゞ")
+    ("zf" "〃") ("zF" "→")
+    ("zg" "‐") ("zG" "—")
+    ("zh" "←")
+    ("zj" "↓")
+    ("zk" "↑")
+    ("zl" "→")
+    ("z;" "゛") ("z:" "゜")
+    ("z'" "‘") ("z\"" "“")
 
     ("zx" [":-"]) ("zX" [":-)"])
-    ("zc" "$B!;(B") ("zC" "$B!n(B")
-    ("zv" "$B"((B") ("zV" "$B!`(B")
-    ("zb" "$B!k(B") ("zB" "$B"+(B")
-    ("zn" "$B!l(B") ("zN" "$B"-(B")
-    ("zm" "$B!m(B") ("zM" "$B".(B")
-    ("z," "$B!E(B") ("z<" "$B!e(B")
-    ("z." "$B!D(B") ("z>" "$B!f(B")
-    ("z/" "$B!&(B") ("z?" "$B!g(B")
+    ("zc" "〇") ("zC" "℃")
+    ("zv" "※") ("zV" "÷")
+    ("zb" "°") ("zB" "←")
+    ("zn" "′") ("zN" "↓")
+    ("zm" "″") ("zM" "〓")
+    ("z," "‥") ("z<" "≦")
+    ("z." "…") ("z>" "≧")
+    ("z/" "・") ("z?" "∞")
 
     ("\\\\" quail-japanese-self-insert-and-switch-to-alpha)
     ("{{" quail-japanese-self-insert-and-switch-to-alpha)
@@ -252,81 +251,81 @@
     ))
 
 
-;; $B%m!<%^;zF~NO5Z$S2>L>4A;zJQ49$K$h$kF|K\8lF~NO%a%=%C%I(B
+;; ローマ字入力及び仮名漢字変換による日本語入力メソッド
 ;;
-;; $B$3$NF~NO%a%=%C%I$G$NF|K\8l$NF~NO$OFs$D$N%9%F!<%8!V%m!<%^;z2>L>JQ49!W(B
-;; $B$H!V2>L>4A;zJQ49!W$+$i$J$k!#:G=i$O%m!<%^;z2>L>JQ49$N%9%F!<%8$G!"%9(B
-;; $B%Z!<%9%-!<$r2!$9$3$H$K$h$j!"<!$N%9%F!<%8!V2>L>4A;zJQ49!W$X?J$`!#(B
+;; この入力メソッドでの日本語の入力は二つのステージ「ローマ字仮名変換」
+;; と「仮名漢字変換」からなる。最初はローマ字仮名変換のステージで、ス
+;; ペースキーを押すことにより、次のステージ「仮名漢字変換」へ進む。
 ;;
-;; $B!V%m!<%^;z2>L>JQ49!W(B
+;; 「ローマ字仮名変換」
 ;;
-;; $BJ?2>L>$O>.J8;z%-!<!JNs!K$rBG$D$3$H$K$h$jF~NO!#6gFIE@!"3g8LN`$OBP1~(B
-;; $B$9$k1Q;z%-!<$rBG$D$3$H$K$h$jF~NO!#$=$NB>$N%7%s%\%k$O(B `z' $B$KB3$1$F2?(B
-;; $B$l$+$N%-!<$rBG$D$3$H$K$h$jF~NO!#2<$KA4$F$N2DG=$J%-!<%7!<%1%s%9%j%9(B
-;; $B%H%"%C%W$5$l$F$$$k!#F~NO$5$l$?J8;z$O2<@~$G<($5$l$k!#(B
+;; 平仮名は小文字キー（列）を打つことにより入力。句読点、括弧類は対応
+;; する英字キーを打つことにより入力。その他のシンボルは `z' に続けて何
+;; れかのキーを打つことにより入力。下に全ての可能なキーシーケンスリス
+;; トアップされている。入力された文字は下線で示される。
 ;;
-;; $B$5$i$K0J2<$N%-!<$GFCJL$J=hM}$r9T$&!#(B
+;; さらに以下のキーで特別な処理を行う。
 ;;
-;; K	$BJ?2>L>$rJR2>L>$K!"$"$k$$$OJR2>L>$rJ?2>L>$KJQ49(B
-;; qq	$B$3$NF~NO%a%=%C%I$H(B `japanese-ascii' $BF~NO%a%=%C%I$r%H%0%k@ZBX(B
-;; qz	`japanese-zenkaku' $BF~NO%a%=%C%I$K%7%U%H(B
-;;	qh $B$HBG$F$P85$KLa$k(B
-;; RET	$B8=:_$NF~NOJ8;zNs$r3NDj(B
-;; SPC	$B2>L>4A;zJQ49$K?J$`(B
+;; K	平仮名を片仮名に、あるいは片仮名を平仮名に変換
+;; qq	この入力メソッドと `japanese-ascii' 入力メソッドをトグル切替
+;; qz	`japanese-zenkaku' 入力メソッドにシフト
+;;	qh と打てば元に戻る
+;; RET	現在の入力文字列を確定
+;; SPC	仮名漢字変換に進む
 ;;
-;; `japanese-ascii' $BF~NO%a%=%C%I$O(B ASCII $BJ8;z$rF~NO$9$k$N$K;H$&!#$3$l(B
-;; $B$OF~NO%a%=%C%I$r%*%U$K$9$k$N$H$[$H$s$IF1$8$G$"$k!#0[$J$k$N$O(B qq $B$H(B
-;; $BBG$D$3$H$K$h$j!"(B`japanese' $BF~NO%a%=%C%I$KLa$l$kE@$G$"$k!#(B
+;; `japanese-ascii' 入力メソッドは ASCII 文字を入力するのに使う。これ
+;; は入力メソッドをオフにするのとほとんど同じである。異なるのは qq と
+;; 打つことにより、`japanese' 入力メソッドに戻れる点である。
 ;;
-;; `japanese-zenkaku' $BF~NO%a%=%C%I$OA43Q1Q?t;z$rF~NO$9$k$N$K;H$&!#(B
+;; `japanese-zenkaku' 入力メソッドは全角英数字を入力するのに使う。
 ;;
-;; $B!V%m!<%^;z2>L>JQ49!W%9%F!<%8$G$N%-!<%7!<%1%s%9$N%j%9%H$O:G8e$KIU$1(B
-;; $B$F$"$k!#(B
+;; 「ローマ字仮名変換」ステージでのキーシーケンスのリストは最後に付け
+;; てある。
 ;;
-;; $B!V2>L>4A;zJQ49!W(B
+;; 「仮名漢字変換」
 ;;
-;; $B$3$N%9%F!<%8$G$O!"A0%9%F!<%8$GF~NO$5$l$?J8;zNs$r2>L>4A;zJQ49$9$k!#(B
-;; $BJQ49$5$l$?J8;zNs$O!"CmL\J8@a!JH?E>I=<(!K$H;D$j$NF~NO!J2<@~I=<(!K$K(B
-;; $BJ,$1$i$l$k!#CmL\J8@a$KBP$7$F$O0J2<$N%3%^%s%I$,;H$($k!#(B
+;; このステージでは、前ステージで入力された文字列を仮名漢字変換する。
+;; 変換された文字列は、注目文節（反転表示）と残りの入力（下線表示）に
+;; 分けられる。注目文節に対しては以下のコマンドが使える。
 ;;
 ;; SPC, C-n	kkc-next
-;;	$B<!$NJQ498uJd$rI=<((B
-;;	kkc-show-conversion-list-count $B0J>eB3$1$FBG$F$P!"JQ498uJd%j%9(B
-;;	$B%H$r%(%3!<%(%j%"$KI=<((B
+;;	次の変換候補を表示
+;;	kkc-show-conversion-list-count 以上続けて打てば、変換候補リス
+;;	トをエコーエリアに表示
 ;; C-p		kkc-prev
-;;	$BA0$NJQ498uJd$rI=<((B
-;;	kkc-show-conversion-list-count $B0J>eB3$1$FBG$F$P!"JQ498uJd%j%9(B
-;;	$B%H$r%(%3!<%(%j%"$KI=<((B
+;;	前の変換候補を表示
+;;	kkc-show-conversion-list-count 以上続けて打てば、変換候補リス
+;;	トをエコーエリアに表示
 ;; l		kkc-show-conversion-list-or-next-group
-;;	$B:G9b#1#08D$^$G$NJQ498uJd$r%(%3!<%(%j%"$KI=<(!#(B
-;;	$BB3$1$FBG$?$l$l$P!"<!$N#1#08uJd$rI=<(!#(B
+;;	最高１０個までの変換候補をエコーエリアに表示。
+;;	続けて打たれれば、次の１０候補を表示。
 ;; L		kkc-show-conversion-list-or-prev-group
-;;	$B:G9b#1#08D$^$G$NJQ498uJd$r%(%3!<%(%j%"$KI=<(!#(B
-;;	$BB3$1$FBG$?$l$l$P!"A0$N#1#08uJd$rI=<(!#(B
+;;	最高１０個までの変換候補をエコーエリアに表示。
+;;	続けて打たれれば、前の１０候補を表示。
 ;; 0..9		kkc-select-from-list
-;;	$BBG$?$l$??t;z$NJQ498uJd$rA*Br(B
+;;	打たれた数字の変換候補を選択
 ;; H		kkc-hiragana
-;;	$BCmL\J8@a$rJ?2>L>$KJQ49(B
+;;	注目文節を平仮名に変換
 ;; K		kkc-katakana
-;;	$BCmL\J8@a$rJR2>L>$KJQ49(B
+;;	注目文節を片仮名に変換
 ;; C-o		kkc-longer
-;;	$BCmL\J8@a$r8e$m$K0lJ8;z?-$P$9(B
+;;	注目文節を後ろに一文字伸ばす
 ;; C-i		kkc-shorter
-;;	$BCmL\J8@a$r8e$m$+$i0lJ8;z=L$a$k(B
+;;	注目文節を後ろから一文字縮める
 ;; C-f		kkc-next-phrase
-;;	$BCmL\J8@a$r3NDj$5$;$k!#$b$7;D$j$NF~NO$,$^$@$"$l$P!":G=i$NJ8@a$r(B
-;;	$BA*Br$7!"$=$l$rCmL\J8@a$H$7!"$=$N:G=i$NJQ498uJd$rI=<($9$k!#(B
+;;	注目文節を確定させる。もし残りの入力がまだあれば、最初の文節を
+;;	選択し、それを注目文節とし、その最初の変換候補を表示する。
 ;; DEL, C-c	kkc-cancel
-;;	$B2>L>4A;zJQ49$r%-%c%s%;%k$7!"%m!<%^;z2>L>JQ49$N%9%F!<%8$KLa$k!#(B
+;;	仮名漢字変換をキャンセルし、ローマ字仮名変換のステージに戻る。
 ;; return		kkc-terminate
-;;	$BA4J8@a$r3NDj$5$;$k!#(B
+;;	全文節を確定させる。
 ;; C-SPC, C-@	kkc-first-char-only
-;;	$B:G=i$NJ8;z$r3NDj$5$;!";D$j$O:o=|$9$k!#(B
+;;	最初の文字を確定させ、残りは削除する。
 ;; C-h		kkc-help
-;;	$B$3$l$i$N%-!<%P%$%s%I$N%j%9%H$rI=<($9$k!#$"(B
+;;	これらのキーバインドのリストを表示する。あ
 
 (quail-define-package
- "japanese" "Japanese" "A$B$"(B"
+ "japanese" "Japanese" "Aあ"
  nil
  "Japanese input method by Roman transliteration and Kana-Kanji conversion.
 
@@ -360,7 +359,7 @@ input method.
 The input method `japanese-zenkaku' is used to enter full width
 JISX0208 characters corresponding to typed ASCII characters.
 
-List of the all key sequences for Roman-Kana transliteration is shown
+List of all the key sequences for Roman-Kana transliteration is shown
 at the tail.
 
 :: Kana-Kanji conversion ::
@@ -413,7 +412,7 @@ C-h		kkc-help
 	List these key bindings.
 "
  nil t t nil nil nil nil nil
- 'quail-japanese-update-translation
+ #'quail-japanese-update-translation
  '(("K" . quail-japanese-toggle-kana)
    (" " . quail-japanese-kanji-kkc)
    ("\C-m" . quail-no-conversion)
@@ -433,7 +432,7 @@ Type \"qq\" to go back to previous input method."
 (quail-define-rules ("qq" quail-japanese-switch-package))
 
 (quail-define-package
- "japanese-zenkaku" "Japanese" "$B#A(B"
+ "japanese-zenkaku" "Japanese" "Ａ"
  nil
  "Japanese zenkaku alpha numeric character input method.
 ---- Special key bindings ----
@@ -445,30 +444,30 @@ qh:	shift to the input method `japanese',
 
 (quail-define-rules
 
-(" " "$B!!(B") ("!" "$B!*(B") ("\"" "$B!m(B") ("#" "$B!t(B")
-("$" "$B!p(B") ("%" "$B!s(B") ("&" "$B!u(B") ("'" "$B!l(B")
-("(" "$B!J(B") (")" "$B!K(B") ("*" "$B!v(B") ("+" "$B!\(B")
-("," "$B!$(B") ("-" "$B!](B") ("." "$B!%(B") ("/" "$B!?(B")
-("0" "$B#0(B") ("1" "$B#1(B") ("2" "$B#2(B") ("3" "$B#3(B")
-("4" "$B#4(B") ("5" "$B#5(B") ("6" "$B#6(B") ("7" "$B#7(B")
-("8" "$B#8(B") ("9" "$B#9(B") (":" "$B!'(B") (";" "$B!((B")
-("<" "$B!c(B") ("=" "$B!a(B") (">" "$B!d(B") ("?" "$B!)(B")
-("@" "$B!w(B") ("A" "$B#A(B") ("B" "$B#B(B") ("C" "$B#C(B")
-("D" "$B#D(B") ("E" "$B#E(B") ("F" "$B#F(B") ("G" "$B#G(B")
-("H" "$B#H(B") ("I" "$B#I(B") ("J" "$B#J(B") ("K" "$B#K(B")
-("L" "$B#L(B") ("M" "$B#M(B") ("N" "$B#N(B") ("O" "$B#O(B")
-("P" "$B#P(B") ("Q" "$B#Q(B") ("R" "$B#R(B") ("S" "$B#S(B")
-("T" "$B#T(B") ("U" "$B#U(B") ("V" "$B#V(B") ("W" "$B#W(B")
-("X" "$B#X(B") ("Y" "$B#Y(B") ("Z" "$B#Z(B") ("[" "$B!N(B")
-("\\" "$B!o(B") ("]" "$B!O(B") ("^" "$B!0(B") ("_" "$B!2(B")
-("`" "$B!F(B") ("a" "$B#a(B") ("b" "$B#b(B") ("c" "$B#c(B")
-("d" "$B#d(B") ("e" "$B#e(B") ("f" "$B#f(B") ("g" "$B#g(B")
-("h" "$B#h(B") ("i" "$B#i(B") ("j" "$B#j(B") ("k" "$B#k(B")
-("l" "$B#l(B") ("m" "$B#m(B") ("n" "$B#n(B") ("o" "$B#o(B")
-("p" "$B#p(B") ("q" "$B#q(B") ("r" "$B#r(B") ("s" "$B#s(B")
-("t" "$B#t(B") ("u" "$B#u(B") ("v" "$B#v(B") ("w" "$B#w(B")
-("x" "$B#x(B") ("y" "$B#y(B") ("z" "$B#z(B") ("{" "$B!P(B")
-("|" "$B!C(B") ("}" "$B!Q(B") ("~" "$B!A(B")
+(" " "　") ("!" "！") ("\"" "″") ("#" "＃")
+("$" "＄") ("%" "％") ("&" "＆") ("'" "′")
+("(" "（") (")" "）") ("*" "＊") ("+" "＋")
+("," "，") ("-" "−") ("." "．") ("/" "／")
+("0" "０") ("1" "１") ("2" "２") ("3" "３")
+("4" "４") ("5" "５") ("6" "６") ("7" "７")
+("8" "８") ("9" "９") (":" "：") (";" "；")
+("<" "＜") ("=" "＝") (">" "＞") ("?" "？")
+("@" "＠") ("A" "Ａ") ("B" "Ｂ") ("C" "Ｃ")
+("D" "Ｄ") ("E" "Ｅ") ("F" "Ｆ") ("G" "Ｇ")
+("H" "Ｈ") ("I" "Ｉ") ("J" "Ｊ") ("K" "Ｋ")
+("L" "Ｌ") ("M" "Ｍ") ("N" "Ｎ") ("O" "Ｏ")
+("P" "Ｐ") ("Q" "Ｑ") ("R" "Ｒ") ("S" "Ｓ")
+("T" "Ｔ") ("U" "Ｕ") ("V" "Ｖ") ("W" "Ｗ")
+("X" "Ｘ") ("Y" "Ｙ") ("Z" "Ｚ") ("[" "［")
+("\\" "￥") ("]" "］") ("^" "＾") ("_" "＿")
+("`" "‘") ("a" "ａ") ("b" "ｂ") ("c" "ｃ")
+("d" "ｄ") ("e" "ｅ") ("f" "ｆ") ("g" "ｇ")
+("h" "ｈ") ("i" "ｉ") ("j" "ｊ") ("k" "ｋ")
+("l" "ｌ") ("m" "ｍ") ("n" "ｎ") ("o" "ｏ")
+("p" "ｐ") ("q" "ｑ") ("r" "ｒ") ("s" "ｓ")
+("t" "ｔ") ("u" "ｕ") ("v" "ｖ") ("w" "ｗ")
+("x" "ｘ") ("y" "ｙ") ("z" "ｚ") ("{" "｛")
+("|" "｜") ("}" "｝") ("~" "〜")
 
 ("qq" quail-japanese-switch-package)
 ("qh" quail-japanese-switch-package)
@@ -485,14 +484,14 @@ qh:	shift to the input method `japanese',
 
 (quail-define-package
  "japanese-hankaku-kana"
- "Japanese" "(I1(B"
+ "Japanese" "ｱ"
  nil
  "Japanese hankaku katakana input method by Roman transliteration.
 ---- Special key bindings ----
 qq:	toggle between this input method and the input method `japanese-ascii'.
 "
  nil t t nil nil nil nil nil
- 'quail-japanese-hankaku-update-translation)
+ #'quail-japanese-hankaku-update-translation)
 
 (dolist (elt quail-japanese-transliteration-rules)
   (quail-defrule (car elt)
@@ -514,11 +513,11 @@ qq:	toggle between this input method and the input method `japanese-ascii'.
 		   trans)))
 
 (quail-define-package
- "japanese-hiragana" "Japanese" "$B$"(B"
+ "japanese-hiragana" "Japanese" "あ"
  nil
  "Japanese hiragana input method by Roman transliteration."
  nil t t nil nil nil nil nil
- 'quail-japanese-update-translation)
+ #'quail-japanese-update-translation)
 
 ;; Use the same map as that of `japanese'.
 (setcar (cdr (cdr quail-current-package))
@@ -535,11 +534,11 @@ qq:	toggle between this input method and the input method `japanese-ascii'.
   control-flag)
 
 (quail-define-package
- "japanese-katakana" "Japanese" "$B%"(B"
+ "japanese-katakana" "Japanese" "ア"
  nil
  "Japanese katakana input method by Roman transliteration."
  nil t t nil nil nil nil nil
- 'quail-japanese-katakana-update-translation)
+ #'quail-japanese-katakana-update-translation)
 
 (dolist (elt quail-japanese-transliteration-rules)
   (quail-defrule (car elt)

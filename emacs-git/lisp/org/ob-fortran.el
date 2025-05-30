@@ -1,11 +1,11 @@
 ;;; ob-fortran.el --- Babel Functions for Fortran    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Authors: Sergey Litvinov
 ;;       Eric Schulte
 ;; Keywords: literate programming, reproducible research, fortran
-;; Homepage: http://orgmode.org
+;; URL: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 ;;
@@ -27,26 +27,32 @@
 ;; Org-Babel support for evaluating fortran code.
 
 ;;; Code:
+
+(require 'org-macs)
+(org-assert-version)
+
 (require 'ob)
+(require 'org-macs)
 (require 'cc-mode)
 (require 'cl-lib)
 
 (declare-function org-entry-get "org"
 		  (pom property &optional inherit literal-nil))
-(declare-function org-remove-indentation "org" (code &optional n))
-(declare-function org-trim "org" (s &optional keep-lead))
 
 (defvar org-babel-tangle-lang-exts)
 (add-to-list 'org-babel-tangle-lang-exts '("fortran" . "F90"))
 
 (defvar org-babel-default-header-args:fortran '())
 
-(defvar org-babel-fortran-compiler "gfortran"
-  "fortran command used to compile a fortran source code file into an
-  executable.")
+(defcustom org-babel-fortran-compiler "gfortran"
+  "Fortran command used to compile Fortran source code file."
+  :group 'org-babel
+  :package-version '(Org . "9.5")
+  :type  'string)
 
 (defun org-babel-execute:fortran (body params)
-  "This function should only be called by `org-babel-execute:fortran'"
+  "Execute Fortran BODY according to PARAMS.
+This function is called by `org-babel-execute-src-block'."
   (let* ((tmp-src-file (org-babel-temp-file "fortran-src-" ".F90"))
          (tmp-bin-file (org-babel-temp-file "fortran-bin-" org-babel-exeext))
          (cmdline (cdr (assq :cmdline params)))
@@ -77,9 +83,10 @@
         (cdr (assq :rowname-names params)) (cdr (assq :rownames params)))))))
 
 (defun org-babel-expand-body:fortran (body params)
-  "Expand a block of fortran or fortran code with org-babel according to
-its header arguments."
+  "Expand a fortran BODY according to its header arguments defined in PARAMS."
   (let ((vars (org-babel--get-vars params))
+        (prologue (cdr (assq :prologue params)))
+        (epilogue (cdr (assq :epilogue params)))
         (main-p (not (string= (cdr (assq :main params)) "no")))
         (includes (or (cdr (assq :includes params))
                       (org-babel-read (org-entry-get nil "includes" t))))
@@ -102,32 +109,43 @@ its header arguments."
 		     (concat
 		      ;; variables
 		      (mapconcat 'org-babel-fortran-var-to-fortran vars "\n")
-		      body) params)
-		  body) "\n") "\n")))
+                      (and prologue (concat prologue "\n"))
+		      body
+                      (and prologue (concat prologue "\n")))
+		     params)
+                  (concat
+                   (and prologue (concat prologue "\n"))
+		   body
+                   (and epilogue (concat "\n" epilogue "\n"))))
+                "\n")
+               "\n")))
 
 (defun org-babel-fortran-ensure-main-wrap (body params)
-  "Wrap body in a \"program ... end program\" block if none exists."
-  (if (string-match "^[ \t]*program[ \t]*.*" (capitalize body))
+  "Wrap BODY in a \"program ... end program\" block if none exists.
+Variable assignments are derived from PARAMS."
+  (if (string-match "^[ \t]*program\\>" (capitalize body))
       (let ((vars (org-babel--get-vars params)))
-	(if vars (error "Cannot use :vars if `program' statement is present"))
+	(when vars (error "Cannot use :vars if `program' statement is present"))
 	body)
     (format "program main\n%s\nend program main\n" body)))
 
 (defun org-babel-prep-session:fortran (_session _params)
-  "This function does nothing as fortran is a compiled language with no
-support for sessions"
+  "Do nothing.
+This function does nothing as fortran is a compiled language with no
+support for sessions."
   (error "Fortran is a compiled languages -- no support for sessions"))
 
 (defun org-babel-load-session:fortran (_session _body _params)
-  "This function does nothing as fortran is a compiled language with no
-support for sessions"
+  "Do nothing.
+This function does nothing as fortran is a compiled language with no
+support for sessions."
   (error "Fortran is a compiled languages -- no support for sessions"))
 
 ;; helper functions
 
 (defun org-babel-fortran-var-to-fortran (pair)
-  "Convert an elisp val into a string of fortran code specifying a var
-of the same value."
+  "Convert PAIR of (VAR . VAL) into a string of fortran code.
+The fortran code will assign VAL to VAR variable."
   ;; TODO list support
   (let ((var (car pair))
         (val (cdr pair)))
@@ -155,10 +173,10 @@ of the same value."
       (format "real, parameter :: %S(%d) = %s\n"
 	      var (length val) (org-babel-fortran-transform-list val)))
      (t
-      (error "the type of parameter %s is not supported by ob-fortran" var)))))
+      (error "The type of parameter %s is not supported by ob-fortran" var)))))
 
 (defun org-babel-fortran-transform-list (val)
-  "Return a fortran representation of enclose syntactic lists."
+  "Return a fortran representation of enclose syntactic list VAL."
   (if (listp val)
       (concat "(/" (mapconcat #'org-babel-fortran-transform-list val ", ") "/)")
     (format "%S" val)))

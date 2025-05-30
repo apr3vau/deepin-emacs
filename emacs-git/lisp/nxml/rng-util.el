@@ -1,9 +1,9 @@
-;;; rng-util.el --- utility functions for RELAX NG library
+;;; rng-util.el --- utility functions for RELAX NG library  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: James Clark
-;; Keywords: wp, hypermedia, languages, XML, RelaxNG
+;; Keywords: text, hypermedia, languages, XML, RelaxNG
 
 ;; This file is part of GNU Emacs.
 
@@ -24,6 +24,8 @@
 
 ;;; Code:
 
+(require 'cl-lib)
+
 (defun rng-make-datatypes-uri (uri)
   (if (string-equal uri "")
       ;; The spec doesn't say to do this, but it's perfectly conformant
@@ -36,51 +38,10 @@
 
 (defconst rng-builtin-datatypes-uri (rng-make-datatypes-uri ""))
 
-(defun rng-uniquify-eq (list)
-  "Destructively remove `eq' duplicates from LIST."
-  (and list
-       (let ((head list))
-	 (while (cdr head)
-	   (if (eq (car head) (cadr head))
-	       (setcdr head (cddr head)))
-	   (setq head (cdr head)))
-	 list)))
-
-(defun rng-uniquify-equal (list)
-  "Destructively remove `equal' duplicates from LIST."
-  (and list
-       (let ((head list))
-	 (while (cdr head)
-	   (if (equal (car head) (cadr head))
-	       (setcdr head (cddr head)))
-	   (setq head (cdr head)))
-	 list)))
-
-(defun rng-blank-p (str) (string-match "\\`[ \t\n\r]*\\'" str))
-
 (defun rng-substq (new old list)
   "Replace first member of LIST (if any) that is `eq' to OLD by NEW.
 LIST is not modified."
-  (cond ((null list) nil)
-	((eq (car list) old)
-	 (cons new (cdr list)))
-	(t
-	 (let ((tail (cons (car list)
-			   nil))
-	       (rest (cdr list)))
-	   (setq list tail)
-	   (while rest
-	     (let ((item (car rest)))
-	       (setq rest (cdr rest))
-	       (cond ((eq item old)
-		      (setcdr tail
-			      (cons new rest))
-		      (setq rest nil))
-		     (t
-		      (setq tail
-			    (setcdr tail
-				    (cons item nil))))))))
-	 list)))
+  (cl-substitute new old list :count 1 :test #'eq))
 
 (defun rng-escape-string (s)
   (replace-regexp-in-string "[&\"<>]"
@@ -93,16 +54,15 @@ LIST is not modified."
 			    s
 			    t))
 
-(defun rng-collapse-space (string)
-  (setq string
-	(replace-regexp-in-string "[ \t\r\n]+" " " string t t))
-  (when (string-match "\\` " string)
-    (setq string (substring string 1)))
-  (when (string-match " \\'" string)
-    (setq string (substring string 0 -1)))
-  string)
-
 (define-error 'rng-error nil)
+
+(defun rng-uniquify-eq (list)
+  (declare (obsolete seq-uniq "28.1"))
+  (seq-uniq list #'eq))
+
+(define-obsolete-function-alias 'rng-uniquify-equal #'seq-uniq "28.1")
+(define-obsolete-function-alias 'rng-blank-p #'string-blank-p "29.1")
+(define-obsolete-function-alias 'rng-collapse-space #'string-clean-whitespace "29.1")
 
 (provide 'rng-util)
 

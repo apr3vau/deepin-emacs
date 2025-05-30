@@ -1,6 +1,6 @@
 ;;; flyspell.el --- On-the-fly spell checker  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998, 2000-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2000-2025 Free Software Foundation, Inc.
 
 ;; Author: Manuel Serrano <Manuel.Serrano@sophia.inria.fr>
 ;; Maintainer: emacs-devel@gnu.org
@@ -22,7 +22,7 @@
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;;
+
 ;; Flyspell is a minor Emacs mode performing on-the-fly spelling
 ;; checking.
 ;;
@@ -31,10 +31,9 @@
 ;;
 ;; To enable Flyspell in text representing computer programs, type
 ;; M-x flyspell-prog-mode.
-;; In that mode only text inside comments is checked.
+;; In that mode only text inside comments and strings is checked.
 ;;
-;; Some user variables control the behavior of flyspell.  They are
-;; those defined under the `User variables' comment.
+;; Use `M-x customize-group RET flyspell RET' to customize flyspell.
 
 ;;; Code:
 
@@ -57,7 +56,6 @@
 (defcustom flyspell-highlight-flag t
   "How Flyspell should indicate misspelled words.
 Non-nil means use highlight, nil means use minibuffer messages."
-  :group 'flyspell
   :type 'boolean)
 
 (defcustom flyspell-mark-duplications-flag t
@@ -65,8 +63,12 @@ Non-nil means use highlight, nil means use minibuffer messages."
 See `flyspell-mark-duplications-exceptions' to add exceptions to this rule.
 Detection of repeated words is not implemented in
 \"large\" regions; see variable `flyspell-large-region'."
-  :group 'flyspell
   :type 'boolean)
+
+(defcustom flyspell-case-fold-duplications t
+  "Non-nil means Flyspell matches duplicate words case-insensitively."
+  :type 'boolean
+  :version "27.1")
 
 (defcustom flyspell-mark-duplications-exceptions
   '((nil . ("that" "had")) ; Common defaults for English.
@@ -74,16 +76,15 @@ Detection of repeated words is not implemented in
   "A list of exceptions for duplicated words.
 It should be a list of (LANGUAGE . EXCEPTION-LIST).
 
-LANGUAGE is nil, which means the exceptions apply regardless of
+LANGUAGE can be nil, which means the exceptions apply regardless of
 the current dictionary, or a regular expression matching the
 dictionary name (`ispell-local-dictionary' or
 `ispell-dictionary') for which the exceptions should apply.
 
 EXCEPTION-LIST is a list of strings.  The checked word is
 downcased before comparing with these exceptions."
-  :group 'flyspell
   :type '(alist :key-type (choice (const :tag "All dictionaries" nil)
-				  string)
+				  regexp)
 		:value-type (repeat string))
   :version "24.1")
 
@@ -91,7 +92,6 @@ downcased before comparing with these exceptions."
   "If non-nil, sort the corrections before popping them.
 The sorting is controlled by the `flyspell-sort-corrections-function'
 variable, and defaults to sorting alphabetically."
-  :group 'flyspell
   :version "21.1"
   :type 'boolean)
 
@@ -103,8 +103,7 @@ function takes three parameters -- the two correction candidates
 to be sorted, and the third parameter is the word that's being
 corrected."
   :version "26.1"
-  :type 'function
-  :group 'flyspell)
+  :type 'function)
 
 (defun flyspell-sort-corrections-alphabetically (corr1 corr2 _)
   (string< corr1 corr2))
@@ -124,26 +123,25 @@ Flyspell uses a different face (`flyspell-duplicate') to highlight it.
 This variable specifies how far to search to find such a duplicate.
 -1 means no limit (search the whole buffer).
 0 means do not search for duplicate unrecognized spellings."
-  :group 'flyspell
   :version "24.5"			; -1 -> 400000
   :type '(choice (const :tag "no limit" -1)
 		 number))
 
 (defcustom flyspell-delay 3
   "The number of seconds to wait before checking, after a \"delayed\" command."
-  :group 'flyspell
   :type 'number)
 
 (defcustom flyspell-persistent-highlight t
   "Non-nil means misspelled words remain highlighted until corrected.
 If this variable is nil, only the most recently detected misspelled word
-is highlighted."
-  :group 'flyspell
+is highlighted, and the highlight is turned off as soon as point moves
+off the misspelled word.
+
+Make sure this variable is non-nil if you use `flyspell-region'."
   :type 'boolean)
 
 (defcustom flyspell-highlight-properties t
   "Non-nil means highlight incorrect words even if a property exists for this word."
-  :group 'flyspell
   :type 'boolean)
 
 (defcustom flyspell-default-delayed-commands
@@ -155,7 +153,6 @@ is highlighted."
     backward-delete-char-untabify)
   "The standard list of delayed commands for Flyspell.
 See `flyspell-delayed-commands'."
-  :group 'flyspell
   :version "21.1"
   :type '(repeat (symbol)))
 
@@ -163,7 +160,6 @@ See `flyspell-delayed-commands'."
   "List of commands that are \"delayed\" for Flyspell mode.
 After these commands, Flyspell checking is delayed for a short time,
 whose length is specified by `flyspell-delay'."
-  :group 'flyspell
   :type '(repeat (symbol)))
 
 (defcustom flyspell-default-deplacement-commands
@@ -173,7 +169,6 @@ whose length is specified by `flyspell-delay'."
     scroll-down)
   "The standard list of deplacement commands for Flyspell.
 See variable `flyspell-deplacement-commands'."
-  :group 'flyspell
   :version "21.1"
   :type '(repeat (symbol)))
 
@@ -181,18 +176,15 @@ See variable `flyspell-deplacement-commands'."
   "List of commands that are \"deplacement\" for Flyspell mode.
 After these commands, Flyspell checking is performed only if the previous
 command was not the very same command."
-  :group 'flyspell
   :version "21.1"
   :type '(repeat (symbol)))
 
 (defcustom flyspell-issue-welcome-flag t
   "Non-nil means that Flyspell should display a welcome message when started."
-  :group 'flyspell
   :type 'boolean)
 
 (defcustom flyspell-issue-message-flag t
   "Non-nil means that Flyspell emits messages when checking words."
-  :group 'flyspell
   :type 'boolean)
 
 (defcustom flyspell-incorrect-hook nil
@@ -204,7 +196,6 @@ of possible corrections as returned by `ispell-parse-output'.
 
 If any of the functions return non-nil, the word is not highlighted as
 incorrect."
-  :group 'flyspell
   :version "21.1"
   :type 'hook)
 
@@ -216,50 +207,43 @@ when flyspell is started, the value of that variable is used instead
 of `flyspell-default-dictionary' to select the default dictionary.
 Otherwise, if `flyspell-default-dictionary' is nil, it means to use
 Ispell's ultimate default dictionary."
-  :group 'flyspell
   :version "21.1"
   :type '(choice string (const :tag "Default" nil)))
 
 (defcustom flyspell-tex-command-regexp
   "\\(\\(begin\\|end\\)[ \t]*{\\|\\(cite[a-z*]*\\|label\\|ref\\|eqref\\|usepackage\\|documentclass\\)[ \t]*\\(\\[[^]]*\\]\\)?{[^{}]*\\)"
   "A string that is the regular expression that matches TeX commands."
-  :group 'flyspell
   :version "21.1"
-  :type 'string)
+  :type 'regexp)
 
 (defcustom flyspell-check-tex-math-command nil
   "Non-nil means check even inside TeX math environment.
 TeX math environments are discovered by `texmathp', implemented
 inside AUCTeX package.  That package may be found at
 URL `https://www.gnu.org/software/auctex/'"
-  :group 'flyspell
   :type 'boolean)
 
 (defcustom flyspell-dictionaries-that-consider-dash-as-word-delimiter
   '("francais" "deutsch8" "norsk")
   "List of dictionary names that consider `-' as word delimiter."
-  :group 'flyspell
   :version "21.1"
   :type '(repeat (string)))
 
 (defcustom flyspell-abbrev-p
   nil
   "If non-nil, add correction to abbreviation table."
-  :group 'flyspell
   :version "21.1"
   :type 'boolean)
 
 (defcustom flyspell-use-global-abbrev-table-p
   nil
   "If non-nil, prefer global abbrev table to local abbrev table."
-  :group 'flyspell
   :version "21.1"
   :type 'boolean)
 
 (defcustom flyspell-mode-line-string " Fly"
   "String displayed on the mode line when flyspell is active.
 Set this to nil if you don't want a mode line indicator."
-  :group 'flyspell
   :type '(choice string (const :tag "None" nil)))
 
 (defcustom flyspell-large-region 1000
@@ -273,30 +257,25 @@ Doubled words are not detected in a large region, because Ispell
 does not check for them.
 
 If this variable is nil, all regions are treated as small."
-  :group 'flyspell
   :version "21.1"
   :type '(choice number (const :tag "All small" nil)))
 
 (defcustom flyspell-insert-function (function insert)
   "Function for inserting word by flyspell upon correction."
-  :group 'flyspell
   :type 'function)
 
 (defcustom flyspell-before-incorrect-word-string nil
   "String used to indicate an incorrect word starting."
-  :group 'flyspell
   :type '(choice string (const nil)))
 
 (defcustom flyspell-after-incorrect-word-string nil
   "String used to indicate an incorrect word ending."
-  :group 'flyspell
   :type '(choice string (const nil)))
 
 (defvar flyspell-mode-map)
 
 (defcustom flyspell-use-meta-tab t
   "Non-nil means that flyspell uses M-TAB to correct word."
-  :group 'flyspell
   :type 'boolean
   :initialize 'custom-initialize-default
   :set (lambda (sym val)
@@ -307,8 +286,16 @@ If this variable is nil, all regions are treated as small."
 (defcustom flyspell-auto-correct-binding
   [(control ?\;)]
   "The key binding for flyspell auto correction."
-  :type 'key-sequence
-  :group 'flyspell)
+  :type 'key-sequence)
+
+(defcustom flyspell-check-changes nil
+  "If non-nil, spell-check only words that were edited.
+By default, this is nil, and Flyspell checks every word across which
+you move point, even if you haven't edited the word.  Customizing this
+option to a non-nil value will not flag mis-spelled words across which
+you move point without editing them."
+  :type 'boolean
+  :version "30.1")
 
 ;;*---------------------------------------------------------------------*/
 ;;*    Mode specific options                                            */
@@ -321,14 +308,15 @@ If this variable is nil, all regions are treated as small."
 ;;*    	     (lambda () (setq flyspell-generic-check-word-predicate     */
 ;;*    			       'mail-mode-flyspell-verify)))            */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-generic-check-word-predicate nil
+
+(define-obsolete-variable-alias 'flyspell-generic-check-word-p
+  'flyspell-generic-check-word-predicate "25.1")
+
+(defvar-local flyspell-generic-check-word-predicate nil
   "Function providing per-mode customization over which words are flyspelled.
 Returns t to continue checking, nil otherwise.
 Flyspell mode sets this variable to whatever is the `flyspell-mode-predicate'
 property of the major mode name.")
-(make-variable-buffer-local 'flyspell-generic-check-word-predicate)
-(define-obsolete-variable-alias 'flyspell-generic-check-word-p
-  'flyspell-generic-check-word-predicate "25.1")
 
 ;;*--- mail mode -------------------------------------------------------*/
 (put 'mail-mode 'flyspell-mode-predicate 'mail-mode-flyspell-verify)
@@ -406,18 +394,20 @@ like <img alt=\"Some thing.\">."
 ;;*---------------------------------------------------------------------*/
 ;;*    Programming mode                                                 */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-prog-text-faces
+(defcustom flyspell-prog-text-faces
   '(font-lock-string-face font-lock-comment-face font-lock-doc-face)
-  "Faces corresponding to text in programming-mode buffers.")
+  "Faces corresponding to text in programming-mode buffers."
+  :type '(set (const font-lock-string-face)
+              (const font-lock-comment-face)
+              (const font-lock-doc-face))
+  :version "28.1")
 
 (defun flyspell-generic-progmode-verify ()
   "Used for `flyspell-generic-check-word-predicate' in programming modes."
-  ;; (point) is next char after the word. Must check one char before.
-  (let ((f (get-text-property (- (point) 1) 'face)))
-    (memq f flyspell-prog-text-faces)))
-
-;; Records the binding of M-TAB in effect before flyspell was activated.
-(defvar flyspell--prev-meta-tab-binding)
+  (unless (eql (point) (point-min))
+    ;; (point) is next char after the word. Must check one char before.
+    (let ((f (get-text-property (1- (point)) 'face)))
+      (memq f flyspell-prog-text-faces))))
 
 ;;;###autoload
 (defun flyspell-prog-mode ()
@@ -425,32 +415,15 @@ like <img alt=\"Some thing.\">."
   (interactive)
   (setq flyspell-generic-check-word-predicate
         #'flyspell-generic-progmode-verify)
-  (setq-local flyspell--prev-meta-tab-binding
-              (or (local-key-binding "\M-\t" t)
-                  (global-key-binding "\M-\t" t)))
   (flyspell-mode 1)
   (run-hooks 'flyspell-prog-mode-hook))
 
 ;;*---------------------------------------------------------------------*/
-;;*    Overlay compatibility                                            */
-;;*---------------------------------------------------------------------*/
-(autoload 'make-overlay            "overlay" "Overlay compatibility kit." t)
-(autoload 'overlayp                "overlay" "Overlay compatibility kit." t)
-(autoload 'overlays-in             "overlay" "Overlay compatibility kit." t)
-(autoload 'delete-overlay          "overlay" "Overlay compatibility kit." t)
-(autoload 'overlays-at             "overlay" "Overlay compatibility kit." t)
-(autoload 'overlay-put             "overlay" "Overlay compatibility kit." t)
-(autoload 'overlay-get             "overlay" "Overlay compatibility kit." t)
-(autoload 'previous-overlay-change "overlay" "Overlay compatibility kit." t)
-
-;;*---------------------------------------------------------------------*/
 ;;*    The minor mode declaration.                                      */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-mouse-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [mouse-2] 'flyspell-correct-word)
-    map)
-  "Keymap for Flyspell to put on erroneous words.")
+(defvar-keymap flyspell-mouse-map
+  :doc "Keymap for Flyspell to put on erroneous words."
+  "<mouse-2>" #'flyspell-correct-word)
 
 (defvar flyspell-mode-map
   (let ((map (make-sparse-keymap)))
@@ -464,13 +437,10 @@ like <img alt=\"Some thing.\">."
   "Minor mode keymap for Flyspell mode--for the whole buffer.")
 
 ;; dash character machinery
-(defvar flyspell-consider-dash-as-word-delimiter-flag nil
+(defvar-local flyspell-consider-dash-as-word-delimiter-flag nil
   "Non-nil means that the `-' char is considered as a word delimiter.")
-(make-variable-buffer-local 'flyspell-consider-dash-as-word-delimiter-flag)
-(defvar flyspell-dash-dictionary nil)
-(make-variable-buffer-local 'flyspell-dash-dictionary)
-(defvar flyspell-dash-local-dictionary nil)
-(make-variable-buffer-local 'flyspell-dash-local-dictionary)
+(defvar-local flyspell-dash-dictionary nil)
+(defvar-local flyspell-dash-local-dictionary nil)
 
 ;;*---------------------------------------------------------------------*/
 ;;*    Highlighting                                                     */
@@ -481,8 +451,7 @@ like <img alt=\"Some thing.\">."
     (t
      :underline t :inherit error))
   "Flyspell face for misspelled words."
-  :version "24.4"
-  :group 'flyspell)
+  :version "24.4")
 
 (defface flyspell-duplicate
   '((((supports :underline (:style wave)))
@@ -491,10 +460,16 @@ like <img alt=\"Some thing.\">."
      :underline t :inherit warning))
   "Flyspell face for words that appear twice in a row.
 See also `flyspell-duplicate-distance'."
-  :version "24.4"
-  :group 'flyspell)
+  :version "24.4")
 
 (defvar flyspell-overlay nil)
+
+(defun flyspell-context-menu (_menu _click)
+  "Context menu for `context-menu-mode'."
+  ;; TODO: refactor `flyspell-correct-word' and related functions to return
+  ;; a keymap menu where every menu item is bound to a lambda that calls
+  ;; `flyspell-do-correct' with an argument that is a correct word.
+  'flyspell-correct-word)
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-mode ...                                                */
@@ -503,13 +478,13 @@ See also `flyspell-duplicate-distance'."
 ;;;###autoload
 (define-minor-mode flyspell-mode
   "Toggle on-the-fly spell checking (Flyspell mode).
-With a prefix argument ARG, enable Flyspell mode if ARG is
-positive, and disable it otherwise.  If called from Lisp, enable
-the mode if ARG is omitted or nil.
 
 Flyspell mode is a buffer-local minor mode.  When enabled, it
 spawns a single Ispell process and checks each word.  The default
 flyspell behavior is to highlight incorrect words.
+
+This mode is geared toward text modes.  In buffers that contain
+code, `flyspell-prog-mode' is usually a better choice.
 
 Bindings:
 \\[ispell-word]: correct words (using Ispell).
@@ -527,20 +502,33 @@ invoking `ispell-change-dictionary'.
 
 Consider using the `ispell-parser' to check your text.  For instance
 consider adding:
-\(add-hook \\='tex-mode-hook (function (lambda () (setq ispell-parser \\='tex))))
+\(add-hook \\='tex-mode-hook (lambda () (setq ispell-parser \\='tex)))
 in your init file.
 
 \\[flyspell-region] checks all words inside a region.
 \\[flyspell-buffer] checks the whole buffer."
-  :lighter flyspell-mode-line-string
+  :lighter (flyspell-mode-line-string
+            ;; If `flyspell-mode-line-string' is nil, then nothing of
+            ;; the following is displayed in the mode line.
+            ((:propertize flyspell-mode-line-string)
+             (:propertize
+              (:eval
+	       (concat "/" (substring (or ispell-local-dictionary
+			                  ispell-dictionary
+                                          "--")
+                                      0 2)))
+              help-echo "mouse-1: Change dictionary"
+              local-map (keymap
+                         (mode-line keymap
+                                    (mouse-1 . ispell-change-dictionary))))))
   :keymap flyspell-mode-map
   :group 'flyspell
   (if flyspell-mode
       (condition-case err
-	  (flyspell-mode-on)
+          (flyspell--mode-on (called-interactively-p 'interactive))
 	(error (message "Error enabling Flyspell mode:\n%s" (cdr err))
 	       (flyspell-mode -1)))
-    (flyspell-mode-off)))
+    (flyspell--mode-off)))
 
 ;;;###autoload
 (defun turn-on-flyspell ()
@@ -554,12 +542,9 @@ in your init file.
 
 (custom-add-option 'text-mode-hook 'turn-on-flyspell)
 
-;;*---------------------------------------------------------------------*/
-;;*    flyspell-buffers ...                                             */
-;;*    -------------------------------------------------------------    */
-;;*    For remembering buffers running flyspell                         */
-;;*---------------------------------------------------------------------*/
-(defvar flyspell-buffers nil)
+(defvar flyspell-buffers nil
+  "For remembering buffers running flyspell.")
+(make-obsolete-variable 'flyspell-buffers "not used." "28.1")
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-minibuffer-p ...                                        */
@@ -608,18 +593,21 @@ in your init file.
       (kill-local-variable 'flyspell-word-cache-word))))
 
 ;; Make sure we flush our caches when needed.  Do it here rather than in
-;; flyspell-mode-on, since flyspell-region may be used without ever turning
+;; flyspell--mode-on, since flyspell-region may be used without ever turning
 ;; on flyspell-mode.
 (add-hook 'ispell-kill-ispell-hook 'flyspell-kill-ispell-hook)
 
 ;;*---------------------------------------------------------------------*/
-;;*    flyspell-mode-on ...                                             */
+;;*    flyspell--mode-on ...                                            */
 ;;*---------------------------------------------------------------------*/
-(defun flyspell-mode-on ()
-  "Turn Flyspell mode on.  Do not use this; use `flyspell-mode' instead."
+(defun flyspell--mode-on (&optional show-msg)
+  "Turn Flyspell mode on.  Do not use this; use `flyspell-mode' instead.
+
+If optional argument SHOW-MSG is non-nil, show a welcome message
+if `flyspell-issue-message-flag' and `flyspell-issue-welcome-flag'
+are both non-nil."
   (ispell-set-spellchecker-params) ; Initialize variables and dicts alists
   (setq ispell-highlight-face 'flyspell-incorrect)
-  ;; local dictionaries setup
   (or ispell-local-dictionary ispell-dictionary
       (if flyspell-default-dictionary
 	  (ispell-change-dictionary flyspell-default-dictionary)))
@@ -629,34 +617,29 @@ in your init file.
   ;; Pass the `force' argument for the case where flyspell was active already
   ;; but the buffer's local-defs have been edited.
   (flyspell-accept-buffer-local-defs 'force)
-  ;; we put the `flyspell-delayed' property on some commands
   (flyspell-delay-commands)
-  ;; we put the `flyspell-deplacement' property on some commands
   (flyspell-deplacement-commands)
-  ;; we bound flyspell action to post-command hook
-  (add-hook 'post-command-hook (function flyspell-post-command-hook) t t)
-  ;; we bound flyspell action to pre-command hook
+  (if flyspell-check-changes
+      (add-hook 'post-command-hook (function flyspell-check-changes) t t)
+    (add-hook 'post-command-hook (function flyspell-post-command-hook) t t))
   (add-hook 'pre-command-hook (function flyspell-pre-command-hook) t t)
-  ;; we bound flyspell action to after-change hook
   (add-hook 'after-change-functions 'flyspell-after-change-function nil t)
-  ;; we bound flyspell action to hack-local-variables-hook
   (add-hook 'hack-local-variables-hook
 	    (function flyspell-hack-local-variables-hook) t t)
-  ;; set flyspell-generic-check-word-predicate based on the major mode
   (let ((mode-predicate (get major-mode 'flyspell-mode-predicate)))
     (if mode-predicate
 	(setq flyspell-generic-check-word-predicate mode-predicate)))
-  ;; the welcome message
   (if (and flyspell-issue-message-flag
-	   flyspell-issue-welcome-flag
-	   (called-interactively-p 'interactive))
-      (let ((binding (where-is-internal 'flyspell-auto-correct-word
-					nil 'non-ascii)))
-	(message "%s"
-	 (if binding
-	     (format "Welcome to flyspell. Use %s or Mouse-2 to correct words."
-		     (key-description binding))
-	   "Welcome to flyspell. Use Mouse-2 to correct words.")))))
+           flyspell-issue-welcome-flag
+           show-msg)
+      (let* ((binding (where-is-internal 'flyspell-auto-correct-word
+                                         nil 'non-ascii))
+             (mouse-button (if context-menu-mode "Mouse-3" "Mouse-2")))
+        (message (format-message
+                  "Welcome to Flyspell. Use %s to correct words."
+                  (if binding
+                      (format "`%s' or `%s'" (key-description binding) mouse-button)
+                    (format "`%s'" mouse-button)))))))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-delay-commands ...                                      */
@@ -698,14 +681,10 @@ has been used, the current word is not checked."
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-word-cache ...                                          */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-word-cache-start  nil)
-(defvar flyspell-word-cache-end    nil)
-(defvar flyspell-word-cache-word   nil)
-(defvar flyspell-word-cache-result '_)
-(make-variable-buffer-local 'flyspell-word-cache-start)
-(make-variable-buffer-local 'flyspell-word-cache-end)
-(make-variable-buffer-local 'flyspell-word-cache-word)
-(make-variable-buffer-local 'flyspell-word-cache-result)
+(defvar-local flyspell-word-cache-start  nil)
+(defvar-local flyspell-word-cache-end    nil)
+(defvar-local flyspell-word-cache-word   nil)
+(defvar-local flyspell-word-cache-result '_)
 
 ;;*---------------------------------------------------------------------*/
 ;;*    The flyspell pre-hook, store the current position. In the        */
@@ -713,8 +692,8 @@ has been used, the current word is not checked."
 ;;*    has to be spell checked.                                         */
 ;;*---------------------------------------------------------------------*/
 (defvar flyspell-pre-buffer     nil "Buffer current before `this-command'.")
-(defvar flyspell-pre-point      nil "Point before running `this-command'")
-(defvar flyspell-pre-column     nil "Column before running `this-command'")
+(defvar flyspell-pre-point      nil "Point before running `this-command'.")
+(defvar flyspell-pre-column     nil "Column before running `this-command'.")
 (defvar flyspell-pre-pre-buffer nil)
 (defvar flyspell-pre-pre-point  nil)
 (make-variable-buffer-local 'flyspell-pre-point) ;Why??  --Stef
@@ -736,23 +715,20 @@ has been used, the current word is not checked."
   (setq flyspell-pre-column (current-column)))
 
 ;;*---------------------------------------------------------------------*/
-;;*    flyspell-mode-off ...                                            */
+;;*    flyspell--mode-off ...                                           */
 ;;*---------------------------------------------------------------------*/
 ;;;###autoload
-(defun flyspell-mode-off ()
+(defun flyspell--mode-off ()
   "Turn Flyspell mode off."
-  ;; We remove the hooks.
+  (remove-hook 'post-command-hook (function flyspell-check-changes) t)
   (remove-hook 'post-command-hook (function flyspell-post-command-hook) t)
   (remove-hook 'pre-command-hook (function flyspell-pre-command-hook) t)
   (remove-hook 'after-change-functions 'flyspell-after-change-function t)
   (remove-hook 'hack-local-variables-hook
 	       (function flyspell-hack-local-variables-hook) t)
-  ;; We remove all the flyspell highlightings.
   (flyspell-delete-all-overlays)
-  ;; We have to erase pre cache variables.
   (setq flyspell-pre-buffer nil)
   (setq flyspell-pre-point  nil)
-  ;; We mark the mode as killed.
   (setq flyspell-mode nil))
 
 ;;*---------------------------------------------------------------------*/
@@ -811,8 +787,7 @@ before the current command."
 ;;*    the post command hook, we will check, if the word at this        */
 ;;*    position has to be spell checked.                                */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-changes nil)
-(make-variable-buffer-local 'flyspell-changes)
+(defvar-local flyspell-changes nil)
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-after-change-function ...                               */
@@ -863,6 +838,9 @@ Mostly we check word delimiters."
        ((get this-command 'flyspell-deplacement)
 	(not (eq flyspell-previous-command this-command)))
        ((get this-command 'flyspell-delayed)
+        ;; In case we're using `delete-selection-mode', make the
+        ;; region be updated immediately.
+        (deactivate-mark)
 	;; The current command is not delayed, that
 	;; is that we must check the word now.
 	(and (not unread-command-events)
@@ -921,7 +899,7 @@ Mostly we check word delimiters."
                           (or (string= "" ispell-otherchars)
                               (not (looking-at ispell-otherchars)))
                           (or flyspell-consider-dash-as-word-delimiter-flag
-                              (not (looking-at "\\-")))
+                              (not (looking-at "-")))
                           2)))))
        (format "  because    : %S\n"
                (cond
@@ -939,7 +917,7 @@ Mostly we check word delimiters."
                             (or (string= "" ispell-otherchars)
                                 (not (looking-at ispell-otherchars)))
                             (or flyspell-consider-dash-as-word-delimiter-flag
-                                (not (looking-at "\\-")))))))
+                                (not (looking-at "-")))))))
                  ;; Yes because we have reached or typed a word delimiter.
                  'separator)
                 ((not (integerp flyspell-delay))
@@ -982,6 +960,11 @@ Mostly we check word delimiters."
       (let ((command this-command)
             ;; Prevent anything we do from affecting the mark.
             deactivate-mark)
+        (if (and (eq command 'transpose-chars)
+                 flyspell-pre-point)
+            (save-excursion
+              (goto-char (- flyspell-pre-point 1))
+              (flyspell-word)))
         (if (flyspell-check-pre-word-p)
             (save-excursion
               '(flyspell-debug-signal-pre-word-checked)
@@ -1019,6 +1002,23 @@ Mostly we check word delimiters."
             (setq flyspell-changes (cdr flyspell-changes))))
         (setq flyspell-previous-command command)))))
 
+(defun flyspell-check-changes ()
+  "Function to spell-check only edited words when point moves off the word.
+This is installed by flyspell as `post-command-hook' when the user
+option `flyspell-check-changes' is non-nil.  It spell-checks a word
+on moving point from the word only if the word was edited before the move."
+  (when flyspell-mode
+    (with-local-quit
+      (when (consp flyspell-changes)
+        (let ((start (car (car flyspell-changes)))
+              (stop  (cdr (car flyspell-changes)))
+              (word (save-excursion (flyspell-get-word))))
+          (unless (and word (<= (nth 1 word) start) (>= (nth 2 word) stop))
+            (save-excursion
+              (goto-char start)
+              (flyspell-word))
+            (setq flyspell-changes nil)))))))
+
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-notify-misspell ...                                     */
 ;;*---------------------------------------------------------------------*/
@@ -1035,7 +1035,6 @@ Mostly we check word delimiters."
 (defun flyspell-word-search-backward (word bound &optional ignore-case)
   (save-excursion
     (let* ((r '())
-	   (inhibit-point-motion-hooks t)
 	   (flyspell-not-casechars (flyspell-get-not-casechars))
 	   (bound (if (and bound
 			   (> bound (point-min)))
@@ -1069,7 +1068,6 @@ Mostly we check word delimiters."
 (defun flyspell-word-search-forward (word bound)
   (save-excursion
     (let* ((r '())
-	   (inhibit-point-motion-hooks t)
 	   (flyspell-not-casechars (flyspell-get-not-casechars))
 	   (bound (if (and bound
 			   (< bound (point-max)))
@@ -1102,8 +1100,11 @@ Mostly we check word delimiters."
 If the optional argument FOLLOWING, or, when called interactively
 `ispell-following-word', is non-nil, checks the following (rather
 than preceding) word when the cursor is not over a word.  If
-optional argument KNOWN-MISSPELLING is non nil considers word a
-misspelling and skips redundant spell-checking step."
+optional argument KNOWN-MISSPELLING is non-nil considers word a
+misspelling and skips redundant spell-checking step.
+
+See `flyspell-get-word' for details of how this finds the word to
+spell-check."
   (interactive (list ispell-following-word))
   (ispell-set-spellchecker-params)    ; Initialize variables and dicts alists
   (save-excursion
@@ -1144,7 +1145,8 @@ misspelling and skips redundant spell-checking step."
 			      (- (save-excursion
                                    (skip-chars-backward " \t\n\f")))))
 			  (p (when (>= bound (point-min))
-			       (flyspell-word-search-backward word bound t))))
+			       (flyspell-word-search-backward
+                                word bound flyspell-case-fold-duplications))))
 		     (and p (/= p start)))))
 	    ;; yes, this is a doublon
 	    (flyspell-highlight-incorrect-region start end 'doublon)
@@ -1247,14 +1249,27 @@ misspelling and skips redundant spell-checking step."
 			     (t
 			      (setq flyspell-word-cache-result nil)
 			      ;; Highlight the location as incorrect,
-			      ;; including offset specified in POSS.
+			      ;; including offset specified in POSS
+			      ;; and only for the length of the
+			      ;; misspelled word specified by POSS.
 			      (if flyspell-highlight-flag
-				  (flyspell-highlight-incorrect-region
-				   (if (and (consp poss)
-					    (integerp (nth 1 poss)))
-				       (+ start (nth 1 poss) -1)
-				     start)
-				   end poss)
+                                  (let ((hstart start)
+                                        (hend end)
+                                        offset misspelled)
+                                    (when (consp poss)
+                                      (setq misspelled (car poss)
+                                            offset (nth 1 poss))
+                                      (if (integerp offset)
+                                          (setq hstart (+ start offset -1)))
+                                      ;; POSS includes the misspelled
+                                      ;; word; use that to figure out
+                                      ;; how many characters to highlight.
+                                      (if (stringp misspelled)
+                                          (setq hend
+                                                (+ hstart
+                                                   (length misspelled)))))
+				    (flyspell-highlight-incorrect-region
+                                     hstart hend poss))
 				(flyspell-notify-misspell word poss))
 			      nil))))
 	      ;; return to original location
@@ -1302,7 +1317,13 @@ misspelling and skips redundant spell-checking step."
 Optional argument FOLLOWING non-nil means to get the following
 \(rather than preceding) word when the cursor is not over a word.
 Optional second argument EXTRA-OTHERCHARS is a regexp of characters
-that may be included as part of a word (see `ispell-dictionary-alist')."
+that may be included as part of a word (see `ispell-dictionary-alist').
+
+This finds the word to spell-check by searching for CASECHARS defined
+in `ispell-dictionary-alist' for the current dictionary.  Thus, the
+word could be far away from point if point is inside whitespace or
+punctuation characters, or in text that belongs to a different
+language."
   (let* ((flyspell-casechars (flyspell-get-casechars))
 	 (flyspell-not-casechars (flyspell-get-not-casechars))
 	 (ispell-otherchars (ispell-get-otherchars))
@@ -1358,7 +1379,10 @@ that may be included as part of a word (see `ispell-dictionary-alist')."
 ;;*    flyspell-small-region ...                                        */
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-small-region (beg end)
-  "Flyspell text between BEG and END."
+  "Flyspell text between BEG and END.
+
+This function is intended to work on small regions, as
+determined by `flyspell-large-region'."
   (save-excursion
     (if (> beg end)
 	(let ((old beg))
@@ -1405,10 +1429,20 @@ that may be included as part of a word (see `ispell-dictionary-alist')."
 The list of incorrect words should be in `flyspell-external-ispell-buffer'.
 \(We finish by killing that buffer and setting the variable to nil.)
 The buffer to mark them in is `flyspell-large-region-buffer'."
-  (let (words-not-found
-	(ispell-otherchars (ispell-get-otherchars))
-	(buffer-scan-pos flyspell-large-region-beg)
-	case-fold-search)
+  (let* (words-not-found
+         (flyspell-casechars (flyspell-get-casechars))
+         (ispell-otherchars (ispell-get-otherchars))
+         (ispell-many-otherchars-p (ispell-get-many-otherchars-p))
+         (word-chars (concat flyspell-casechars
+                             "+\\("
+                             (if (not (string= "" ispell-otherchars))
+                                 (concat ispell-otherchars "?"))
+                             flyspell-casechars
+                             "+\\)"
+                             (if ispell-many-otherchars-p
+                                 "*" "?")))
+         (buffer-scan-pos flyspell-large-region-beg)
+         case-fold-search)
     (with-current-buffer flyspell-external-ispell-buffer
       (goto-char (point-min))
       ;; Loop over incorrect words, in the order they were reported,
@@ -1438,11 +1472,18 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
 			      ;; Move back into the match
 			      ;; so flyspell-get-word will find it.
 			      (forward-char -1)
-			      (flyspell-get-word)))
+                              ;; Is this a word that matches the
+                              ;; current dictionary?
+                              (if (looking-at word-chars)
+			          (flyspell-get-word))))
 			   (found (car found-list))
 			   (found-length (length found))
 			   (misspell-length (length word)))
 		      (when (or
+                             ;; Misspelled word is not from the
+                             ;; language supported by the current
+                             ;; dictionary.
+                             (null found)
 			     ;; Size matches, we really found it.
 			     (= found-length misspell-length)
 			     ;; Matches as part of a boundary-char separated
@@ -1464,13 +1505,21 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
 			     ;; backslash) and none of the previous
 			     ;; conditions match.
 			     (and (not ispell-really-aspell)
+                                  (not ispell-really-hunspell)
+                                  (not ispell-really-enchant)
 				  (save-excursion
 				    (goto-char (- (nth 1 found-list) 1))
 				    (if (looking-at "[\\]" )
 					t
 				      nil))))
 			(setq keep nil)
-			(flyspell-word nil t)
+                        ;; Don't try spell-checking words whose
+                        ;; characters don't match CASECHARS, because
+                        ;; flyspell-word will then consider as
+                        ;; misspelling the preceding word that matches
+                        ;; CASECHARS.
+                        (or (null found)
+			    (flyspell-word nil t))
 			;; Search for next misspelled word will begin from
 			;; end of last validated match.
 			(setq buffer-scan-pos (point))))
@@ -1503,7 +1552,7 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
       (goto-char (point-min))
       ;; Localwords parsing copied from ispell.el.
       (while (search-forward ispell-words-keyword nil t)
-	(let ((end (point-at-eol))
+        (let ((end (line-end-position))
 	      string)
 	  ;; buffer-local words separated by a space, and can contain
 	  ;; any character other than a space.  Not rigorous enough.
@@ -1629,7 +1678,10 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
 ;;*---------------------------------------------------------------------*/
 ;;;###autoload
 (defun flyspell-region (beg end)
-  "Flyspell text between BEG and END."
+  "Flyspell text between BEG and END.
+
+Make sure `flyspell-mode' is turned on if you want the highlight
+of a misspelled word removed when you've corrected it."
   (interactive "r")
   (ispell-set-spellchecker-params)  ; Initialize variables and dicts alists
   (if (= beg end)
@@ -1661,25 +1713,32 @@ The buffer to mark them in is `flyspell-large-region-buffer'."
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-goto-next-error ...                                     */
 ;;*---------------------------------------------------------------------*/
-(defun flyspell-goto-next-error ()
-  "Go to the next previously detected error.
+(defun flyspell-goto-next-error (&optional previous)
+  "Go to the next error.
+If PREVIOUS (interactively, the prefix), go to the previous error
+instead.
+
 In general FLYSPELL-GOTO-NEXT-ERROR must be used after
 FLYSPELL-BUFFER."
-  (interactive)
+  (interactive "P")
   (let ((pos (point))
-	(max (point-max)))
-    (if (and (eq (current-buffer) flyspell-old-buffer-error)
-	     (eq pos flyspell-old-pos-error))
-	(progn
-	  (if (= flyspell-old-pos-error max)
-	      ;; goto beginning of buffer
+	(max (if previous (point-min) (point-max))))
+    (when (and (eq (current-buffer) flyspell-old-buffer-error)
+	       (eq pos flyspell-old-pos-error))
+      (if previous
+          (if (= flyspell-old-pos-error max)
 	      (progn
-		(message "Restarting from beginning of buffer")
-		(goto-char (point-min)))
-	    (forward-word 1))
-	  (setq pos (point))))
-    ;; seek the next error
-    (while (and (< pos max)
+	        (message "Restarting from end of the buffer")
+	        (goto-char (point-max)))
+	    (forward-word -1))
+        (if (= flyspell-old-pos-error max)
+	    (progn
+	      (message "Restarting from beginning of buffer")
+	      (goto-char (point-min)))
+	  (forward-word 1)))
+      (setq pos (point)))
+    ;; Seek the next error.
+    (while (and (/= pos max)
 		(let ((ovs (overlays-at pos))
 		      (r '()))
 		  (while (and (not r) (consp ovs))
@@ -1687,19 +1746,21 @@ FLYSPELL-BUFFER."
 			(setq r t)
 		      (setq ovs (cdr ovs))))
 		  (not r)))
-      (setq pos (1+ pos)))
-    ;; save the current location for next invocation
-    (setq flyspell-old-pos-error pos)
-    (setq flyspell-old-buffer-error (current-buffer))
+      (setq pos (if previous (1- pos) (1+ pos))))
     (goto-char pos)
-    (if (= pos max)
-	(message "No more miss-spelled word!"))))
+    (when previous
+      (forward-word -1))
+    ;; Save the current location for next invocation.
+    (setq flyspell-old-pos-error (point))
+    (setq flyspell-old-buffer-error (current-buffer))
+    (when (= (point) max)
+      (message "No more miss-spelled words"))))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-overlay-p ...                                           */
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-overlay-p (o)
-  "Return true if O is an overlay used by flyspell."
+  "Return non-nil if O is an overlay used by flyspell."
   (and (overlayp o) (overlay-get o 'flyspell-overlay)))
 
 ;;*---------------------------------------------------------------------*/
@@ -1732,7 +1793,7 @@ FLYSPELL-BUFFER."
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-properties-at-p ...                                     */
 ;;*    -------------------------------------------------------------    */
-;;*    Is there an highlight properties at position pos?                */
+;;*    Is there a highlight property at position pos?                   */
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-properties-at-p (pos)
   "Return t if there is a text property at POS, not counting `local-map'.
@@ -1760,11 +1821,15 @@ for the overlay."
     (overlay-put overlay 'mouse-face mouse-face)
     (overlay-put overlay 'flyspell-overlay t)
     (overlay-put overlay 'evaporate t)
-    (overlay-put overlay 'help-echo "mouse-2: correct word at point")
-    ;; If misspelled text has a 'keymap' property, let that remain in
-    ;; effect for the bindings that flyspell-mouse-map doesn't override.
-    (set-keymap-parent flyspell-mouse-map (get-char-property beg 'keymap))
-    (overlay-put overlay 'keymap flyspell-mouse-map)
+    (overlay-put overlay 'help-echo
+                 (concat (if context-menu-mode "mouse-3" "mouse-2")
+                         ": correct word at point"))
+    (if context-menu-mode
+        (overlay-put overlay 'context-menu-function 'flyspell-context-menu)
+      ;; If misspelled text has a 'keymap' property, let that remain in
+      ;; effect for the bindings that flyspell-mouse-map doesn't override.
+      (set-keymap-parent flyspell-mouse-map (get-char-property beg 'keymap))
+      (overlay-put overlay 'keymap flyspell-mouse-map))
     (when (eq face 'flyspell-incorrect)
       (and (stringp flyspell-before-incorrect-word-string)
            (overlay-put overlay 'before-string
@@ -1810,7 +1875,7 @@ is itself incorrect, but suspiciously repeated."
 ;;*    flyspell-highlight-duplicate-region ...                          */
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-highlight-duplicate-region (beg end poss)
-  "Set up an overlay on a duplicate misspelled word, in the buffer from BEG to END.
+  "Set up overlay on duplicate misspelled word, in the buffer from BEG to END.
 POSS is a list of possible spelling/correction lists,
 as returned by `ispell-parse-output'."
   (let ((inhibit-read-only t))
@@ -1830,14 +1895,10 @@ as returned by `ispell-parse-output'."
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-auto-correct-cache ...                                  */
 ;;*---------------------------------------------------------------------*/
-(defvar flyspell-auto-correct-pos nil)
-(defvar flyspell-auto-correct-region nil)
-(defvar flyspell-auto-correct-ring nil)
-(defvar flyspell-auto-correct-word nil)
-(make-variable-buffer-local 'flyspell-auto-correct-pos)
-(make-variable-buffer-local 'flyspell-auto-correct-region)
-(make-variable-buffer-local 'flyspell-auto-correct-ring)
-(make-variable-buffer-local 'flyspell-auto-correct-word)
+(defvar-local flyspell-auto-correct-pos nil)
+(defvar-local flyspell-auto-correct-region nil)
+(defvar-local flyspell-auto-correct-ring nil)
+(defvar-local flyspell-auto-correct-word nil)
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-check-previous-highlighted-word ...                     */
@@ -1857,7 +1918,7 @@ before point that's highlighted as misspelled."
 	  (while (and (setq pos (previous-overlay-change pos))
 		      (not (= pos pos1)))
 	    (setq pos1 pos)
-	    (if (> pos (point-min))
+	    (if (>= pos (point-min))
 		(progn
 		  (setq ovs (overlays-at pos))
 		  (while (consp ovs)
@@ -1892,9 +1953,7 @@ before point that's highlighted as misspelled."
 			   'face 'flyspell-incorrect
 			   string))
       (setq pos (cdr pos)))
-    (if (fboundp 'display-message)
-	(display-message 'no-log string)
-      (message "%s" string))))
+    (message "%s" string)))
 
 ;;*---------------------------------------------------------------------*/
 ;;*    flyspell-abbrev-table ...                                        */
@@ -1917,19 +1976,28 @@ before point that's highlighted as misspelled."
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-auto-correct-word ()
   "Correct the current word.
-This command proposes various successive corrections for the current word."
+This command proposes various successive corrections for the
+current word.  If invoked repeatedly on the same position, it
+cycles through the possible corrections of the current word.
+
+See `flyspell-get-word' for details of how this finds the word to
+spell-check."
   (interactive)
   ;; If we are not in the construct where flyspell should be active,
   ;; invoke the original binding of M-TAB, if that was recorded.
-  (if (and (local-variable-p 'flyspell--prev-meta-tab-binding)
-           (commandp flyspell--prev-meta-tab-binding t)
-           (functionp flyspell-generic-check-word-predicate)
-           (not (funcall flyspell-generic-check-word-predicate))
-           (equal (where-is-internal 'flyspell-auto-correct-word nil t)
-                  [?\M-\t]))
-      (call-interactively flyspell--prev-meta-tab-binding)
-    (let ((pos     (point))
-          (old-max (point-max)))
+  (let ((pos     (point))
+        (old-max (point-max))
+        (next-cmd (and (functionp flyspell-generic-check-word-predicate)
+                       (not (funcall flyspell-generic-check-word-predicate))
+                       (let ((flyspell-mode nil))
+                         (key-binding (this-command-keys))))))
+    (if next-cmd
+        (command-execute next-cmd)
+      ;; Flush a possibly stale cache from previous invocations of
+      ;; flyspell-auto-correct-word/flyspell-auto-correct-previous-word.
+      (if (not (memq last-command '(flyspell-auto-correct-word
+                                    flyspell-auto-correct-previous-word)))
+          (setq flyspell-auto-correct-region nil))
       ;; Use the correct dictionary.
       (flyspell-accept-buffer-local-defs)
       (if (and (eq flyspell-auto-correct-pos pos)
@@ -1997,7 +2065,7 @@ This command proposes various successive corrections for the current word."
                             (let ((new-word replace))
                               (if (not (equal new-word (car poss)))
                                   (progn
-                                    ;; the save the current replacements
+                                    ;; then save the current replacements
                                     (setq flyspell-auto-correct-region
                                           (cons start (length new-word)))
                                     (let ((l replacements))
@@ -2038,7 +2106,7 @@ This command proposes various successive corrections for the current word."
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-auto-correct-previous-hook ()
   "Hook to track successive calls to `flyspell-auto-correct-previous-word'.
-Sets `flyspell-auto-correct-previous-pos' to nil"
+Sets `flyspell-auto-correct-previous-pos' to nil."
   (interactive)
   (remove-hook 'pre-command-hook (function flyspell-auto-correct-previous-hook) t)
   (unless (eq this-command (function flyspell-auto-correct-previous-word))
@@ -2066,7 +2134,9 @@ But don't look beyond what's visible on the screen."
 	  ;; only reset if a new overlay exists
 	  (setq flyspell-auto-correct-previous-pos nil)
 
-	  (let ((overlay-list (overlays-in (point-min) position))
+	  (let ((overlay-list (seq-sort-by
+                               #'overlay-start #'>
+                               (overlays-in (point-min) position)))
 		(new-overlay 'dummy-value))
 
 	    ;; search for previous (new) flyspell overlay
@@ -2104,7 +2174,7 @@ The word checked is the word at the mouse position."
   (interactive "e")
   (let ((save (point)))
     (mouse-set-point event)
-    (flyspell-correct-word-before-point event save)))
+    (flyspell-correct-word-before-point (and (consp event) event) save)))
 
 (defun flyspell-correct-word-before-point (&optional event opoint)
   "Pop up a menu of possible corrections for misspelled word before point.
@@ -2214,17 +2284,8 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-emacs-popup (event poss word)
   "The Emacs popup menu."
-  (if (and (not event)
-           (display-mouse-p))
-      (let* ((mouse-pos  (mouse-position))
-	     (mouse-pos  (if (nth 1 mouse-pos)
-			     mouse-pos
-			   (set-mouse-position (car mouse-pos)
-				 	       (/ (frame-width) 2) 2)
-			   (mouse-position))))
-	(setq event (list (list (car (cdr mouse-pos))
-				(1+ (cdr (cdr mouse-pos))))
-			  (car mouse-pos)))))
+  (unless event
+    (setq event (popup-menu-normalize-position (point))))
   (let* ((corrects   (flyspell-sort (car (cdr (cdr poss))) word))
 	 (cor-menu   (if (consp corrects)
 			 (mapcar (lambda (correct)
@@ -2232,8 +2293,8 @@ If OPOINT is non-nil, restore point there after adjusting it for replacement."
 				 corrects)
 		       '()))
 	 (affix      (car (cdr (cdr (cdr poss)))))
-	 show-affix-info
-	 (base-menu  (let ((save (if (and (consp affix) show-affix-info)
+	 ;; show-affix-info
+	 (base-menu  (let ((save (if nil ;; (and (consp affix) show-affix-info)
 				     (list
 				      (list (concat "Save affix: " (car affix))
 					    'save)
@@ -2322,6 +2383,9 @@ This function is meant to be added to `flyspell-incorrect-hook'."
 ;;*---------------------------------------------------------------------*/
 (defun flyspell-change-abbrev (table old new)
   (set (abbrev-symbol old table) new))
+
+(define-obsolete-function-alias 'flyspell-mode-on 'flyspell--mode-on "30.1")
+(define-obsolete-function-alias 'flyspell-mode-off 'flyspell--mode-off "30.1")
 
 (provide 'flyspell)
 

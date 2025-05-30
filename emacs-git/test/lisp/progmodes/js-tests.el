@@ -1,6 +1,6 @@
-;;; js-tests.el --- Test suite for js-mode
+;;; js-tests.el --- Test suite for js-mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2017 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -22,6 +22,7 @@
 ;;; Code:
 
 (require 'ert)
+(require 'ert-x)
 (require 'js)
 (require 'syntax)
 
@@ -195,6 +196,103 @@ if (!/[ (:,='\"]/.test(value)) {
     (insert "/")
     ;; The bug was a hang.
     (should t)))
+
+;;;; Indentation tests.
+
+(defun js-tests--remove-indentation ()
+  "Remove all indentation in the current buffer."
+  (goto-char (point-min))
+  (while (re-search-forward (rx bol (+ (in " \t"))) nil t)
+    (let ((syntax (save-match-data (syntax-ppss))))
+      (unless (nth 3 syntax)       ; Avoid multiline string literals.
+        (replace-match "")))))
+
+(defmacro js-deftest-indent (file)
+  `(ert-deftest ,(intern (format "js-indent-test/%s" file)) ()
+     :tags '(:expensive-test)
+     (let ((buf (find-file-noselect (ert-resource-file ,file))))
+       (unwind-protect
+           (with-current-buffer buf
+             (let ((orig (buffer-string)))
+               (js-tests--remove-indentation)
+               ;; Indent and check that we get the original text.
+               (indent-region (point-min) (point-max))
+               (should (equal (buffer-string) orig))
+               ;; Verify idempotency.
+               (indent-region (point-min) (point-max))
+               (should (equal (buffer-string) orig))))
+         (kill-buffer buf)))))
+
+(js-deftest-indent "js-chain.js")
+(js-deftest-indent "js-indent-align-list-continuation-nil.js")
+(js-deftest-indent "js-indent-init-dynamic.js")
+(js-deftest-indent "js-indent-init-t.js")
+(js-deftest-indent "js.js")
+(js-deftest-indent "jsx-align-gt-with-lt.jsx")
+(js-deftest-indent "jsx-comment-string.jsx")
+(js-deftest-indent "jsx-indent-level.jsx")
+(js-deftest-indent "jsx-quote.jsx")
+(js-deftest-indent "jsx-self-closing.jsx")
+(js-deftest-indent "jsx-unclosed-1.jsx")
+(js-deftest-indent "jsx-unclosed-2.jsx")
+(js-deftest-indent "jsx.jsx")
+
+;;;; Navigation tests.
+
+(ert-deftest js-mode-beginning-of-defun ()
+  (with-temp-buffer
+    (insert "function foo() {
+  var value = 1;
+}
+
+/** A comment. */
+function bar() {
+  var value = 1;
+}
+")
+    (js-mode)
+    ;; Move point inside `foo'.
+    (goto-char 18)
+    (beginning-of-defun)
+    (should (bobp))
+    ;; Move point between the two functions.
+    (goto-char 37)
+    (beginning-of-defun)
+    (should (bobp))
+    ;; Move point inside `bar'.
+    (goto-char 73)
+    (beginning-of-defun)
+    ;; Point should move to the beginning of `bar'.
+    (should (equal (point) 56))))
+
+(ert-deftest js-mode-end-of-defun ()
+  (with-temp-buffer
+    (insert "function foo() {
+  var value = 1;
+}
+
+/** A comment. */
+function bar() {
+  var value = 1;
+}
+")
+    (js-mode)
+    (goto-char (point-min))
+    (end-of-defun)
+    ;; end-of-defun from the beginning of the buffer should go to the
+    ;; end of `foo'.
+    (should (equal (point) 37))
+    ;; Move point to the beginning of /** A comment. */
+    (goto-char 38)
+    (end-of-defun)
+    ;; end-of-defun should move point to eob.
+    (should (eobp))))
+
+;;;; Tree-sitter tests.
+
+(ert-deftest js-ts-mode-test-indentation ()
+  (skip-unless (treesit-ready-p 'javascript))
+  (ert-test-erts-file (ert-resource-file "js-ts-indents.erts")))
 
 (provide 'js-tests)
 

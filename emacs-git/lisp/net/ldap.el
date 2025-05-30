@@ -1,6 +1,6 @@
-;;; ldap.el --- client interface to LDAP for Emacs
+;;; ldap.el --- client interface to LDAP for Emacs  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1998-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Author: Oscar Figueiredo <oscar@cpe.fr>
 ;; Maintainer: emacs-devel@gnu.org
@@ -29,11 +29,10 @@
 ;;    `ldapsearch' to actually perform the searches.  That program can be
 ;;    found in all LDAP developer kits such as:
 ;;      - UM-LDAP 3.3 (http://www.umich.edu/~dirsvcs/ldap/)
-;;      - OpenLDAP (http://www.openldap.org/)
+;;      - OpenLDAP (https://www.openldap.org/)
 
 ;;; Code:
 
-(require 'custom)
 (require 'password-cache)
 
 (autoload 'auth-source-search "auth-source")
@@ -52,9 +51,10 @@ a separator."
 
 (defcustom ldap-default-port nil
   "Default TCP port for LDAP connections.
-Initialized from the LDAP library at build time. Default value is 389."
+Initialized from the LDAP library at build time.
+Default value is 389."
   :type '(choice (const :tag "Use library default" nil)
-		 (integer :tag "Port number")))
+                 (natnum :tag "Port number")))
 
 (defcustom ldap-default-base nil
   "Default base for LDAP searches.
@@ -72,6 +72,9 @@ HOST is the hostname of an LDAP server (with an optional TCP port number
 appended to it using a colon as a separator).
 PROPn and VALn are property/value pairs describing parameters for the server.
 Valid properties include:
+  `auth-source' specifies whether or not to look up, via the
+  `auth-source' library, options which are not otherwise provided
+  in this list.  See `ldap-search-internal'.
   `binddn' is the distinguished name of the user to bind as
     (in RFC 1779 syntax).
   `passwd' is the password to use for simple authentication.
@@ -90,6 +93,11 @@ Valid properties include:
 		       (string :tag "Host name")
 		       (checklist :inline t
 				  :greedy t
+				  (list
+				   :tag "Use auth-source"
+				   :inline t
+				   (const :tag "Use auth-source" auth-source)
+				   boolean)
 				  (list
 				   :tag "Search Base"
 				   :inline t
@@ -148,14 +156,13 @@ Valid properties include:
   "The name of the ldapsearch command line program."
   :type '(string :tag "`ldapsearch' Program"))
 
-(defcustom ldap-ldapsearch-args '("-LL" "-tt")
+(defcustom ldap-ldapsearch-args nil
   "A list of additional arguments to pass to `ldapsearch'."
   :type '(repeat :tag "`ldapsearch' Arguments"
 		 (string :tag "Argument")))
 
 (defcustom ldap-ldapsearch-password-prompt-regexp "Enter LDAP Password: "
-  "A regular expression used to recognize the `ldapsearch'
-program's password prompt."
+  "Regexp used to recognize the `ldapsearch' program's password prompt."
   :type 'regexp
   :version "25.1")
 
@@ -419,12 +426,12 @@ RFC2798 Section 9.1.1")
   (encode-coding-string str ldap-coding-system))
 
 (defun ldap-decode-address (str)
-  (mapconcat 'ldap-decode-string
+  (mapconcat #'ldap-decode-string
 	     (split-string str "\\$")
 	     "\n"))
 
 (defun ldap-encode-address (str)
-  (mapconcat 'ldap-encode-string
+  (mapconcat #'ldap-encode-string
 	     (split-string str "\n")
 	     "$"))
 
@@ -465,7 +472,8 @@ the associated values.
 If WITHDN is non-nil, each entry in the result will be prepended with
 its distinguished name WITHDN.
 Additional search parameters can be specified through
-`ldap-host-parameters-alist', which see."
+`ldap-host-parameters-alist', which see.
+See `ldap-search-internal' for the description of return value."
   (interactive "sFilter:")
   (or host
       (setq host ldap-default-host)
@@ -480,7 +488,9 @@ Additional search parameters can be specified through
     (if ldap-ignore-attribute-codings
 	result
       (mapcar (lambda (record)
-		(mapcar #'ldap-decode-attribute record))
+                (append (and withdn (list (car record)))
+		        (mapcar #'ldap-decode-attribute
+                                (if withdn (cdr record) record))))
 	      result))))
 
 (defun ldap-password-read (host)
@@ -563,8 +573,13 @@ RFC 1779 syntax).
   `sizelimit' is the maximum number of matches to return.
   `withdn' if non-nil each entry in the result will be prepended with
 its distinguished name DN.
-The function returns a list of matching entries.  Each entry is itself
-an alist of attribute/value pairs."
+
+The function returns a list of matching entries.  Each entry is
+itself a list ATTRS of (ATTR VALUE) pairs; `dn' attribute is not
+included.
+When `withdn' is non-nil the result is instead an alist with
+elements (DN . ATTRS), where DN is a string value and ATTRS is
+same as above."
   (let* ((buf (get-buffer-create " *ldap-search*"))
 	(bufval (get-buffer-create " *ldap-value*"))
 	(host (or (plist-get search-plist 'host)
@@ -602,7 +617,8 @@ an alist of attribute/value pairs."
 	(sizelimit (plist-get search-plist 'sizelimit))
 	(withdn (plist-get search-plist 'withdn))
 	(numres 0)
-	arglist dn name value record result proc)
+        (arglist (list "-LLL" "-tt"))
+	dn name value record result)
     (if (or (null filter)
 	    (equal "" filter))
 	(error "No search filter"))
@@ -646,8 +662,9 @@ an alist of attribute/value pairs."
 	       (not (equal "" sizelimit)))
 	  (setq arglist (nconc arglist (list (format "-z%s" sizelimit)))))
       (if passwd
-	  (let* ((process-connection-type nil)
-		 (proc-args (append arglist ldap-ldapsearch-args
+	  ;; Leave process-connection-type at its default value.  See
+	  ;; discussion in Bug#33050.
+	  (let* ((proc-args (append arglist ldap-ldapsearch-args
 				    filter))
 		 (proc (apply #'start-process "ldapsearch" buf
 			      ldap-ldapsearch-prog
@@ -663,7 +680,7 @@ an alist of attribute/value pairs."
 	    (while (not (memq (process-status proc) '(exit signal)))
 	      (sit-for 0.1))
 	    (let ((status (process-exit-status proc)))
-	      (when (not (eq status 0))
+	      (when (not (memql status '(0 4))) ; 4 = Size limit exceeded
 		;; Handle invalid credentials exit status specially
 		;; for ldap-password-read.
 		(if (eq status 49)
@@ -671,7 +688,7 @@ an alist of attribute/value pairs."
 				   " bind distinguished name (binddn)"))
 		  (error "Failed ldapsearch invocation: %s \"%s\""
 			 ldap-ldapsearch-prog
-			 (mapconcat 'identity proc-args "\" \""))))))
+			 (mapconcat #'identity proc-args "\" \""))))))
 	(apply #'call-process ldap-ldapsearch-prog
 	       ;; Ignore stderr, which can corrupt results
 	       nil (list buf nil) nil
@@ -682,7 +699,7 @@ an alist of attribute/value pairs."
       (while (re-search-forward (concat "[\t\n\f]+ \\|"
 					ldap-ldapsearch-password-prompt-regexp)
 				nil t)
-	(replace-match "" nil nil))
+	(replace-match ""))
       (goto-char (point-min))
 
       (if (looking-at "usage")
@@ -691,42 +708,47 @@ an alist of attribute/value pairs."
 	;; Skip error message when retrieving attribute list
 	(if (looking-at "Size limit exceeded")
 	    (forward-line 1))
-        (if (looking-at "version:") (forward-line 1)) ;bug#12724.
 	(while (progn
 		 (skip-chars-forward " \t\n")
 		 (not (eobp)))
-	  (setq dn (buffer-substring (point) (point-at-eol)))
-	  (forward-line 1)
           (while (looking-at "^\\([A-Za-z][-A-Za-z0-9]*\
 \\|[0-9]+\\(?:\\.[0-9]+\\)*\\)\\(;[-A-Za-z0-9]+\\)*[=:\t ]+\
-\\(<[\t ]*file://\\)\\(.*\\)$")
+\\(<[\t ]*file://\\)?\\(.*\\)$")
 	    (setq name (match-string 1)
 		  value (match-string 4))
-            ;; Need to handle file:///D:/... as generated by OpenLDAP
-            ;; on DOS/Windows as local files.
-            (if (and (memq system-type '(windows-nt ms-dos))
-                     (eq (string-match "/\\(.:.*\\)$" value) 0))
-                (setq value (match-string 1 value)))
-	    ;; Do not try to open non-existent files
-	    (if (equal value "")
-		(setq value " ")
-	      (with-current-buffer bufval
-		(erase-buffer)
-		(set-buffer-multibyte nil)
-		(insert-file-contents-literally value)
-		(delete-file value)
-		(setq value (buffer-string))))
-	    (setq record (cons (list name value)
-			       record))
+            (when (memq system-type '(windows-nt ms-dos))
+              ;; Need to handle file:///D:/... as generated by
+              ;; OpenLDAP on DOS/Windows as local files.
+              (save-match-data
+                (when (eq (string-match "/\\(.:.*\\)$" value) 0)
+                  (setq value (match-string 1 value)))))
+            (cond ((match-string 3)     ;normal value written to a file
+                   (with-current-buffer bufval
+		     (erase-buffer)
+		     (set-buffer-multibyte nil)
+		     (insert-file-contents-literally value)
+		     (delete-file value)
+		     (setq value (buffer-string))))
+                  (;; dn is output inline
+                   (string-equal-ignore-case name "dn")
+                   (setq dn value
+                         name nil
+                         value nil))
+                  (t (setq value " ")))
+            (and name value
+	         (setq record (cons (list name value)
+			            record)))
 	    (forward-line 1))
-	  (cond (withdn
-		 (push (cons dn (nreverse record)) result))
-		(record
-		 (push (nreverse record) result)))
-	  (setq record nil)
-	  (skip-chars-forward " \t\n")
+          (when dn
+	    (cond (withdn
+		   (push (cons dn (nreverse record))
+                         result))
+		  (record
+		   (push (nreverse record) result))))
+	  (setq record nil
+                dn nil)
 	  (message "Parsing results... %d" numres)
-	  (1+ numres))
+	  (setq numres (1+ numres)))
 	(message "Parsing results... done")
 	(nreverse result)))))
 

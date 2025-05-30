@@ -1,6 +1,6 @@
 ;;; url-cookie.el --- URL cookie support  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996-1999, 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1999, 2004-2025 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes, hypermedia
 
@@ -26,6 +26,7 @@
 (require 'url-util)
 (require 'url-parse)
 (require 'url-domsuf)
+(require 'generate-lisp-file)
 
 (eval-when-compile (require 'cl-lib))
 
@@ -60,7 +61,7 @@
 
 (defcustom url-cookie-multiple-line nil
   "If nil, HTTP requests put all cookies for the server on one line.
-Some web servers, such as http://www.hotmail.com/, only accept cookies
+Some web servers, such as https://www.hotmail.com/, only accept cookies
 when they are on one line.  This is broken behavior, but just try
 telling Microsoft that."
   :type 'boolean
@@ -105,11 +106,10 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 		    ;; away, make it expire a year from now
 		    (expires (format-time-string
 			      "%d %b %Y %T [GMT]"
-			      (seconds-to-time
-			       (let ((s (string-to-number (nth 4 fields))))
-				 (if (and (= s 0) long-session)
-				     (seconds-to-time (+ (* 365 24 60 60) (float-time)))
-				   s)))))
+			      (let ((s (string-to-number (nth 4 fields))))
+				(if (and (zerop s) long-session)
+				    (time-add nil (* 365 24 60 60))
+				  s))))
 		    (key (nth 5 fields))
 		    (val (nth 6 fields)))
 		(cl-incf n)
@@ -139,7 +139,8 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
     (set var new)))
 
 (defun url-cookie-write-file (&optional fname)
-  (when url-cookies-changed-since-last-save
+  (when (and url-cookies-changed-since-last-save
+             url-cookie-file)
     (or fname (setq fname (expand-file-name url-cookie-file)))
     (if (condition-case nil
             (progn
@@ -158,11 +159,8 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 	(insert ")\n(setq url-cookie-secure-storage\n '")
 	(pp url-cookie-secure-storage (current-buffer)))
       (insert ")\n")
-      (insert "\n;; Local Variables:\n"
-              ";; version-control: never\n"
-              ";; no-byte-compile: t\n"
-              ";; End:\n")
-      (set (make-local-variable 'version-control) 'never)
+      (generate-lisp-file-trailer fname :inhibit-provide t :autoloads t)
+      (setq-local version-control 'never)
       (write-file fname))
     (setq url-cookies-changed-since-last-save nil))))
 
@@ -210,7 +208,7 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
   (let ((exp (url-cookie-expires cookie)))
     (and (> (length exp) 0)
 	 (condition-case ()
-	     (> (float-time) (float-time (date-to-time exp)))
+	     (time-less-p (date-to-time exp) nil)
 	   (error nil)))))
 
 (defun url-cookie-retrieve (host &optional localpart secure)
@@ -290,7 +288,7 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 
 (defun url-cookie-handle-set-cookie (str)
   (setq url-cookies-changed-since-last-save t)
-  (let* ((args (url-parse-args str t))
+  (let* ((args (nreverse (url-parse-args str t)))
 	 (case-fold-search t)
 	 (secure (and (assoc-string "secure" args t) t))
 	 (domain (or (cdr-safe (assoc-string "domain" args t))
@@ -298,44 +296,17 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 	 (current-url (url-view-url t))
 	 (trusted url-cookie-trusted-urls)
 	 (untrusted url-cookie-untrusted-urls)
-	 (expires (cdr-safe (assoc-string "expires" args t)))
+	 (max-age (cdr-safe (assoc-string "max-age" args t)))
 	 (localpart (or (cdr-safe (assoc-string "path" args t))
 			(file-name-directory
 			 (url-filename url-current-object))))
-	 (rest nil))
-    (dolist (this args)
-      (or (member (downcase (car this)) '("secure" "domain" "expires" "path"))
-	  (setq rest (cons this rest))))
-
-    ;; Sometimes we get dates that the timezone package cannot handle very
-    ;; gracefully - take care of this here, instead of in url-cookie-expired-p
-    ;; to speed things up.
-    (and expires
-	 (string-match
-	  (concat "^[^,]+, +\\(..\\)-\\(...\\)-\\(..\\) +"
-		  "\\(..:..:..\\) +\\[*\\([^]]+\\)\\]*$")
-	  expires)
-	 (setq expires (concat (match-string 1 expires) " "
-			       (match-string 2 expires) " "
-			       (match-string 3 expires) " "
-			       (match-string 4 expires) " ["
-			       (match-string 5 expires) "]")))
-
-    ;; This one is for older Emacs/XEmacs variants that don't
-    ;; understand this format without tenths of a second in it.
-    ;; Wednesday, 30-Dec-2037 16:00:00 GMT
-    ;;       - vs -
-    ;; Wednesday, 30-Dec-2037 16:00:00.00 GMT
-    (and expires
-	 (string-match
-	  "\\([0-9]+\\)-\\([A-Za-z]+\\)-\\([0-9]+\\)[ \t]+\\([0-9]+:[0-9]+:[0-9]+\\)\\(\\.[0-9]+\\)*[ \t]+\\([-+a-zA-Z0-9]+\\)"
-	  expires)
-	 (setq expires (concat (match-string 1 expires) "-"	; day
-			       (match-string 2 expires) "-"	; month
-			       (match-string 3 expires) " "	; year
-			       (match-string 4 expires) ".00 " ; hour:minutes:seconds
-			       (match-string 6 expires)))) ":" ; timezone
-
+	 (expires nil))
+    (if (and max-age (string-match "\\`-?[0-9]+\\'" max-age))
+	(setq expires (ignore-errors
+                        (format-time-string "%a %b %d %H:%M:%S %Y GMT"
+					    (time-add nil (read max-age))
+					    t)))
+      (setq expires (cdr-safe (assoc-string "expires" args t))))
     (while (consp trusted)
       (if (string-match (car trusted) current-url)
 	  (setq trusted (- (match-end 0) (match-beginning 0)))
@@ -346,7 +317,7 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 	(pop untrusted)))
     (and trusted untrusted
 	 ;; Choose the more specific match.
-	 (set (if (> trusted untrusted) 'untrusted 'trusted) nil))
+	 (if (> trusted untrusted) (setq untrusted nil) (setq trusted nil)))
     (cond
      (untrusted
       ;; The site was explicitly marked as untrusted by the user.
@@ -359,8 +330,9 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 	   (not trusted)
 	   (save-window-excursion
 	     (with-output-to-temp-buffer "*Cookie Warning*"
-	       (dolist (x rest)
-                 (princ (format "%s - %s" (car x) (cdr x)))))
+	       (princ (format "%s=\"%s\"\n" (caar args) (cdar args)))
+	       (dolist (x (cdr args))
+		 (princ (format "  %s=\"%s\"\n" (car x) (cdr x)))))
 	     (prog1
 		 (not (funcall url-confirmation-func
 			       (format "Allow %s to set these cookies? "
@@ -371,8 +343,8 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
       nil)
      ((url-cookie-host-can-set-p (url-host url-current-object) domain)
       ;; Cookie is accepted by the user, and passes our security checks.
-      (dolist (cur rest)
-	(url-cookie-store (car cur) (cdr cur) expires domain localpart secure)))
+      (url-cookie-store (caar args) (cdar args)
+			expires domain localpart secure))
      (t
       (url-lazy-message "%s tried to set a cookie for domain %s - rejected."
 			(url-host url-current-object) domain)))))
@@ -384,11 +356,11 @@ i.e. 1970-1-1) are loaded as expiring one year from now instead."
 Default is 1 hour.  Note that if you change this variable outside of
 the `customize' interface after `url-do-setup' has been run, you need
 to run the `url-cookie-setup-save-timer' function manually."
-  :set #'(lambda (var val)
-	   (set-default var val)
-	   (if (bound-and-true-p url-setup-done)
-	       (url-cookie-setup-save-timer)))
-  :type 'integer
+  :set (lambda (var val)
+         (set-default var val)
+         (if (bound-and-true-p url-setup-done)
+             (url-cookie-setup-save-timer)))
+  :type 'natnum
   :group 'url-cookie)
 
 (defun url-cookie-setup-save-timer ()
@@ -421,6 +393,8 @@ instead delete all cookies that do not match REGEXP."
 
 ;;; Mode for listing and editing cookies.
 
+(defvar url-cookie--deleted-cookies nil)
+
 (defun url-cookie-list ()
   "Display a buffer listing the current URL cookies, if there are any.
 Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
@@ -430,6 +404,11 @@ Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
     (error "No cookies are defined"))
 
   (pop-to-buffer "*url cookies*")
+  (url-cookie-mode)
+  (url-cookie--generate-buffer)
+  (goto-char (point-min)))
+
+(defun url-cookie--generate-buffer ()
   (let ((inhibit-read-only t)
 	(domains (sort
 		  (copy-sequence
@@ -440,7 +419,6 @@ Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
 	(domain-length 0)
 	start name format domain)
     (erase-buffer)
-    (url-cookie-mode)
     (dolist (elem domains)
       (setq domain-length (max domain-length (length (car elem)))))
     (setq format (format "%%-%ds %%-20s %%s" domain-length)
@@ -452,16 +430,15 @@ Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
 			    (lambda (c1 c2)
 			      (string< (url-cookie-name c1)
 				       (url-cookie-name c2)))))
-	(setq start (point)
+        (setq start (point)
 	      name (url-cookie-name cookie))
-	(when (> (length name) 20)
+        (when (> (length name) 20)
 	  (setq name (substring name 0 20)))
-	(insert (format format domain name
-			(url-cookie-value cookie))
-		"\n")
-	(setq domain "")
-	(put-text-property start (1+ start) 'url-cookie cookie)))
-    (goto-char (point-min))))
+        (insert (format format domain name
+		        (url-cookie-value cookie))
+	        "\n")
+        (setq domain "")
+        (put-text-property start (1+ start) 'url-cookie cookie)))))
 
 (defun url-cookie-delete ()
   "Delete the cookie on the current line."
@@ -485,13 +462,40 @@ Use \\<url-cookie-mode-map>\\[url-cookie-delete] to remove cookies."
     (delete-region (line-beginning-position)
 		   (progn
 		     (forward-line 1)
-		     (point)))))
+		     (point)))
+    (let ((point (point)))
+      (erase-buffer)
+      (url-cookie--generate-buffer)
+      (goto-char point))
+    (push cookie url-cookie--deleted-cookies)))
 
-(defvar url-cookie-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map [delete] 'url-cookie-delete)
-    (define-key map [(control k)] 'url-cookie-delete)
-    map))
+(defun url-cookie-undo ()
+  "Undo deletion of a cookie."
+  (interactive)
+  (unless url-cookie--deleted-cookies
+    (error "No cookie deletions to undo"))
+  (let* ((cookie (pop url-cookie--deleted-cookies))
+         (variable (if (url-cookie-secure cookie)
+		       'url-cookie-secure-storage
+		     'url-cookie-storage))
+         (list (symbol-value variable))
+	 (elem (assoc (url-cookie-domain cookie) list)))
+    (if elem
+        (nconc elem (list cookie))
+      (setq elem (list (url-cookie-domain cookie) cookie))
+      (set variable (cons elem list)))
+    (setq url-cookies-changed-since-last-save t)
+    (url-cookie-write-file)
+    (let ((point (point))
+          (inhibit-read-only t))
+      (erase-buffer)
+      (url-cookie--generate-buffer)
+      (goto-char point))))
+
+(defvar-keymap url-cookie-mode-map
+  "<delete>" #'url-cookie-delete
+  "C-k"      #'url-cookie-delete
+  "C-_"      #'url-cookie-undo)
 
 (define-derived-mode url-cookie-mode special-mode "URL Cookie"
   "Mode for listing cookies.

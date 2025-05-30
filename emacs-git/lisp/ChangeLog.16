@@ -379,7 +379,7 @@
 2013-02-28  Sam Steingold  <sds@gnu.org>
 
 	* vc/diff-mode.el (diff-hunk-file-names): Handle filenames with spaces.
-	See <http://stackoverflow.com/questions/14720205>.
+	See <https://stackoverflow.com/questions/14720205>.
 
 2013-02-28  Thierry Volpiatto  <thierry.volpiatto@gmail.com>
 
@@ -1326,7 +1326,7 @@
 
 	* net/soap-client.el (soap-invoke): Encode the string for
 	`url-request-data' as UTF-8.
-	Fixes <http://code.google.com/p/emacs-soap-client/issues/detail?id=16>.
+	Fixes <https://code.google.com/p/emacs-soap-client/issues/detail?id=16>.
 
 2013-02-01  Glenn Morris  <rgm@gnu.org>
 
@@ -1371,7 +1371,7 @@
 
 	* frame.el (toggle-frame-maximized, toggle-frame-fullscreen):
 	Use fullboth as an alias for fullscreen.  Suggested by Jan Djärv in
-	<https://lists.gnu.org/archive/html/emacs-devel/2013-01/msg00203.html>.
+	<https://lists.gnu.org/r/emacs-devel/2013-01/msg00203.html>.
 
 2013-01-30  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -1770,7 +1770,7 @@
 	(jit-lock--debug-fontifying): New var.
 	(jit-lock--debug-fontify): New function.
 	* subr.el (condition-case-unless-debug): Don't prevent catching the
-	error, just let the debbugger run.
+	error, just let the debugger run.
 	* emacs-lisp/timer.el (timer-event-handler): Don't prevent debugging
 	timer code and don't drop errors silently.
 
@@ -2422,7 +2422,7 @@
 
 	* epg.el: Support pinentry-curses.
 	Suggested by Werner Koch in
-	<https://lists.gnu.org/archive/html/emacs-devel/2007-02/msg00755.html>.
+	<https://lists.gnu.org/r/emacs-devel/2007-02/msg00755.html>.
 	(epg-agent-file, epg-agent-mtime): New variable.
 	(epg--start): Record the modified time of gpg-agent socket file,
 	to restore Emacs frame after pinentry-curses termination.
@@ -2448,7 +2448,7 @@
 	(toggle-frame-maximized): Rewrite and bind to M-<f10>.
 	(toggle-frame-fullscreen): New command bound to <f11> instead of
 	`toggle-frame-maximized'.
-	https://lists.gnu.org/archive/html/emacs-devel/2012-12/msg00703.html
+	https://lists.gnu.org/r/emacs-devel/2012-12/msg00703.html
 
 2012-12-27  Michael Albinus  <michael.albinus@gmx.de>
 
@@ -2462,7 +2462,7 @@
 2012-12-27  Sam Steingold  <sds@gnu.org>
 
 	* progmodes/cperl-mode.el (cperl-calculate-indent): Do not stagger
-	continuations, see <http://stackoverflow.com/questions/3582436>.
+	continuations, see <https://stackoverflow.com/questions/3582436>.
 
 2012-12-27  Dmitry Gutov  <dgutov@yandex.ru>
 
@@ -2573,7 +2573,7 @@
 
 	* progmodes/grep.el (rgrep): Escape command line.  Sometimes, it
 	is too long for Tramp.  See discussion in
-	<http://thread.gmane.org/gmane.emacs.tramp/8233/focus=8244>.
+	<http://thread.gmane.org/gmane.emacs.tramp/8233/focus=8244>. [dead link]
 
 	* progmodes/compile.el (compilation-start): Remove line escape
 	template.
@@ -2686,7 +2686,7 @@
 	(isearch-insert-char-by-name): New command.
 	* international/mule-cmds.el (read-char-by-name): Let-bind
 	`enable-recursive-minibuffers' to t.
-	https://lists.gnu.org/archive/html/emacs-devel/2012-12/msg00234.html
+	https://lists.gnu.org/r/emacs-devel/2012-12/msg00234.html
 
 2012-12-15  Juri Linkov  <juri@jurta.org>
 
@@ -2814,7 +2814,7 @@
 2012-12-12  Jonas Bernoulli  <jonas@bernoul.li>
 
 	* emacs-lisp/eieio.el: Prettier object pretty-printing (bug#13115).
-	(eieio-override-prin1): Don't quote kewords and booleans.
+	(eieio-override-prin1): Don't quote keywords and booleans.
 	(object-write) <eieio-default-superclass>: Don't put closing parens
 	on new line, avoid needless empty lines, align values that are objects
 	with the slot keyword (instead of beginning on the same line).
@@ -3018,7 +3018,7 @@
 
 	* progmodes/sql.el: Use cl-lib and lexical-binding; various cleanup.
 	(sql-signum): Remove.  Use `cl-signum' instead.
-	(sql-read-passwd): Remove; use read-passwd instread.
+	(sql-read-passwd): Remove; use read-passwd instead.
 	(sql-get-login-ext): Use read-string.
 	(sql-get-login): Use dolist and pcase.
 	(sql--completion-table): Rename from sql-try-completion.
@@ -4784,7 +4784,7 @@
 	Convert to defcustom.
 	(gdb-get-source-file): Don't bind pop-up-windows.
 
-	* progmodes/gud.el (gud-display-line): Don't specially re-use
+	* progmodes/gud.el (gud-display-line): Don't specially reuse
 	other frames for the gdb-mi case (Bug#12648).
 
 2012-10-18  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -4831,7 +4831,7 @@
 	* progmodes/compile.el (compilation-error-regexp-alist-alist):
 	Adjust the msft regexp to the output of Studio 2010, and move msft
 	before edg-1.  See the discussion on emacs-devel,
-	https://lists.gnu.org/archive/html/emacs-devel/2012-09/msg00579.html,
+	https://lists.gnu.org/r/emacs-devel/2012-09/msg00579.html,
 	for the details.
 
 2012-10-14  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -4866,12 +4866,13 @@
 2012-10-12  Fabián Ezequiel Gallina  <fgallina@cuca>
 
 	* progmodes/python.el (python-mode-map):
-	Replace subtitute-key-definition with proper command remapping.
+	Replace substitute-key-definition with proper command remapping.
 	(python-nav--up-list): Fix behavior for blocks on the same level.
 
 2012-10-11  Stefan Monnier  <monnier@iro.umontreal.ca>
 
-	* help-fns.el (describe-function-1): Handle autoloads w/o docstrings.
+	* help-fns.el (describe-function-1): Handle autoloads without
+	docstrings.
 
 	* emacs-lisp/bytecomp.el (byte-compile-eval): Adjust to long-ago
 	changes to the format of load-history.
@@ -5453,7 +5454,7 @@
 
 	* profiler.el (profiler-sampling-interval): Change default back to 1.
 	See Stefan Monnier in
-	<https://lists.gnu.org/archive/html/emacs-devel/2012-09/msg00863.html>.
+	<https://lists.gnu.org/r/emacs-devel/2012-09/msg00863.html>.
 
 2012-10-01  Fabián Ezequiel Gallina  <fgallina@cuca>
 
@@ -6641,7 +6642,7 @@
 	search-whitespace-regexp if isearch-lax-whitespace or
 	isearch-regexp-lax-whitespace is non-nil.
 	(Info-mode): Don't set local variable search-whitespace-regexp.
-	https://lists.gnu.org/archive/html/emacs-devel/2012-08/msg00811.html
+	https://lists.gnu.org/r/emacs-devel/2012-08/msg00811.html
 
 2012-09-12  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -7037,7 +7038,7 @@
 2012-09-02  Juri Linkov  <juri@jurta.org>
 
 	Toggle whitespace matching mode with M-s SPC.
-	https://lists.gnu.org/archive/html/emacs-devel/2012-09/msg00008.html
+	https://lists.gnu.org/r/emacs-devel/2012-09/msg00008.html
 
 	* isearch.el (search-whitespace-regexp): Doc fix.
 	Remove cons cell customization.
@@ -7833,7 +7834,7 @@
 	the form for POSITION argument.
 
 	* term/x-win.el (x-menu-bar-open):
-	Use the value returend from (posn-at-point) as position
+	Use the value returned from (posn-at-point) as position
 	passed to `popup-menu'.
 
 2012-08-09  Jay Belanger  <jay.p.belanger@gmail.com>
@@ -8109,7 +8110,7 @@
 
 	* whitespace.el (whitespace-display-mappings): Use Unicode
 	codepoints, instead of emacs-mule codepoints.  See
-	https://lists.gnu.org/archive/html/help-gnu-emacs/2012-07/msg00366.html
+	https://lists.gnu.org/r/help-gnu-emacs/2012-07/msg00366.html
 	for the details.
 
 	* files.el (file-truename): Don't skip symlink-chasing part on
@@ -8513,7 +8514,7 @@
 	* startup.el (command-line): Don't display an empty user name in
 	the error message about non-existent home directory, when
 	init-file-user was set to an empty string.  See
-	https://lists.gnu.org/archive/html/bug-gnu-emacs/2012-07/msg00835.html
+	https://lists.gnu.org/r/bug-gnu-emacs/2012-07/msg00835.html
 	for the details and context.
 
 2012-07-22  Vincent Belaïche  <vincentb1@users.sourceforge.net>
@@ -9419,7 +9420,7 @@
 
 	* calendar/calendar.el (calendar-exit): Don't try to delete or
 	iconify last frame.  See:
-	https://lists.gnu.org/archive/html/emacs-devel/2012-06/msg00372.html
+	https://lists.gnu.org/r/emacs-devel/2012-06/msg00372.html
 
 2012-06-25  Jim Diamond  <Jim.Diamond@AcadiaU.ca>  (tiny change)
 
@@ -10430,7 +10431,7 @@
 	* descr-text.el (describe-char): Mention how to insert the
 	character, if the current input method doesn't support it.
 	See the discussion in this thread for the details:
-	https://lists.gnu.org/archive/html/emacs-devel/2012-05/msg00533.html.
+	https://lists.gnu.org/r/emacs-devel/2012-05/msg00533.html.
 
 2012-06-08  Sam Steingold  <sds@gnu.org>
 
@@ -10664,8 +10665,7 @@
 	* textmodes/rst.el: Add comments.
 	(rst-transition, rst-adornment): New faces.
 	(rst-adornment-faces-alist): Make default safe to reevaluate.
-	Fixes
-	http://sourceforge.net/tracker/?func=detail&atid=422030&aid=3479603&group_id=38414.
+	Fixes https://sourceforge.net/p/docutils/bugs/180/.
 	Improve customization tags.
 	(rst-define-level-faces): Clarify meaning.
 
@@ -10765,7 +10765,7 @@
 
 	* play/zone.el (zone-hiding-mode-line): Rename from
 	zone-hiding-modeline.  All callers changed.
-	(zone): Remove unusued `modeline-hidden-level' property.
+	(zone): Remove unused `modeline-hidden-level' property.
 
 	* progmodes/xscheme.el (xscheme-mode-line-initialize): Rename from
 	xscheme-modeline-initialize.  All callers changed.
@@ -10931,7 +10931,7 @@
 
 2012-05-29  Aaron S. Hawley  <aaron.s.hawley@gmail.com>
 
-	* vc/vc.el (vc-revert, vc-rollback): Dont kill vc-diff buffer on
+	* vc/vc.el (vc-revert, vc-rollback): Don't kill vc-diff buffer on
 	revert (Bug#11488).
 
 2012-05-29  Juri Linkov  <juri@jurta.org>
@@ -10967,8 +10967,8 @@
 	* comint.el (comint-history-isearch-end):
 	Use `isearch-search-fun-default'.
 	(comint-history-isearch-search): Use `isearch-search-fun-default'
-	and remove spacial case for `isearch-word'.
-	(comint-history-isearch-wrap): Remove spacial case for
+	and remove special case for `isearch-word'.
+	(comint-history-isearch-wrap): Remove special case for
 	`isearch-word'.
 
 	* hexl.el (hexl-isearch-search-function):
@@ -10981,13 +10981,13 @@
 	Use `isearch-search-fun-default'.
 
 	* simple.el (minibuffer-history-isearch-search):
-	Use `isearch-search-fun-default' and remove spacial case for
+	Use `isearch-search-fun-default' and remove special case for
 	`isearch-word'.
-	(minibuffer-history-isearch-wrap): Remove spacial case for
+	(minibuffer-history-isearch-wrap): Remove special case for
 	`isearch-word'.
 
 	* textmodes/reftex-global.el (reftex-isearch-wrap-function):
-	Remove spacial case for `isearch-word'.
+	Remove special case for `isearch-word'.
 	(reftex-isearch-isearch-search): Use `isearch-search-fun-default'.
 
 2012-05-28  Agustín Martín Domingo  <agustin.martin@hispalinux.es>
@@ -11473,7 +11473,7 @@
 	(sh-set-shell): Use smie-setup if requested.
 
 	* term.el (term-set-escape-char): Properly set term-escape-char.
-	See http://stackoverflow.com/questions/10524656.
+	See https://stackoverflow.com/questions/10524656.
 
 2012-05-10  Chong Yidong  <cyd@gnu.org>
 
@@ -11992,11 +11992,11 @@
 	* progmodes/verilog-mode.el (verilog-pretty-expr): Don't line up
 	assignment with tests in ifs and for loops.
 	(verilog-extended-complete-re, verilog-complete-reg): Change so
-	that DPI inport functions don't look like function declarations.
+	that DPI import functions don't look like function declarations.
 	(verilog-pretty-expr): Don't line up assignment
 	operations to the test and increment in if and for loops
 	(verilog-extended-complete-re, verilog-complete-reg): Change so
-	that DPI inport functions don't look like function declarations.
+	that DPI import functions don't look like function declarations.
 
 2012-05-03  Kenichi Handa  <handa@m17n.org>
 
@@ -13909,7 +13909,7 @@
 	Insert invisible LRM characters before each character in a keyboard
 	layout cell, to prevent their reordering by bidi display engine.
 	For details, see the discussion in
-	https://lists.gnu.org/archive/html/emacs-devel/2012-03/msg00085.html.
+	https://lists.gnu.org/r/emacs-devel/2012-03/msg00085.html.
 
 2012-03-08  Alan Mackenzie  <acm@muc.de>
 
@@ -13927,7 +13927,7 @@
 
 	* international/quail.el (quail-help):
 	Force bidi-paragraph-direction be left-to-right.  See discussion in
-	https://lists.gnu.org/archive/html/emacs-devel/2012-03/msg00062.html
+	https://lists.gnu.org/r/emacs-devel/2012-03/msg00062.html
 	for the reason.
 
 2012-03-07  Michael Albinus  <michael.albinus@gmx.de>
@@ -15004,7 +15004,7 @@
 
 	* descr-text.el (describe-char): Show the raw character, not only
 	its display form at POS.  Suggested by Kenichi Handa <handa@m17n.org>.
-	See https://lists.gnu.org/archive/html/emacs-devel/2012-01/msg00760.html
+	See https://lists.gnu.org/r/emacs-devel/2012-01/msg00760.html
 	for the reasons.
 
 2012-01-28  Phil Hagelberg  <phil@hagelb.org>
@@ -15340,7 +15340,7 @@
 	* subr.el (with-selected-frame): Mention that the selected frame
 	is restored (bug#9980).
 
-	* ibuffer.el (ibuffer-mode): List the bindings in the corrent map
+	* ibuffer.el (ibuffer-mode): List the bindings in the correct map
 	(bug#9759).
 
 	* mail/smtpmail.el (password-cache-add): Remove unused declaration.
@@ -15362,7 +15362,7 @@
 	* time.el (display-time-load-average)
 	(display-time-default-load-average): Doc fixes.  See the thread
 	starting at
-	https://lists.gnu.org/archive/html/help-gnu-emacs/2012-01/msg00059.html
+	https://lists.gnu.org/r/help-gnu-emacs/2012-01/msg00059.html
 	for the details.
 
 2012-01-06  Glenn Morris  <rgm@gnu.org>
@@ -15382,7 +15382,7 @@
 	* calendar/calendar.el (calendar-mode):
 	Locally set scroll-margin to 0.  (Bug#10379)
 
-2012-01-06  Ulrich Mueller  <ulm@gentoo.org>
+2012-01-06  Ulrich Müller  <ulm@gentoo.org>
 
 	* play/doctor.el (doctor-death): Escape "," characters.  (Bug#10370)
 
@@ -15769,7 +15769,7 @@
 	(texinfo-insert-master-menu-list): Improve the error message
 	displayed if there's no menu in the Top node.
 	(Bug#2975)  See also this thread:
-	https://lists.gnu.org/archive/html/emacs-devel/2011-12/msg00156.html.
+	https://lists.gnu.org/r/emacs-devel/2011-12/msg00156.html.
 
 2011-12-09  Manuel Gómez  <mgrojo@gmail.com>  (tiny change)
 
@@ -15918,7 +15918,7 @@
 	Rework verilog-pretty-expr to handle new assignment operators in system
 	verilog, such as += *= and the like.
 	(verilog-assignment-operator-re): Regular expression to find the
-	assigment operator in a verilog assignment.
+	assignment operator in a verilog assignment.
 	(verilog-assignment-operation-re): Regular expression to find an
 	assignment statement for pretty-expr.
 	(verilog-in-attribute-p): Query returns true if point is in an
@@ -16476,7 +16476,7 @@
 	(python-pdbtrack-track-stack-file): Adjust to recognize ipdb as well as
 	regular python pdb prompts.  Adjustments shamelessly taken exactly as
 	suggested in EmacsWiki page (tiny change):
-	http://www.emacswiki.org/PythonProgrammingInEmacs#toc14
+	https://www.emacswiki.org/PythonProgrammingInEmacs#toc14
 
 2011-11-16  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -17133,7 +17133,7 @@
 	(mouse-drag-vertical-line): Call mouse-drag-line.
 	* window.el (window-at-side-p, windows-at-side): New functions.
 
-2011-10-21  Ulrich Mueller  <ulm@gentoo.org>
+2011-10-21  Ulrich Müller  <ulm@gentoo.org>
 
 	* tar-mode.el (tar-grind-file-mode):
 	Fix handling of setuid/setgid, handle sticky bit.  (Bug#9817)
@@ -20442,7 +20442,7 @@
 2011-07-03  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
 	* net/network-stream.el (open-network-stream): Use the
-	:end-of-capability command thoughout.
+	:end-of-capability command throughout.
 
 2011-07-03  Wolfgang Jenkner  <wjenkner@inode.at>  (tiny change)
 
@@ -21496,7 +21496,7 @@
 	* net/network-stream.el (open-network-stream): Add the keyword
 	:always-query-capabilities for the case where you want to force a
 	`plain' network connection, but the protocol still requires the
-	capabilitiy command (i.e., SMTP and EHLO).
+	capability command (i.e., SMTP and EHLO).
 
 	* subr.el (process-live-p): Rename from `process-alive-p' for
 	consistency with other `-live-p' functions.
@@ -22838,15 +22838,14 @@
 2011-05-10  Jim Meyering  <meyering@redhat.com>
 
 	Fix doubled-word typos.
-	* international/quail.el (quail-insert-kbd-layout): and and -> and.
-	* kermit.el: and and -> and.
-	* net/ldap.el (ldap-search-internal): to to -> to.
-	* progmodes/vhdl-mode.el (vhdl-offsets-alist): Likewise.
-	* progmodes/js.el (js-mode): and and -> and.
-	* textmodes/artist.el (artist-move-to-xy): at at -> at.
-	(artist-draw-region-trim-line-endings): if if -> if.
-	And Safetyc -> Safety.
-	* textmodes/reftex-dcr.el (reftex-view-crossref): at at -> at a.
+	* international/quail.el (quail-insert-kbd-layout):
+	* kermit.el:
+	* net/ldap.el (ldap-search-internal):
+	* progmodes/vhdl-mode.el (vhdl-offsets-alist):
+	* progmodes/js.el (js-mode):
+	* textmodes/artist.el (artist-move-to-xy):
+	(artist-draw-region-trim-line-endings):
+	* textmodes/reftex-dcr.el (reftex-view-crossref): Fix typos.
 
 2011-05-10  Glenn Morris  <rgm@gnu.org>
 	    Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -24104,7 +24103,7 @@
 
 	* emacs-lisp/lisp-mode.el (eval-defun-2): Use eval-sexp-add-defvars.
 
-	* htmlfontify.el (hfy-etags-cmd): Remove inoperant eval-and-compile.
+	* htmlfontify.el (hfy-etags-cmd): Remove inoperative eval-and-compile.
 	(hfy-e2x-etags-cmd, hfy-etags-cmd-alist-default)
 	(hfy-etags-cmd-alist): Don't eval-and-compile any more.
 
@@ -24325,7 +24324,7 @@
 	Pass nil for `after-find-file-from-revert-buffer'.
 
 	* saveplace.el (save-place-find-file-hook): Use new variable
-	`rever-buffer-in-progress-p', not `after-find-file-from-revert-buffer'.
+	`revert-buffer-in-progress-p', not `after-find-file-from-revert-buffer'.
 
 2011-04-06  Glenn Morris  <rgm@gnu.org>
 
@@ -24381,7 +24380,7 @@
 
 	* help-fns.el (describe-variable): Complete all variables having
 	documentation, including keywords.
-	https://lists.gnu.org/archive/html/emacs-devel/2011-04/msg00112.html
+	https://lists.gnu.org/r/emacs-devel/2011-04/msg00112.html
 
 2011-04-04  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -24707,7 +24706,7 @@
 	* abbrev.el (abbrev-edit-save-to-file, abbrev-edit-save-buffer):
 	New commands.
 	(edit-abbrevs-map): Bind them here.
-	(write-abbrev-file): New optinal arg VERBOSE.  (Bug#5937)
+	(write-abbrev-file): New optional arg VERBOSE.  (Bug#5937)
 
 2011-03-29  Ken Manheimer  <ken.manheimer@gmail.com>
 
@@ -25199,7 +25198,7 @@
 	* emacs-lisp/package-x.el (package-upload-buffer-internal):
 	Use `equal' for upload base check.
 
-2011-03-08  Arni Magnusson  <arnima@hafro.is>  (tiny change)
+2011-03-08  Arni Magnusson  <thisisarni@gmail.com>  (tiny change)
 
 	* textmodes/texinfo.el (texinfo-environments):
 	Add deftypecv, deftypeivar, deftypemethod, deftypeop, html.  (Bug#2783)
@@ -25223,7 +25222,7 @@ See ChangeLog.15 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2011-2017 Free Software Foundation, Inc.
+  Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

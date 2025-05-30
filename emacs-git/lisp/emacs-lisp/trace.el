@@ -1,6 +1,6 @@
 ;;; trace.el --- tracing facility for Emacs Lisp functions  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 1998, 2000-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
 ;; Author: Hans Chalupsky <hans@cs.buffalo.edu>
 ;; Maintainer: emacs-devel@gnu.org
@@ -21,12 +21,6 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
-
-;; LCD Archive Entry:
-;; trace|Hans Chalupsky|hans@cs.buffalo.edu|
-;; Tracing facility for Emacs Lisp functions|
-;; 1993/05/18 00:41:16|2.0|~/packages/trace.el.Z|
-
 
 ;;; Commentary:
 
@@ -134,6 +128,8 @@
 
 ;;; Code:
 
+(require 'cl-print)
+
 (defgroup trace nil
   "Tracing facility for Emacs Lisp functions."
   :prefix "trace-"
@@ -160,42 +156,43 @@
 (defun trace-values (&rest values)
   "Helper function to get internal values.
 You can call this function to add internal values in the trace buffer."
-  (unless inhibit-trace
-    (with-current-buffer trace-buffer
-      (goto-char (point-max))
-      (insert
-       (trace-entry-message
-        'trace-values trace-level values "")))))
+  (trace--entry-message
+   'trace-values trace-level values (lambda () "")))
 
-(defun trace-entry-message (function level args context)
+(defun trace--entry-message (function level args context)
   "Generate a string that describes that FUNCTION has been entered.
-LEVEL is the trace level, ARGS is the list of arguments passed to FUNCTION,
-and CONTEXT is a string describing the dynamic context (e.g. values of
-some global variables)."
-  (let ((print-circle t))
-    (format "%s%s%d -> %S%s\n"
-            (mapconcat 'char-to-string (make-string (1- level) ?|) " ")
-            (if (> level 1) " " "")
-            level
-            ;; FIXME: Make it so we can click the function name to jump to its
-            ;; definition and/or untrace it.
-            (cons function args)
-            context)))
+LEVEL is the trace level, ARGS is the list of arguments passed to FUNCTION."
+  (unless inhibit-trace
+    (trace--insert
+     (let ((ctx (funcall context))
+           (print-circle t)
+           (print-escape-newlines t))
+       (format "%s%s%d -> %s%s\n"
+               (mapconcat #'char-to-string
+                          (make-string (max 0 (1- level)) ?|) " ")
+               (if (> level 1) " " "")
+               level
+               ;; FIXME: Make it so we can click the function name to
+               ;; jump to its definition and/or untrace it.
+               (cl-prin1-to-string (cons function args))
+               ctx)))))
 
-(defun trace-exit-message (function level value context)
+(defun trace--exit-message (function level value context)
   "Generate a string that describes that FUNCTION has exited.
-LEVEL is the trace level, VALUE value returned by FUNCTION,
-and CONTEXT is a string describing the dynamic context (e.g. values of
-some global variables)."
-  (let ((print-circle t))
-    (format "%s%s%d <- %s: %S%s\n"
-            (mapconcat 'char-to-string (make-string (1- level) ?|) " ")
-            (if (> level 1) " " "")
-            level
-            function
-            ;; Do this so we'll see strings:
-            value
-            context)))
+LEVEL is the trace level, VALUE value returned by FUNCTION."
+  (unless inhibit-trace
+    (trace--insert
+     (let ((ctx (funcall context))
+           (print-circle t)
+           (print-escape-newlines t))
+       (format "%s%s%d <- %s: %s%s\n"
+               (mapconcat 'char-to-string (make-string (1- level) ?|) " ")
+               (if (> level 1) " " "")
+               level
+               function
+               ;; Do this so we'll see strings:
+               (cl-prin1-to-string value)
+               ctx)))))
 
 (defvar trace--timer nil)
 
@@ -210,43 +207,40 @@ some global variables)."
 			    (setq trace--timer nil)
 			    (display-buffer buf nil 0))))))
 
+(defun trace--insert (msg)
+  (if noninteractive
+      (message "%s" (if (eq ?\n (aref msg (1- (length msg))))
+                        (substring msg 0 -1) msg))
+    (with-current-buffer trace-buffer
+      (setq-local window-point-insertion-type t)
+      (goto-char (point-max))
+      (let ((deactivate-mark nil))      ;Protect deactivate-mark.
+        (insert msg)))))
 
 (defun trace-make-advice (function buffer background context)
   "Build the piece of advice to be added to trace FUNCTION.
 FUNCTION is the name of the traced function.
 BUFFER is the buffer where the trace should be printed.
 BACKGROUND if nil means to display BUFFER.
-CONTEXT if non-nil should be a function that returns extra info that should
-be printed along with the arguments in the trace."
+CONTEXT should be a function that returns extra text that should
+be printed after the arguments in the trace."
   (lambda (body &rest args)
     (let ((trace-level (1+ trace-level))
-          (trace-buffer (get-buffer-create buffer))
-          (deactivate-mark nil)         ;Protect deactivate-mark.
-          (ctx (funcall context)))
+          (trace-buffer (get-buffer-create buffer)))
+      ;; Insert a separator from previous trace output:
       (unless inhibit-trace
-        (with-current-buffer trace-buffer
-          (set (make-local-variable 'window-point-insertion-type) t)
-          (unless background (trace--display-buffer trace-buffer))
-          (goto-char (point-max))
-          ;; Insert a separator from previous trace output:
-          (if (= trace-level 1) (insert trace-separator))
-          (insert
-           (trace-entry-message
-            function trace-level args ctx))))
+        (unless background (trace--display-buffer trace-buffer))
+        (if (= trace-level 1) (trace--insert trace-separator)))
+      (trace--entry-message
+       function trace-level args context)
       (let ((result))
         (unwind-protect
             (setq result (list (apply body args)))
-          (unless inhibit-trace
-            (let ((ctx (funcall context)))
-              (with-current-buffer trace-buffer
-                (unless background (trace--display-buffer trace-buffer))
-                (goto-char (point-max))
-                (insert
-                 (trace-exit-message
-                  function
-                  trace-level
-                  (if result (car result) '\!non-local\ exit\!)
-                  ctx))))))
+          (trace--exit-message
+           function
+           trace-level
+           (if result (car result) '\!non-local\ exit\!)
+           context))
         (car result)))))
 
 (defun trace-function-internal (function buffer background context)
@@ -265,34 +259,29 @@ be printed along with the arguments in the trace."
 If `current-prefix-arg' is non-nil, also read a buffer and a \"context\"
 \(Lisp expression).  Return (FUNCTION BUFFER FUNCTION-CONTEXT)."
   (cons
-   (let ((default (function-called-at-point))
-         (beg (string-match ":[ \t]*\\'" prompt)))
-     (intern (completing-read (if default
-                                  (format
-                                   "%s (default %s)%s"
-                                   (substring prompt 0 beg)
-                                   default
-                                   (if beg (substring prompt beg) ": "))
-                                prompt)
+   (let ((default (function-called-at-point)))
+     (intern (completing-read (format-prompt prompt default)
                               obarray 'fboundp t nil nil
                               (if default (symbol-name default)))))
    (when current-prefix-arg
      (list
-      (read-buffer "Output to buffer: " trace-buffer)
+      (read-buffer "Output to buffer" trace-buffer)
       (let ((exp
-             (let ((minibuffer-completing-symbol t))
-               (read-from-minibuffer "Context expression: "
-                                     nil read-expression-map t
-                                     'read-expression-history))))
+             (read-from-minibuffer "Context expression: "
+                                   nil read-expression-map t
+                                   'read-expression-history)))
         (lambda ()
-          (let ((print-circle t))
+          (let ((print-circle t)
+                (print-escape-newlines t))
             (concat " [" (prin1-to-string (eval exp t)) "]"))))))))
 
 ;;;###autoload
 (defun trace-function-foreground (function &optional buffer context)
   "Trace calls to function FUNCTION.
 With a prefix argument, also prompt for the trace buffer (default
-`trace-buffer'), and a Lisp expression CONTEXT.
+`trace-buffer'), and a Lisp expression CONTEXT.  When called from
+Lisp, CONTEXT should be a function of no arguments which returns
+a value to insert into BUFFER during the trace.
 
 Tracing a function causes every call to that function to insert
 into BUFFER Lisp-style trace messages that display the function's
@@ -306,7 +295,7 @@ functions that switch buffers, or do any other display-oriented
 stuff - use `trace-function-background' instead.
 
 To stop tracing a function, use `untrace-function' or `untrace-all'."
-  (interactive (trace--read-args "Trace function: "))
+  (interactive (trace--read-args "Trace function"))
   (trace-function-internal function buffer nil context))
 
 ;;;###autoload
@@ -314,7 +303,7 @@ To stop tracing a function, use `untrace-function' or `untrace-all'."
   "Trace calls to function FUNCTION, quietly.
 This is like `trace-function-foreground', but without popping up
 the output buffer or changing the window configuration."
-  (interactive (trace--read-args "Trace function in background: "))
+  (interactive (trace--read-args "Trace function in background"))
   (trace-function-internal function buffer t context))
 
 ;;;###autoload

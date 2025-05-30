@@ -1,8 +1,8 @@
-;;; srecode/table.el --- Tables of Semantic Recoders
+;;; srecode/table.el --- Tables of Semantic Recoders  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
-;; Author: Eric M. Ludlam <eric@siege-engine.com>
+;; Author: Eric M. Ludlam <zappo@gnu.org>
 
 ;; This file is part of GNU Emacs.
 
@@ -137,41 +137,36 @@ Tracks all the template-tables for a specific major mode.")
   "Get the SRecoder mode table for the major mode MODE.
 This will find the mode table specific to MODE, and then
 calculate all inherited templates from parent modes."
-  (let ((table nil)
-	(tmptable nil))
-    (while mode
-      (setq tmptable (eieio-instance-tracker-find
-		      mode 'major-mode 'srecode-mode-table-list)
-	    mode (get-mode-local-parent mode))
-      (when tmptable
-	(if (not table)
-	    (progn
-	      ;; If this is the first, update tables to have
-	      ;; all the mode specific tables in it.
-	      (setq table tmptable)
-	      (oset table tables (oref table modetables)))
-	  ;; If there already is a table, then reset the tables
-	  ;; slot to include all the tables belonging to this new child node.
-	  (oset table tables (append (oref table modetables)
-				     (oref tmptable modetables)))))
-      )
+  (let ((table nil))
+    (dolist (mode (derived-mode-all-parents mode))
+      (let ((tmptable (eieio-instance-tracker-find
+		       mode 'major-mode 'srecode-mode-table-list)))
+	(when tmptable
+	  (if (not table)
+	      (progn
+	        ;; If this is the first, update tables to have
+	        ;; all the mode specific tables in it.
+	        (setq table tmptable)
+	        (oset table tables (oref table modetables)))
+	    ;; If there already is a table, then reset the tables
+	    ;; slot to include all the tables belonging to this new child node.
+	    (oset table tables (append (oref table modetables)
+				       (oref tmptable modetables)))))
+	))
     table))
 
 (defun srecode-make-mode-table (mode)
   "Get the SRecoder mode table for the major mode MODE."
   (let ((old (eieio-instance-tracker-find
 	      mode 'major-mode 'srecode-mode-table-list)))
-    (if old
-	old
-      (let* ((ms (if (stringp mode) mode (symbol-name mode)))
-	     (new (srecode-mode-table ms
-				      :major-mode mode
-				      :modetables nil
-				      :tables nil)))
-	;; Save this new mode table in that mode's variable.
-	(eval `(setq-mode-local ,mode srecode-table ,new))
+    (or old
+	(let* ((new (srecode-mode-table :major-mode mode
+				        :modetables nil
+				        :tables nil)))
+	  ;; Save this new mode table in that mode's variable.
+	  (eval `(setq-mode-local ,mode srecode-table ,new) t)
 
-	new))))
+	  new))))
 
 (cl-defmethod srecode-mode-table-find ((mt srecode-mode-table) file)
   "Look in the mode table MT for a template table from FILE.
@@ -184,11 +179,11 @@ INIT are the initialization parameters for the new template table."
   (let* ((mt (srecode-make-mode-table mode))
 	 (old (srecode-mode-table-find mt file))
 	 (attr (file-attributes file))
-	 (new (apply 'srecode-template-table
+	 (new (apply #'srecode-template-table
 		     (file-name-nondirectory file)
 		     :file file
-		     :filesize (nth 7 attr)
-		     :filedate (nth 5 attr)
+		     :filesize (file-attribute-size attr)
+		     :filedate (file-attribute-modification-time attr)
 		     :major-mode mode
 		     init
 		     )))
@@ -200,13 +195,13 @@ INIT are the initialization parameters for the new template table."
     ;; go front-to-back, the highest priority items are put
     ;; into the search table first, allowing lower priority items
     ;; to be the items found in the search table.
-    (object-sort-list mt 'modetables (lambda (a b)
-				       (> (oref a :priority)
-					  (oref b :priority))))
+    (srecode-object-sort-list mt 'modetables (lambda (a b)
+                                               (> (oref a priority)
+                                                  (oref b priority))))
     ;; Return it.
     new))
 
-(defun object-sort-list (object slot predicate)
+(defun srecode-object-sort-list (object slot predicate)
   "Sort the items in OBJECT's SLOT.
 Use PREDICATE is the same as for the `sort' function."
   (when (slot-boundp object slot)
@@ -239,9 +234,9 @@ Use PREDICATE is the same as for the `sort' function."
 (cl-defmethod srecode-dump ((tab srecode-mode-table))
   "Dump the contents of the SRecode mode table TAB."
   (princ "MODE TABLE FOR ")
-  (princ (oref tab :major-mode))
+  (princ (oref tab major-mode))
   (princ "\n--------------------------------------------\n\nNumber of tables: ")
-  (let ((subtab (oref tab :tables)))
+  (let ((subtab (oref tab tables)))
     (princ (length subtab))
     (princ "\n\n")
     (while subtab
@@ -254,17 +249,17 @@ Use PREDICATE is the same as for the `sort' function."
   (princ "Template Table for ")
   (princ (eieio-object-name-string tab))
   (princ "\nPriority: ")
-  (prin1 (oref tab :priority))
-  (when (oref tab :application)
+  (prin1 (oref tab priority))
+  (when (oref tab application)
     (princ "\nApplication: ")
-    (princ (oref tab :application)))
-  (when (oref tab :framework)
+    (princ (oref tab application)))
+  (when (oref tab framework)
     (princ "\nFramework: ")
-    (princ (oref tab :framework)))
-  (when (oref tab :project)
+    (princ (oref tab framework)))
+  (when (oref tab project)
     (require 'srecode/find) ; For srecode-template-table-in-project-p
     (princ "\nProject Directory: ")
-    (princ (oref tab :project))
+    (princ (oref tab project))
     (when (not (srecode-template-table-in-project-p tab))
       (princ "\n   ** Not Usable in this file. **")))
   (princ "\n\nVariables:\n")
@@ -284,6 +279,8 @@ Use PREDICATE is the same as for the `sort' function."
       (setq temp (cdr temp))))
   )
 
+(define-obsolete-function-alias 'object-sort-list
+  #'srecode-object-sort-list "29.1")
 
 (provide 'srecode/table)
 

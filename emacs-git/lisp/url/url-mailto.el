@@ -1,6 +1,6 @@
-;;; url-mail.el --- Mail Uniform Resource Locator retrieval code
+;;; url-mailto.el --- Mail Uniform Resource Locator retrieval code  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1996-1999, 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes
 
@@ -28,12 +28,7 @@
 (require 'url-util)
 
 ;;;###autoload
-(defun url-mail (&rest args)
-  (interactive "P")
-  (if (fboundp 'message-mail)
-      (apply 'message-mail args)
-    (or (apply 'mail args)
-	(error "Mail aborted"))))
+(defalias 'url-mail #'message-mail)
 
 (defun url-mail-goto-field (field)
   (if (not field)
@@ -57,8 +52,6 @@
 	(save-excursion
 	  (insert "\n"))))))
 
-(declare-function mail-send-and-exit "sendmail")
-
 ;;;###autoload
 (defun url-mailto (url)
   "Handle the mailto: URL syntax."
@@ -67,7 +60,7 @@
       ;; mailto:wmperry@gnu.org
       (setf (url-filename url) (concat (url-user url) "@" (url-filename url))))
   (setq url (url-filename url))
-  (let (to args source-url subject func headers-start)
+  (let (to args source-url subject headers-start) ;; func
     (if (string-match (regexp-quote "?") url)
 	(setq headers-start (match-end 0)
 	      to (url-unhex-string (substring url 0 (match-beginning 0)))
@@ -76,10 +69,11 @@
       (setq to (url-unhex-string url)))
     (setq source-url (url-view-url t))
     (if (and url-request-data (not (assoc "subject" args)))
-	(setq args (cons (list "subject"
+	(push (list "subject"
 			       (concat "Automatic submission from "
 				       url-package-name "/"
-				       url-package-version)) args)))
+				       url-package-version))
+	      args))
     (if (and source-url (not (assoc "x-url-from" args)))
 	(setq args (cons (list "x-url-from" source-url) args)))
 
@@ -103,15 +97,13 @@
 	    (or (search-forward (concat "\n" mail-header-separator "\n") nil t)
 	    	(goto-char (point-max)))
 	    (insert (mapconcat
-		     #'(lambda (string)
-			 (replace-regexp-in-string "\r\n" "\n" string))
+                     (lambda (string)
+                       (string-replace "\r\n" "\n" string))
 		     (cdar args) "\n")))
 	(url-mail-goto-field (caar args))
-	(setq func (intern-soft (concat "mail-" (caar args))))
+	;; (setq func (intern-soft (concat "mail-" (caar args))))
 	(insert (mapconcat 'identity (cdar args) ", ")))
       (setq args (cdr args)))
-    ;; (url-mail-goto-field "User-Agent")
-;;     (insert url-package-name "/" url-package-version " URL/" url-version)
     (if (not url-request-data)
 	(progn
 	  (set-buffer-modified-p nil)
@@ -119,16 +111,16 @@
 	      (url-mail-goto-field nil)
 	    (url-mail-goto-field "subject")))
       (if url-request-extra-headers
-	  (mapconcat
+	  (mapc
 	   (lambda (x)
 	     (url-mail-goto-field (car x))
 	     (insert (cdr x)))
-	   url-request-extra-headers ""))
+	   url-request-extra-headers))
       (goto-char (point-max))
       (insert url-request-data)
       ;; It seems Microsoft-ish to send without warning.
-      ;; Fixme: presumably this should depend on a privacy setting.
-      (if (y-or-n-p "Send this auto-generated mail? ")
+      ;; FIXME: presumably this should depend on a privacy setting.
+      (if (y-or-n-p "Send this auto-generated mail?")
 	  (let ((buffer (current-buffer)))
 	    (cond ((eq url-mail-command 'compose-mail)
 		   (funcall (get mail-user-agent 'sendfunc) nil))

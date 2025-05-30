@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 2004-2017 Free Software Foundation, Inc.
+@c Copyright (C) 2004--2025 Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @c
 @c This file is included either in vc-xtra.texi (when producing the
@@ -15,6 +15,8 @@
 * VC Delete/Rename::    Deleting and renaming version-controlled files.
 * Revision Tags::       Symbolic names for revisions.
 * Version Headers::     Inserting version control headers into working files.
+* Editing VC Commands:: Editing the VC shell commands that Emacs will run.
+* Preparing Patches::   Preparing and Composing patches from within VC
 @end menu
 
 @node Change Logs and VC
@@ -113,8 +115,9 @@ Prompt for a file name, delete the file from the working tree, and
 schedule the deletion for committing.
 
 @item M-x vc-rename-file
-Prompt for two file names, @var{var} and @var{old}, rename them in the
-working tree, and schedule the renaming for committing.
+Prompt for two file names, @var{old} and @var{new}, rename them in the
+working tree, and schedule the renaming for committing.  The @var{old}
+file defaults to the current buffer's file name if it is under VC.
 @end table
 
 @findex vc-delete-file
@@ -174,7 +177,7 @@ current directory as a tag named @var{name}
 @findex vc-retrieve-tag
 @item C-x v r @var{name} @key{RET}
 For all registered files at or below the current directory level,
-retrieve the tagged revision @var{name}. This command will switch to a
+retrieve the tagged revision @var{name}.  This command will switch to a
 branch if @var{name} is a branch name and your VCS distinguishes
 branches from tags.  (@code{vc-retrieve-tag}).
 
@@ -236,7 +239,9 @@ relevant information into the version header.
 an exception, when using RCS, Emacs uses the version header, if there
 is one, to determine the file version, since it is often more reliable
 than the RCS master file.  To inhibit using the version header this
-way, change the variable @code{vc-consult-headers} to @code{nil}.
+way, change the variable @code{vc-consult-headers} to @code{nil}.  VC
+then always uses the file permissions (if it is supposed to trust
+them), or else checks the master file.
 
 @findex vc-insert-headers
 @vindex vc-@var{backend}-header
@@ -260,13 +265,69 @@ elements of the form @code{(@var{regexp} . @var{format})}.  Whenever
 part of the version header.  A @samp{%s} in @var{format} is replaced
 with the file's version control type.
 
+@node Editing VC Commands
+@subsubsection Editing VC Commands
+
+@findex vc-edit-next-command
+@kindex C-x v !
+You can use the @kbd{C-x v !} (@code{vc-edit-next-command}) prefix
+command to edit the shell command line that VC is about to run.  This
+is primarily intended to make it possible to add optional command-line
+arguments to VCS commands without unnecessary complications of the VC
+command set and its interfaces with the backend.
+
+For example, Git can produce logs of more than one branch, but
+@kbd{C-x v b l} (@code{vc-print-branch-log}) prompts for the name of
+just one branch.  To obtain a log of more than one branch, you can
+type @w{@kbd{C-x v ! C-x v b l}} and then append the names of
+additional branches to the end of the @samp{git log} command that VC
+is about to run.
+
+@node Preparing Patches
+@subsubsection Preparing Patches
+
+@findex vc-prepare-patch
+When collaborating on projects it is common to send patches via email,
+to share changes.  You can do this using VC with the
+@code{vc-prepare-patch} command.  This will prompt you for the
+revisions you wish to share, and which destination email address(es)
+to use.  Separate the revisions using the value of
+@var{crm-separator}, commas by default.  The command will then prepare
+those revisions using your @abbr{MUA, Mail User Agent} for you to
+review and send.
+
+When invoked interactively in a Log View buffer with marked revisions,
+those marked revisions will be used.
+
+@vindex vc-prepare-patches-separately
+Depending on the value of the user option
+@code{vc-prepare-patches-separately}, @code{vc-prepare-patch} will
+generate one or more messages.  The default value @code{t} means
+prepare and display a message for each revision, one after another.  A
+value of @code{nil} means to generate a single message with all
+patches attached in the body.
+
+@vindex vc-default-patch-addressee
+If you expect to contribute patches on a regular basis, you can set
+the user option @code{vc-default-patch-addressee} to the address(es)
+you wish to use.  This will be used as the default value when invoking
+@code{vc-prepare-patch}.  Project maintainers may consider setting
+this as a directory local variable
+@iftex
+(@pxref{Directory Variables,,Per-Directory Local Variables,
+emacs, the Emacs Manual}).
+@end iftex
+@ifnottex
+(@pxref{Directory Variables}).
+@end ifnottex
+
 @node Customizing VC
 @subsection Customizing VC
 
 @vindex vc-handled-backends
   The variable @code{vc-handled-backends} determines which version
 control systems VC should handle.  The default value is @code{(RCS CVS
-SVN SCCS Bzr Git Hg Mtn Arch)}, so it contains all the version systems
+SVN SCCS SRC Bzr Git Hg)}, so it contains all the version systems
 that are currently supported.  If you want VC to ignore one or more of
 these systems, exclude its name from the list.  To disable VC
 entirely, set this variable to @code{nil}.
@@ -340,7 +401,6 @@ the master file can only tell you @emph{if} there's any lock on the
 file, but not whether your work file really contains that locked
 version.
 
-@vindex vc-consult-headers
   You can tell VC not to use version headers to determine the file
 status by setting @code{vc-consult-headers} to @code{nil}.  VC then
 always uses the file permissions (if it is supposed to trust them), or
@@ -359,23 +419,17 @@ operations in the variable @code{vc-cvs-global-switches}.  These
 switches are inserted immediately after the @code{cvs} command, before
 the name of the operation to invoke.
 
-@vindex vc-stay-local
 @vindex vc-cvs-stay-local
 @cindex remote repositories (CVS)
   When using a CVS repository on a remote machine, VC can try keeping
 network interactions to a minimum.  This is controlled by the variable
-@code{vc-cvs-stay-local}.  There is another variable,
-@code{vc-stay-local}, which enables the feature also for other back
-ends that support it, including CVS@.  In the following, we will talk
-only about @code{vc-cvs-stay-local}, but everything applies to
-@code{vc-stay-local} as well.
-
-  If @code{vc-cvs-stay-local} is @code{only-file} (the default), VC
-determines the version control status of each file using only the
-entry in the local CVS subdirectory and the information returned by
-previous CVS commands.  As a consequence, if you have modified a file
-and somebody else has checked in other changes, you will not be
-notified of the conflict until you try to commit.
+@code{vc-cvs-stay-local}.  If @code{vc-cvs-stay-local} is
+@code{only-file} (the default), VC determines the version control
+status of each file using only the entry in the local CVS subdirectory
+and the information returned by previous CVS commands.  As a
+consequence, if you have modified a file and somebody else has checked
+in other changes, you will not be notified of the conflict until you
+try to commit.
 
   If you change @code{vc-cvs-stay-local} to @code{nil}, VC queries the
 remote repository @emph{before} it decides what to do in

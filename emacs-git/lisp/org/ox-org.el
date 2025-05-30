@@ -1,9 +1,9 @@
-;;; ox-org.el --- Org Back-End for Org Export Engine -*- lexical-binding: t; -*-
+;;; ox-org.el --- Org Backend for Org Export Engine -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Goaziou <n.goaziou@gmail.com>
-;; Keywords: org, wp
+;; Keywords: org, text
 
 ;; This file is part of GNU Emacs.
 
@@ -23,6 +23,9 @@
 ;;; Commentary:
 
 ;;; Code:
+
+(require 'org-macs)
+(org-assert-version)
 
 (require 'ox)
 (declare-function htmlize-buffer "ext:htmlize" (&optional buffer))
@@ -50,6 +53,20 @@ setting of `org-html-htmlize-output-type' is `css'."
 	  (const :tag "Don't include external stylesheet link" nil)
 	  (string :tag "URL or local href")))
 
+(defcustom org-org-with-special-rows t
+  "Non-nil means export special table rows.
+Special rows are the rows containing special marking characters, as
+described in the Info node `(org)Advanced features'."
+  :group 'org-export-org
+  :type 'boolean
+  :package-version '(Org . "9.7"))
+
+(defcustom org-org-with-cite-processors nil
+  "Non-nil means use citation processors when exporting citations."
+  :group 'org-export-org
+  :type 'boolean
+  :package-version '(Org . "9.7"))
+
 (org-export-define-backend 'org
   '((babel-call . org-org-identity)
     (bold . org-org-identity)
@@ -71,6 +88,8 @@ setting of `org-html-htmlize-output-type' is `css'."
     (inline-src-block . org-org-identity)
     (inlinetask . org-org-identity)
     (italic . org-org-identity)
+    (citation . org-org-identity)
+    (citation-reference . org-org-identity)
     (item . org-org-identity)
     (keyword . org-org-keyword)
     (latex-environment . org-org-identity)
@@ -96,7 +115,7 @@ setting of `org-html-htmlize-output-type' is `css'."
     (table-cell . org-org-identity)
     (table-row . org-org-identity)
     (target . org-org-identity)
-    (timestamp . org-org-identity)
+    (timestamp . org-org-timestamp)
     (underline . org-org-identity)
     (verbatim . org-org-identity)
     (verse-block . org-org-identity))
@@ -108,7 +127,11 @@ setting of `org-html-htmlize-output-type' is `css'."
 	    (lambda (a s v b)
 	      (if a (org-org-export-to-org t s v b)
 		(org-open-file (org-org-export-to-org nil s v b)))))))
-  :filters-alist '((:filter-parse-tree . org-org--add-missing-sections)))
+  :filters-alist '((:filter-parse-tree . org-org--add-missing-sections))
+  :options-alist
+  ;; Export special table rows.
+  '((:with-special-rows nil nil org-org-with-special-rows)
+    (:with-cite-processors nil nil org-org-with-cite-processors)))
 
 (defun org-org--add-missing-sections (tree _backend _info)
   "Ensure each headline has an associated section.
@@ -125,7 +148,7 @@ we make sure it is always called."
 	    (new-section (org-element-create 'section)))
 	(pcase (org-element-type first-child)
 	  (`section nil)
-	  (`nil (org-element-adopt-elements h new-section))
+	  (`nil (org-element-adopt h new-section))
 	  (_ (org-element-insert-before new-section first-child))))))
   tree)
 
@@ -140,7 +163,7 @@ CONTENTS and INFO are ignored."
 CONTENTS is its contents, as a string or nil.  INFO is ignored."
   (let ((case-fold-search t))
     (replace-regexp-in-string
-     "^[ \t]*#\\+ATTR_[-_A-Za-z0-9]+:\\(?: .*\\)?\n" ""
+     "^[ \t]*#\\+attr_[-_a-z0-9]+:\\(?: .*\\)?\n" ""
      (org-export-expand blob contents t))))
 
 (defun org-org-headline (headline contents info)
@@ -165,11 +188,11 @@ CONTENTS is nil.  INFO is ignored."
 		    '("AUTHOR" "CREATOR" "DATE" "EMAIL" "OPTIONS" "TITLE"))
       (org-element-keyword-interpreter keyword nil))))
 
-(defun org-org-link (link contents _info)
+(defun org-org-link (link contents info)
   "Transcode LINK object back into Org syntax.
 CONTENTS is the description of the link, as a string, or nil.
 INFO is a plist containing current export state."
-  (or (org-export-custom-protocol-maybe link contents 'org)
+  (or (org-export-custom-protocol-maybe link contents 'org info)
       (org-element-link-interpreter link contents)))
 
 (defun org-org-template (contents info)
@@ -184,27 +207,31 @@ as a communication channel."
 	       (org-element-map (plist-get info :parse-tree) 'keyword
 		 (lambda (k)
 		   (and (string-equal (org-element-property :key k) "OPTIONS")
-			(concat "#+OPTIONS: "
+			(concat "#+options: "
 				(org-element-property :value k)))))
 	       "\n"))
    (and (plist-get info :with-title)
-	(format "#+TITLE: %s\n" (org-export-data (plist-get info :title) info)))
+	(format "#+title: %s\n" (org-export-data (plist-get info :title) info)))
    (and (plist-get info :with-date)
 	(let ((date (org-export-data (org-export-get-date info) info)))
 	  (and (org-string-nw-p date)
-	       (format "#+DATE: %s\n" date))))
+	       (format "#+date: %s\n" date))))
    (and (plist-get info :with-author)
 	(let ((author (org-export-data (plist-get info :author) info)))
 	  (and (org-string-nw-p author)
-	       (format "#+AUTHOR: %s\n" author))))
+	       (format "#+author: %s\n" author))))
    (and (plist-get info :with-email)
 	(let ((email (org-export-data (plist-get info :email) info)))
 	  (and (org-string-nw-p email)
-	       (format "#+EMAIL: %s\n" email))))
+	       (format "#+email: %s\n" email))))
    (and (plist-get info :with-creator)
 	(org-string-nw-p (plist-get info :creator))
-	(format "#+CREATOR: %s\n" (plist-get info :creator)))
+	(format "#+creator: %s\n" (plist-get info :creator)))
    contents))
+
+(defun org-org-timestamp (timestamp _contents _info)
+  "Transcode a TIMESTAMP object to custom format or back into Org syntax."
+  (org-timestamp-translate timestamp))
 
 (defun org-org-section (section contents info)
   "Transcode SECTION element back into Org syntax.
@@ -218,7 +245,7 @@ a communication channel."
    ;; them are included in the result.
    (let ((footnotes
 	  (org-element-map
-	      (list (org-export-get-parent-headline section) section)
+	      (list (org-element-lineage section 'headline) section)
 	      'footnote-reference
 	    (lambda (fn)
 	      (and (eq (org-element-property :type fn) 'standard)
@@ -234,7 +261,7 @@ a communication channel."
 
 ;;;###autoload
 (defun org-org-export-as-org
-  (&optional async subtreep visible-only body-only ext-plist)
+    (&optional async subtreep visible-only body-only ext-plist)
   "Export current buffer to an Org buffer.
 
 If narrowing is active in the current buffer, only export its
@@ -269,8 +296,8 @@ non-nil."
 
 ;;;###autoload
 (defun org-org-export-to-org
-  (&optional async subtreep visible-only body-only ext-plist)
-  "Export current buffer to an org file.
+    (&optional async subtreep visible-only body-only ext-plist)
+  "Export current buffer to an Org file.
 
 If narrowing is active in the current buffer, only export its
 narrowed part.
@@ -303,7 +330,7 @@ Return output file name."
 
 ;;;###autoload
 (defun org-org-publish-to-org (plist filename pub-dir)
-  "Publish an org file to org.
+  "Publish an Org file to Org.
 
 FILENAME is the filename of the Org file to be published.  PLIST
 is the property list for the given project.  PUB-DIR is the
@@ -312,36 +339,29 @@ publishing directory.
 Return output file name."
   (org-publish-org-to 'org filename ".org" plist pub-dir)
   (when (plist-get plist :htmlized-source)
-    (or (require 'htmlize nil t)
-	(error "Please install htmlize from https://github.com/hniksic/emacs-htmlize"))
+    (org-require-package 'htmlize)
     (require 'ox-html)
     (let* ((org-inhibit-startup t)
 	   (htmlize-output-type 'css)
 	   (html-ext (concat "." (or (plist-get plist :html-extension)
 				     org-html-extension "html")))
-	   (visitingp (find-buffer-visiting filename))
-	   (work-buffer (or visitingp (find-file-noselect filename)))
 	   newbuf)
-      (with-current-buffer work-buffer
-        (org-font-lock-ensure)
-        (outline-show-all)
-        (org-show-block-all)
+      (org-with-file-buffer filename
+        (font-lock-ensure)
+        (org-fold-show-all)
         (setq newbuf (htmlize-buffer)))
       (with-current-buffer newbuf
 	(when org-org-htmlized-css-url
 	  (goto-char (point-min))
 	  (and (re-search-forward
-		"<style type=\"text/css\">[^\000]*?\n[ \t]*</style>.*" nil t)
+		"<style type=\"text/css\">\\(?:.\\|\n\\)*?\n[ \t]*</style>.*" nil t)
 	       (replace-match
 		(format
 		 "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\">"
 		 org-org-htmlized-css-url)
                 t t)))
 	(write-file (concat pub-dir (file-name-nondirectory filename) html-ext)))
-      (kill-buffer newbuf)
-      (unless visitingp (kill-buffer work-buffer)))
-    ;; FIXME: Why?  Which buffer is this supposed to apply to?
-    (set-buffer-modified-p nil)))
+      (kill-buffer newbuf))))
 
 
 (provide 'ox-org)

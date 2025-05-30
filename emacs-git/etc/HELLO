@@ -1,99 +1,161 @@
-This is a list of ways to say hello in various languages.
-It is not intended to be comprehensive, but to demonstrate
-some of the character sets that Emacs supports.
+Content-Type: text/enriched
+Text-Width: 70
+
+This is a list of ways to write a <x-color><param>orange red</param>"hello"</x-color> greeting using
+various scripts.  It is not intended to be comprehensive,
+but to demonstrate some of the character sets and writing
+systems that Emacs supports.  Look for the script used to
+write your language, to see if it is supported.
+
 
 Non-ASCII examples:
-  Europe: ,A!(BHola!, Gr,A|_(B Gott, Hyv,Add(B p,Ad(Biv,Add(B, Tere ,Au(Bhtust, Bon,Cu(Bu
-          Cze,B6f(B!, Dobr,B}(B den, ,L7T`PRabRcYbU(B!, ,FCei\(B ,Fsar(B, $,1J2J0J;J0J@JOJ=J1J0(B
-  Africa: $(3!A!,!>(B
-  Middle/Near East: ,Hylem(B, $,1-g.$-s.1.$-g.%(B $,1-y.$.*.#.%(B
-  South Asia: $,19h9n9x:-9d:'(B, $,15h5n5x6-5d6'(B, $,1?(?.?8?M>u?>?0(B, $,1@H@N@X@m@5@^@P@"(B, $,1;6;A;#;?;,;G(B,
-              $,1AFAzB4AvB=B AqB*(B, $,1<U<C<5<m<5<N<m(B, $,1=h=n=x>-=U=~=p=B(B, $(7"7"!#C!;"E"S"G!;"7"2"[!;"D"["#"G!>(B
-  South East Asia: $,1\'\f\:\V\4\?\]\:(B, (1JP:R-4U(B, $,1H9H$HZHYH"H<HLH5HK(B, ,TJGQJ4U$CQ:(B, Ch,1`(Bo b,1U(Bn
-  East Asia: $ADc:C(B, $(0*/=((B, $B$3$s$K$A$O(B, $(C>H3gGO<<?d(B
-  Misc: E,C6(Bo,C~(Ban,Cx(Bo ,Cf(Biu,C<(Ba,C}(Bde, $,2(3(1('('(5(B, $,1x (B p $,1x((B world $,1s"(B hello p  $,2!a(B
-  CJK variety: GB($AT*Fx(B,$A?*7"(B), BIG5($(0&x86(B,$(0DeBv(B), JIS($B855$(B,$B3+H/(B), KSC($(Cj*Q((B,$(CKR[!(B)
-  Unicode charset: E$,1 E(Bo$,1 }(Ban$,1 =(Bo $,1 )(Biu$,1 U(Ba$,1!-(Bde, $,1&s'5'9',(B $,1'C'1'B(B, $,1-),|,u,}(B, $,1(7(T(`(P(R(a(b(R(c(Y(b(U(B!
+  Europe: <x-charset><param>latin-iso8859-1</param>¡Hola!, Grüß Gott, Hyvää päivää,</x-charset> Tere õhtust,<x-charset><param>latin-iso8859-3</param> Bonġu
+          Cześć!,</x-charset><x-charset><param>latin-iso8859-2</param> Dobrý den,</x-charset><x-charset><param>cyrillic-iso8859-5</param> Здравствуйте!,</x-charset><x-charset><param>greek-iso8859-7</param> Γειά σας,</x-charset> გამარჯობა
+  Africa: <x-charset><param>ethiopic</param>ሠላም</x-charset>
+  Middle/Near East:<x-charset><param>hebrew-iso8859-8</param> שָׁלוֹם,</x-charset> السّلام عليكم
+  South Asia: નમસ્તે, नमस्ते, ನಮಸ್ಕಾರ, നമസ്കാരം, ନମସ୍କାର,
+              ආයුබෝවන්, வணக்கம், నమస్కారం,<x-charset><param>tibetan</param> བཀྲ་ཤིས་བདེ་ལེགས༎</x-charset>
+  South East Asia: ជំរាបសួរ,<x-charset><param>lao</param> ສະບາຍດີ,</x-charset> မင်္ဂလာပါ,<x-charset><param>thai-tis620</param> สวัสดีครับ,</x-charset><x-charset><param>vietnamese-viscii-lower</param> </x-charset><x-charset><param>vietnamese-viscii-upper</param>C</x-charset><x-charset><param>vietnamese-viscii-lower</param>hào bạn</x-charset>
+  East Asia:<x-charset><param>chinese-gb2312</param> 你好,</x-charset><x-charset><param>chinese-big5-1</param> 早晨,</x-charset><x-charset><param>japanese-jisx0208</param> こんにちは,</x-charset><x-charset><param>korean-ksc5601</param> 안녕하세요</x-charset>
+  Misc:<x-charset><param>latin-iso8859-3</param> Eĥoŝanĝo ĉiuĵaŭde,</x-charset> ⠓⠑⠇⠇⠕, ∀ p ∈ world • hello p  □
+  CJK variety:<x-charset><param>chinese-gb2312</param> GB(元气,开发),</x-charset><x-charset><param>chinese-big5-1</param> BIG5(元氣,開發),</x-charset><x-charset><param>japanese-jisx0208</param> JIS(元気,開発),</x-charset><x-charset><param>korean-ksc5601</param> KSC(元氣,開發)</x-charset>
+  Unicode charset:<x-charset><param>unicode</param> Eĥoŝanĝo ĉiuĵaŭde, Γειά σας, שלום, Здравствуйте!</x-charset>
+
 
 LANGUAGE (NATIVE NAME)	HELLO
 ----------------------	-----
-Amharic ($,1O M[MmN{(B)	$,1M`MKM](B
-Arabic ($,1-g.$-y-q-h.*.1-i(B)	$,1-g.$-s.1.$-g.%(B $,1-y.$.*.#.%(B
-Armenian ($,1+p+a+u+e, +e+v(B)	$,1+2+a, ,'(B $,1+q+e+f(B
-Bengali ($,17,7>6b727>(B)	$,17(7.787M6u7>70(B
-Braille	$,2(3(1('('(5(B
-Burmese ($,1H9H\H4HZH9HL(B)	$,1H9H$HZHYH"H<HLH5HK(B
-C	printf ("Hello, world!\n");
-Czech (,Bh(Be,B9(Btina)	Dobr,A}(B den
-Danish (dansk)	Hej / Goddag / Hall,Ax(Bj
-Dutch (Nederlands)	Hallo / Dag
-Emacs	emacs --no-splash -f view-hello-file
-English /$(O+S,0!,D?$(O*y(Bl,0!$(O*h(B/	Hello
-Esperanto	Saluton (E,C6(Bo,C~(Ban,Cx(Bo ,Cf(Biu,C<(Ba,C}(Bde)
-Estonian (eesti keel)	Tere p,Ad(Bevast / Tere ,Au(Bhtust
-Finnish (suomi)	Hei / Hyv,Add(B p,Ad(Biv,Add(B
-French (fran,Ag(Bais)	Bonjour / Salut
-Georgian ($,1JEJ0J@J7J5J4J:J8(B)	$,1J2J0J;J0J@JOJ=J1J0(B
-German (Deutsch)	Guten Tag / Gr,A|_(B Gott
-Greek (,Fekkgmij\(B)	,FCei\(B ,Fsar(B
-Greek, ancient ($,1p1,Fkkgmij^(B)	,FO$,1pv,Fk](B ,Fte(B ,Fja$,1q6(B ,Fl]ca(B ,Fwa$,1r6,Fqe(B
-Gujarati ($,19W:!9\9p9~9d: (B)	$,19h9n9x:-9d:'(B
-Hebrew ($,1-",q-(,y-*(B)	,Hylem(B
-Hungarian (magyar)	Sz,Bi(Bp j,Bs(B napot!
-Hindi ($,15y55B5f6 (B)	$,15h5n5x6-5d6'(B / $,15h5n5x6-5U5~5p(B $,16D(B
-Italian (italiano)	Ciao / Buon giorno
-Javanese (Jawa)	System.out.println("Sugeng siang!");
-Kannada ($,1>u?(?M?(?!(B)	$,1?(?.?8?M>u?>?0(B
-Khmer ($,1\7\V\?\V\!\r\8\b\:(B)	$,1\'\f\:\V\4\?\]\:(B
-Lao ((1>RJRERG(B)	(1JP:R-4U(B / (1"mcKib*!4U(B
-Malayalam ($,1@N@R@O@^@S@"(B)	$,1@H@N@X@m@5@^@P@"(B
-Maltese (il-Malti)	Bon,Cu(Bu / Sa,C11(Ba
-Mathematics	$,1x (B p $,1x((B world $,1s"(B hello p  $,2!a(B
-Mongolian (,L\^]S^[(B ,Lem[(B)	,LAPY](B ,LQPY]P(B ,Lcc(B?
-Norwegian (norsk)	Hei / God dag
-Oriya ($,1:s;\;?:f(B)	$,1;6;A;#;?;,;G(B
-Polish  (j,Bj(Bzyk polski)	Dzie,Bq(B dobry! / Cze,B6f(B!
-Russian (,L`caaZXY(B)	,L7T`P$(O+Z,LRabRcYbU(B!
-Sinhala ($,1B#B2ABB$A}(B)	$,1AFAzB4AvB=B AqB*(B
-Slovak (sloven,Bh(Bina)	Dobr,A}(B de,Br(B
-Slovenian (sloven,B9h(Bina)	Pozdravljeni!
-Spanish (espa,Aq(Bol)	,A!(BHola!
-Swedish (svenska)	Hej / Goddag / Hall,Ae(B
-Tamil ($,1<D<N<_<T<m(B)	$,1<U<C<5<m<5<N<m(B
-Telugu ($,1=d>&=r>!=W>!(B)	$,1=h=n=x>-=U=~=p=B(B
-Thai (,T@RIRd7B(B)	,TJGQJ4U$CQ:(B / ,TJGQJ4U$hP(B
-Tibetan ($(7"7"]"2!;"G#!"2!;(B)	$(7"7"!#C!;"E"S"G!;"7"2"[!;"D"["#"G!>(B
-Tigrigna ($,1NUP-MmN{(B)	$,1MpMKM[NU(B
-Turkish (T,A|(Brk,Ag(Be)	Merhaba
-Ukrainian (,LcZ`Pw]alZP(B)	,L2vbPn(B
-Vietnamese (ti,1*(Bng Vi,1.(Bt)	Ch,A`(Bo b,1U(Bn
+Adlam (𞤀𞤣𞤤𞤢𞤥)	𞤅𞤢𞤤𞤢𞥄𞤥
+Amharic (አማርኛ)	ሠላም
+Arabic (العربيّة)	السّلام عليكم
+Armenian (հայերեն)	Բարև ձեզ
+Balinese (ᬅᬓ᭄ᬱᬭᬩᬮᬶ)	ᬒᬁᬲ᭄ᬯᬲ᭄ᬢ᭄ᬬᬲ᭄ᬢᬸ
+Batak (ᯘᯮᯒᯗ᯲ᯅᯗᯂ᯲)	ᯂᯬᯒᯘ᯲ / ᯔᯧᯐᯬᯀᯱᯐᯬᯀᯱ
+Belarusian (беларуская)	Прывітанне
+Bengali (বাংলা)	নমস্কার
+Brahmi (𑀩𑁆𑀭𑀸𑀳𑁆𑀫𑀻)	𑀦𑀫𑀲𑁆𑀢𑁂
 
-Japanese ($BF|K\8l(B)	$B$3$s$K$A$O(B / (I:]FAJ(B
-Chinese ($AVPND(B,$AFUM(;0(B,$A::So(B)	$ADc:C(B
-Cantonese ($(0GnM$(B,$(0N]0*Hd(B)	$(0*/=((B, $(0+$)p(B
-Korean ($(CGQ1[(B)	$(C>H3gGO<<?d(B / $(C>H3gGO=J4O1n(B
+Braille	⠓⠑⠇⠇⠕
+Buginese (ᨒᨚᨈᨑ)	ᨖᨒᨚ
+Burmese (မြန်မာ)	မင်္ဂလာပါ
+C	printf (<x-color><param>orange red</param>"Hello, world!\n"</x-color>);
+Cham (ꨌꩌ)	ꨦꨤꩌ ꨦꨁꨰ
+Cherokee (ᏣᎳᎩ ᎦᏬᏂᎯᏍᏗ)	ᎣᏏᏲ / ᏏᏲ
+Comanche /kəˈmæntʃiː/	Haa marʉ́awe
+Coptic (ⲘⲉⲧⲢⲉⲙ̀ⲛⲭⲏⲙⲓ)	Ⲛⲟⲩϥⲣⲓ
+Cree (ᓀᐦᐃᔭᐍᐏᐣ)	ᑕᓂᓯ / ᐙᒋᔮ
+Czech (čeština)	Dobrý den
+Danish (dansk)	Hej / Goddag / Halløj
+Devanagari (देवनागरी)	नमस्ते / नमस्कार
+Dutch (Nederlands)	Hallo / Dag
+Efik  /ˈɛfɪk/	Mɔkɔm
+Egyptian Hieroglyphs (𓂋𓏤𓈖𓆎𓅓‌𓏏𓊖)	𓅓𓊵𓏏𓊪, 𓇍𓇋𓂻𓍘𓇋
+Emacs	emacs --no-splash -f view-hello-file
+Emoji	👋
+English /ˈɪŋɡlɪʃ/	Hello
+Esperanto	Saluton (Eĥoŝanĝo ĉiuĵaŭde)
+Estonian (eesti keel)	Tere päevast / Tere õhtust
+Finnish (suomi)	Hei / Hyvää päivää
+French (français)	Bonjour / Salut
+Georgian (ქართული)	გამარჯობა
+German (Deutsch)	Guten Tag / Grüß Gott
+Gothic (𐌲𐌿𐍄𐌹𐍃𐌺𐌰)	𐌷𐌰𐌹𐌻𐍃 / 𐌷𐌰𐌹𐌻𐌰
+Grantha (𑌗𑍍𑌰𑌨𑍍𑌥)	𑌨𑌮𑌸𑍍𑌤𑍇 / 𑌨𑌮𑌸𑍍𑌕𑌾𑌰𑌃
+Greek (ελληνικά)	Γειά σας
+Greek, ancient (ἑλληνική)	Οὖλέ τε καὶ μέγα χαῖρε
+Gujarati (ગુજરાતી)	નમસ્તે
+Gurmukhi (ਗੁਰਮੁਖੀ)	ਸਤ ਸ੍ਰੀ ਅਕਾਲ
+Hanifi Rohingya (𐴌𐴟𐴇𐴥𐴝𐴚𐴒𐴙𐴝 𐴇𐴝𐴕𐴞𐴉𐴞 𐴓𐴠𐴑𐴤𐴝)	𐴀𐴝𐴏𐴓𐴝𐴀𐴡𐴤𐴛𐴝𐴓𐴝𐴙𐴑𐴟𐴔
+Hanunoo (ᜱᜨᜳᜨᜳᜢ)	ᜫᜬᜧ᜴ ᜣᜭᜯᜥ᜴ ᜰᜲᜭᜥ᜴
+Hebrew (עִבְרִית)	שָׁלוֹם
+Hindi (हिन्दी)	प्रणाम / पाय लागू
+Hungarian (magyar)	Szép jó napot!
+Inuktitut (ᐃᓄᒃᑎᑐᑦ)	ᐊᐃ
+Italian (italiano)	Ciao / Buon giorno
+Javanese (ꦧꦱꦗꦮꦶ)	console.log("ꦲꦭꦺꦴ");
+
+Kaithi (𑂍𑂶𑂟𑂲)	𑂩𑂰𑂧𑂩𑂰𑂧
+Kannada (ಕನ್ನಡ)	ನಮಸ್ಕಾರ
+Kharoṣṭhī (𐨑𐨪𐨆𐨛𐨁)	𐨣𐨨𐨲𐨪𐨆 𐨐𐨪𐨅𐨨𐨁
+Khmer (ភាសាខ្មែរ)	ជំរាបសួរ
+Lakota (Lakȟotiyapi)	Taŋyáŋ yahí!
+Lao (ພາສາລາວ)	ສະບາຍດີ / ຂໍໃຫ້ໂຊກດີ
+Lepcha (ᰛᰩᰵᰛᰧᰵᰶ)	ᰂᰦᰕᰥᰬ
+Limbu (ᤕᤰᤌᤢᤱ ᤐᤠᤴ)	ᤛᤣᤘᤠᤖᤥ
+Makasar (𑻪𑻢𑻪𑻢)	𑻦𑻤𑻵𑻱
+Malayalam (മലയാളം)	നമസ്കാരം
+Maldivian (ދިވެހި)	އައްސަލާމު ޢަލައިކުމް / ކިހިނެހް؟
+Maltese (il-Malti)	Bonġu / Saħħa
+Mathematics	∀ p ∈ world • hello p  □
+Meetei Mayek (ꯃꯤꯇꯩ ꯃꯌꯦꯛ)	ꯈꯨꯔꯨꯝꯖꯔꯤ
+Mende Kikakui (𞠀𞠁𞠂)	𞠛𞠉
+Modi (𑘦𑘻𑘚𑘲)	𑘡𑘦𑘭𑘿𑘎𑘰𑘨
+Mongolian Cyrillic (монгол хэл)	Сайн байна уу?
+Mongolian Traditional (ᠮᠣᠩᠭᠣᠯ ᠪᠢᠴᠢᠭ᠋)	ᠰᠠᠶᠢᠨ ᠪᠠᠶᠢᠨ᠎ᠠ ᠤᠤ?
+
+Northern Thai (ᨣᩣᩴᨾᩮᩬᩥᨦ / ᨽᩣᩈᩣᩃ᩶ᩣ᩠ᨶᨶᩣ)	ᩈ᩠ᩅᩢᩔ᩠ᨯᩦᨣᩕᩢ᩠ᨸ
+Norwegian (norsk)	Hei / God dag
+Odia (ଓଡ଼ିଆ)	ନମସ୍କାର
+Polish  (język polski)	Dzień dobry! / Cześć!
+Rejang (ꥆꤰ꥓ꤼꤽ ꤽꥍꤺꥏ)	ꤸꥉꥐꤺꥉꥂꥎ
+Russian (русский)	Здра́вствуйте!
+Sharada (𑆯𑆳𑆫𑆢𑆳)	𑆤𑆩𑆱𑇀𑆑𑆳𑆫
+Siddham (𑖭𑖰𑖟𑖿𑖠𑖽)	𑖡𑖦𑖫𑖿𑖝𑖸
+Sinhala (සිංහල)	ආයුබෝවන්
+Slovak (slovenčina)	Dobrý deň
+Slovenian (slovenščina)	Pozdravljeni!
+Spanish (español)	¡Hola!
+Sundanese (ᮃᮊ᮪ᮟᮛᮞᮥᮔ᮪ᮓ)	ᮞᮙ᮪ᮕᮥᮛᮞᮥᮔ᮪
+Swedish (svenska)	Hej / Goddag / Hallå
+Syloti Nagri (ꠍꠤꠟꠐꠤ ꠘꠣꠉꠞꠤ)	ꠀꠌ꠆ꠍꠣꠟꠣꠝꠥ ꠀꠟꠣꠁꠇꠥꠝ / ꠘꠝꠡ꠆ꠇꠣꠞ
+Tamil (தமிழ்)	வணக்கம்
+Telugu (తెలుగు)	నమస్కారం
+Tagalog (ᜊᜌ᜔ᜊᜌᜒᜈ᜔)	ᜃᜓᜋᜓᜐ᜔ᜆ
+Tagbanwa (ᝦᝪᝯ)	ᝫᝩᝬᝥ ᝣᝮᝧᝯ
+TaiViet (ꪁꪫꪱꪣ ꪼꪕ)	ꪅꪰꪙꫂ ꪨꪮꫂ ꪁꪫꪱ / ꪅꪽ ꪨꪷ ꪁꪫꪱ
+Thai (ภาษาไทย)	สวัสดีครับ / สวัสดีค่ะ
+Tibetan (བོད་སྐད་)	བཀྲ་ཤིས་བདེ་ལེགས༎
+Tigrigna (ትግርኛ)	ሰላማት
+Tirhuta (𑒞𑒱𑒩𑒯𑒳𑒞𑒰)	𑒣𑓂𑒩𑒢𑒰𑒧 / 𑒮𑒲𑒞𑒰𑒩𑒰𑒧
+Turkish (Türkçe)	Esenlikler / Merhaba
+Ukrainian (українська)	Вітаю / Добрий день! / Привіт
+Vietnamese (tiếng Việt)	Chào bạn
+Wancho (𞋒𞋀𞋉𞋃𞋕)    	𞋂𞋈𞋛
+
+
+<x-charset><param>japanese-jisx0208</param>Japanese (日本語)	こんにちは</x-charset> <x-charset><param>katakana-jisx0201</param>/ ｺﾝﾆﾁﾊ
+</x-charset><x-charset><param>chinese-gb2312</param>Chinese (中文,普通话,汉语)	你好
+</x-charset><x-charset><param>chinese-big5-1</param>Cantonese (粵語,廣東話)	早晨, 你好
+</x-charset><x-charset><param>korean-ksc5601</param>Korean (한글)	안녕하세요 / 안녕하십니까
+</x-charset>
 
 
 
-Copyright (C) 2001-2017 Free Software Foundation, Inc.
+
+Copyright (C) 2001-2025 Free Software Foundation, Inc.
+
 
 This file is part of GNU Emacs.
+
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
+
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
+
 You should have received a copy of the GNU General Public License
-along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
+along with GNU Emacs.  If not, see <<https://www.gnu.org/licenses/>.
+
 
 ;;; Local Variables:
-;;; tab-width: 32
+;;; tab-width: 42
 ;;; bidi-display-reordering: t
-;;; coding: iso-2022-7bit
+;;; coding: utf-8
+;;; inhibit-compacting-font-caches: t
 ;;; End:

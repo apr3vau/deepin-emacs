@@ -1,23 +1,23 @@
 ;;;; testcases.el -- Test cases for testcover-tests.el
 
-;; Copyright (C) 2017 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; Author: Gemini Lasswell
 
 ;; This file is part of GNU Emacs.
 
-;; This program is free software: you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License as
-;; published by the Free Software Foundation, either version 3 of the
-;; License, or (at your option) any later version.
-;;
-;; This program is distributed in the hope that it will be useful, but
-;; WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-;; General Public License for more details.
-;;
+;; GNU Emacs is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; GNU Emacs is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see `https://www.gnu.org/licenses/'.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -77,12 +77,12 @@
 "Testcover doesn't prevent testing of defcustom values."
 ;; ====
 (defgroup testcover-testcase nil
-  "Test case for testcover"
+  "Test case for testcover."
   :group 'lisp
   :prefix "testcover-testcase-"
   :version "26.0")
 (defcustom testcover-testcase-flag t
-  "Test value used by testcover-tests.el"
+  "Test value used by testcover-tests.el."
   :type 'boolean
   :group 'testcover-testcase)
 (defun testcover-testcase-get-flag ()
@@ -111,7 +111,7 @@
 "Wrapping a form with noreturn prevents splotching."
 ;; ====
 (defun testcover-testcase-cancel (spacecraft)
-  (error "no destination for %s" spacecraft))
+  (error "No destination for %s" spacecraft))
 (defun testcover-testcase-launch (spacecraft planet)
   (if (null planet)
       (noreturn (testcover-testcase-cancel spacecraft%%%))
@@ -220,13 +220,13 @@
 (defun testcover-testcase-cc (arg)
   (condition-case nil
       (if (null arg%%%)%%%
-        (error "foo")
+        (error "Foo")
         "0")!!!
         (error nil)))
 (should-not (testcover-testcase-cc nil))
 
 ;; ==== quotes-within-backquotes-bug-25316 ====
-"Forms to instrument are found within quotes within backquotes."
+"Forms to analyze are found within quotes within backquotes."
 ;; ====
 (defun testcover-testcase-make-list ()
   (list 'defun 'defvar))
@@ -377,7 +377,7 @@
 (should-error (testcover-testcase-thing 3))
 
 ;; ==== dotted-backquote ====
-"Testcover correctly instruments dotted backquoted lists."
+"Testcover can analyze code inside dotted backquoted lists."
 ;; ====
 (defun testcover-testcase-dotted-bq (flag extras)
   (let* ((bq
@@ -388,7 +388,7 @@
 (should (equal '(a b c d e) (testcover-testcase-dotted-bq t '(d e))))
 
 ;; ==== quoted-backquote ====
-"Testcover correctly instruments the quoted backquote symbol."
+"Testcover correctly handles the quoted backquote symbol."
 ;; ====
 (defun testcover-testcase-special-symbols ()
   (list '\` '\, '\,@))
@@ -396,7 +396,7 @@
 (should (equal '(\` \, \,@) (testcover-testcase-special-symbols)))
 
 ;; ==== backquoted-vector-bug-25316 ====
-"Testcover reinstruments within backquoted vectors."
+"Testcover can analyze code within backquoted vectors."
 ;; ====
 (defun testcover-testcase-vec (a b c)
   `[,a%%% ,(list b%%% c%%%)%%%]%%%)
@@ -411,13 +411,20 @@
 (should (equal '([[4 5] 6]) (testcover-testcase-vec-in-list 4 5 6)))
 (should (equal '([100]) (testcover-testcase-vec-arg 100)))
 
+;; ==== dotted-list-in-vector-bug-30909 ====
+"Testcover can analyze dotted pairs within vectors."
+;; ====
+(defun testcover-testcase-vectors-with-dotted-pairs ()
+  (equal [(1 . "x")] [(1 2 . "y")])%%%)
+(should-not (testcover-testcase-vectors-with-dotted-pairs))
+
 ;; ==== vector-in-macro-spec-bug-25316 ====
-"Testcover reinstruments within vectors."
+"Testcover can analyze code inside vectors."
 ;; ====
 (defmacro testcover-testcase-nth-case (arg vec)
   (declare (indent 1)
            (debug (form (vector &rest form))))
-  `(eval (aref ,vec%%% ,arg%%%))%%%)
+  `(eval (aref ,vec%%% ,arg%%%) t)%%%)
 
 (defun testcover-testcase-use-nth-case (choice val)
   (testcover-testcase-nth-case choice
@@ -466,7 +473,7 @@ regarding the odd-looking coverage result for the quoted form."
 (should (equal (testcover-testcase-use-thing) 15))
 
 ;; ==== backquoted-dotted-alist ====
-"Testcover can instrument a dotted alist constructed with backquote."
+"Testcover can analyze a dotted alist constructed with backquote."
 ;; ====
 (defun testcover-testcase-make-alist (expr entries)
   `((0 . ,expr%%%) . ,entries%%%)%%%)
@@ -476,7 +483,6 @@ regarding the odd-looking coverage result for the quoted form."
 
 ;; ==== coverage-of-the-unknown-symbol-bug-25471 ====
 "Testcover correctly records coverage of code which uses `unknown'"
-:expected-result :failed
 ;; ====
 (defun testcover-testcase-how-do-i-know-you (name)
   (let ((val 'unknown))
@@ -504,4 +510,4 @@ regarding the odd-looking coverage result for the quoted form."
 (testcover-testcase-cyc2 1 2)
 (testcover-testcase-cyc2 1 4)
 
-;; testcases.el ends here.
+;;; testcases.el ends here

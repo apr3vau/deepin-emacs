@@ -11,12 +11,12 @@ override_dh_autoreconf:
 	cd $(SRCDIR) && ./autogen.sh
 
 override_dh_auto_configure:
-	cd $(SRCDIR) && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3
+	cd $(SRCDIR) && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter
 	#fix icon make error
 	#mkdir -p $(SRCDIR)/etc/images/icons/
 
 override_dh_auto_build:
-	cd $(SRCDIR) && make -j9
+	cd $(SRCDIR) && make -j4
 
 override_dh_auto_install:
 	dh_auto_install

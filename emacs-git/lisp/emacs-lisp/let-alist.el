@@ -1,16 +1,16 @@
 ;;; let-alist.el --- Easily let-bind values of an assoc-list by their names -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2025 Free Software Foundation, Inc.
 
 ;; Author: Artur Malabarba <emacs@endlessparentheses.com>
 ;; Package-Requires: ((emacs "24.1"))
-;; Version: 1.0.5
+;; Version: 1.0.6
 ;; Keywords: extensions lisp
 ;; Prefix: let-alist
 ;; Separator: -
 
-;; This is an Elpa :core package. Don't use functionality that is not
-;; compatible with Emacs 24.1.
+;; This is a GNU ELPA :core package.  Avoid functionality that is not
+;; compatible with the version of Emacs recorded above.
 
 ;; This file is part of GNU Emacs.
 
@@ -57,10 +57,10 @@
 ;;       .site.contents))
 ;;
 ;; If you nest `let-alist' invocations, the inner one can't access
-;; the variables of the outer one. You can, however, access alists
+;; the variables of the outer one.  You can, however, access alists
 ;; inside the original alist by using dots inside the symbol, as
 ;; displayed in the example above by the `.site.contents'.
-;;
+
 ;;; Code:
 
 
@@ -75,6 +75,8 @@ symbol, and each cdr is the same symbol without the `.'."
         ;; Return the cons cell inside a list, so it can be appended
         ;; with other results in the clause below.
         (list (cons data (intern (replace-match "" nil nil name)))))))
+   ((vectorp data)
+    (apply #'nconc (mapcar #'let-alist--deep-dot-search data)))
    ((not (consp data)) nil)
    ((eq (car data) 'let-alist)
     ;; For nested ‘let-alist’ forms, ignore symbols appearing in the
@@ -135,9 +137,22 @@ essentially expands to
       .site.contents))
 
 If you nest `let-alist' invocations, the inner one can't access
-the variables of the outer one. You can, however, access alists
+the variables of the outer one.  You can, however, access alists
 inside the original alist by using dots inside the symbol, as
-displayed in the example above."
+displayed in the example above.
+
+To refer to a non-`let-alist' variable starting with a dot in BODY, use
+two dots instead of one.  For example, in the following form `..foo'
+refers to the variable `.foo' bound outside of the `let-alist':
+
+    (let ((.foo 42)) (let-alist \\='((foo . nil)) ..foo))
+
+Note that there is no way to differentiate the case where a key
+is missing from when it is present, but its value is nil.  Thus,
+the following form evaluates to nil:
+
+    (let-alist \\='((some-key . nil))
+      .some-key)"
   (declare (indent 1) (debug t))
   (let ((var (make-symbol "alist")))
     `(let ((,var ,alist))

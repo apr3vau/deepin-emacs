@@ -62,6 +62,7 @@ Deepin Emacs provides below features:
  - git (>= 1:2.6.2-1)
  - autoconf (>= 2.69-9)
  - texinfo (>= 6.0.0.dfsg.1-3)
+ - libtree-sitter-dev
 
 ### Runtime dependencies
 
@@ -74,6 +75,10 @@ Deepin Emacs provides below features:
  - libncurses5-dev (>= 6.0+20151024-2)
  - libdbus-1-dev (>= 1.10.2-1)
  - libgtk-3-dev (>= 3.18.4-1)
+ - libgccjit0
+ - libgnutls28-dev
+ - librsvg2-common
+ - ripgrep
  - w3m (>= 0.5.3-25)
  - w3m-img (>= 0.5.3-25)
  - pyflakes (>= 1.0.0-4）
@@ -108,19 +113,16 @@ $ sudo apt-get install \
                libncurses5-dev \
                libdbus-1-dev \
                libgtk-3-dev \
+               libgccjit0 \
+               libgnutls28-dev \
                w3m \
                w3m-img \
-               pyflakes \
+               python3-pyflakes \
                elpa-pdf-tools-server \
                locate
 ```
 ```
-$ sudo apt-get install python-pip && sudo pip install jedi epc mocker
-```
-
-Download emacs git code
-```
-$ git clone --depth 1 git://git.savannah.gnu.org/emacs.git
+$ sudo apt-get install python3-pip && sudo pip install jedi epc mocker --break-system-packages
 ```
 
 Compile emacs git

@@ -1,10 +1,11 @@
 ;;; ob-dot.el --- Babel Functions for dot            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
+;; Maintainer: Justin Abrahms <justin@abrah.ms>
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; URL: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -25,7 +26,7 @@
 
 ;; Org-Babel support for evaluating dot source code.
 ;;
-;; For information on dot see http://www.graphviz.org/
+;; For information on dot see https://www.graphviz.org/
 ;;
 ;; This differs from most standard languages in that
 ;;
@@ -38,6 +39,10 @@
 ;; 4) there are no variables (at least for now)
 
 ;;; Code:
+
+(require 'org-macs)
+(org-assert-version)
+
 (require 'ob)
 
 (defvar org-babel-default-header-args:dot
@@ -46,7 +51,9 @@
 
 (defun org-babel-expand-body:dot (body params)
   "Expand BODY according to PARAMS, return the expanded body."
-  (let ((vars (org-babel--get-vars params)))
+  (let ((vars (org-babel--get-vars params))
+        (prologue (cdr (assq :prologue params)))
+        (epilogue (cdr (assq :epilogue params))))
     (mapc
      (lambda (pair)
        (let ((name (symbol-name (car pair)))
@@ -59,16 +66,21 @@
 		t
 		t))))
      vars)
-    body))
+    (concat
+     (and prologue (concat prologue "\n"))
+     body
+     (and epilogue (concat "\n" epilogue "\n")))))
 
 (defun org-babel-execute:dot (body params)
-  "Execute a block of Dot code with org-babel.
+  "Execute Dot BODY with org-babel according to PARAMS.
 This function is called by `org-babel-execute-src-block'."
   (let* ((out-file (cdr (or (assq :file params)
 			    (error "You need to specify a :file parameter"))))
 	 (cmdline (or (cdr (assq :cmdline params))
 		      (format "-T%s" (file-name-extension out-file))))
 	 (cmd (or (cdr (assq :cmd params)) "dot"))
+	 (coding-system-for-read 'utf-8) ;use utf-8 with sub-processes
+	 (coding-system-for-write 'utf-8)
 	 (in-file (org-babel-temp-file "dot-")))
     (with-temp-file in-file
       (insert (org-babel-expand-body:dot body params)))
@@ -84,7 +96,5 @@ This function is called by `org-babel-execute-src-block'."
   (error "Dot does not support sessions"))
 
 (provide 'ob-dot)
-
-
 
 ;;; ob-dot.el ends here

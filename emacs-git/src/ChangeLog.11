@@ -26,7 +26,7 @@
 
 	current_column: Now returns EMACS_INT, fixing some iftc
 	that was introduced in the 2002-06-02 change "temporarily"; see
-	<https://lists.gnu.org/archive/html/emacs-devel/2002-06/msg00039.html>.
+	<https://lists.gnu.org/r/emacs-devel/2002-06/msg00039.html>.
 	* bytecode.c (Fbyte_code): Don't cast current_column () to int.
 	* cmds.c (internal_self_insert): Likewise.
 	* indent.c (Fcurrent_column): Likewise.
@@ -91,7 +91,7 @@
 
 	* fileio.c (Fmake_symbolic_link): Treat ENOSYS specially, and
 	generate a special message for it.  Suggested by Eli Zaretskii in
-	<https://lists.gnu.org/archive/html/emacs-devel/2011-02/msg00995.html>.
+	<https://lists.gnu.org/r/emacs-devel/2011-02/msg00995.html>.
 	(Frename_file, Fmake_symbolic_link, Ffile_symlink_p):
 	Simplify the code by assuming that the readlink and symlink calls
 	exist, even if they always fail on this host.
@@ -154,7 +154,7 @@
 
 	* dired.c (Ffile_attributes): Increase size of modes from 10 to 12
 	as per recent filemodestring API change.  Reported by Jonas Öster in
-	<https://lists.gnu.org/archive/html/emacs-devel/2011-02/msg01069.html>.
+	<https://lists.gnu.org/r/emacs-devel/2011-02/msg01069.html>.
 
 2011-02-23  Ben Key  <bkey76@gmail.com>
 
@@ -947,7 +947,7 @@
 	(c_string_pos, number_of_chars, message_dolog):
 	(message_log_check_duplicate, set_message_1, store_mode_line_noprop):
 	(display_mode_element, display_string):
-	Switch between char * and unsigned char * to stay compatible wth
+	Switch between char * and unsigned char * to stay compatible with
 	C89 pointer rules.
 
 	* regex.c: Conform to C89 pointer rules.
@@ -2029,7 +2029,7 @@
 	(update_frame_tool_bar): Calculate tool-bar style once per call.
 	Instead of hiding text labels, omit them.  Don't use
 	xg_show_toolbar_item; create new GtkToolItems from scratch if
-	necessary, instead of trying to re-use them.  This avoids an
+	necessary, instead of trying to reuse them.  This avoids an
 	annoying animation when changing tool-bars.
 
 2010-12-31  Jan Djärv  <jan.h.d@swipnet.se>
@@ -2048,7 +2048,7 @@
 	(ns_set_name): Call ns_set_name_internal.
 	(x_explicitly_set_name): Remove call to ns_set_name_iconic.
 	(x_implicitly_set_name): Ditto.
-	(x_set_title): Remove commet about EXPLICIT.  Call ns_set_name_internal.
+	(x_set_title): Remove comment about EXPLICIT.  Call ns_set_name_internal.
 	(ns_set_name_as_filename): Encode name with ENCODE_UTF_8 (Bug#7517).
 
 2010-12-29  Štěpán Němec  <stepnem@gmail.com>  (tiny change)
@@ -3294,7 +3294,7 @@
 2010-10-09  Lars Magne Ingebrigtsen  <larsi@gnus.org>
 
 	* gnutls.c (syms_of_gnutls): All the bootprops are keywords.
-	(emacs_gnutls_write): Remove the debuggin fsync call.
+	(emacs_gnutls_write): Remove the debugging fsync call.
 	(emacs_gnutls_read): Return -1 if we got an error from
 	gnutls_read.  This allows us to actually read lots of data from
 	the GnuTLS stream.
@@ -6278,7 +6278,7 @@
 2010-07-09  Michael Albinus  <michael.albinus@gmx.de>
 
 	* dbusbind.c (xd_initialize): Add new argument RAISE_ERROR, which
-	allows to suppress errors when polling in Emacs' main loop.
+	allows suppressing errors when polling in Emacs' main loop.
 	(Fdbus_init_bus, Fdbus_get_unique_name, Fdbus_call_method)
 	(Fdbus_call_method_asynchronously, Fdbus_method_return_internal)
 	(Fdbus_method_error_internal, Fdbus_send_signal)
@@ -7244,9 +7244,9 @@
 	* xdisp.c (try_scrolling): Compute the limit for searching point
 	in forward scroll from scroll_max, instead of an arbitrary limit
 	of 10 screen lines.
-	See https://lists.gnu.org/archive/html/emacs-devel/2010-06/msg00766.html
+	See https://lists.gnu.org/r/emacs-devel/2010-06/msg00766.html
 	and
-	https://lists.gnu.org/archive/html/emacs-devel/2010-06/msg00773.html
+	https://lists.gnu.org/r/emacs-devel/2010-06/msg00773.html
 	for details.
 
 2010-06-16  Glenn Morris  <rgm@gnu.org>
@@ -7346,7 +7346,7 @@
 	* window.c (Fselect_window): Move `record_buffer' up to the
 	beginning of this function, so the buffer gets recorded
 	even if the selected window does not change.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-06/msg00137.html
+	https://lists.gnu.org/r/emacs-devel/2010-06/msg00137.html
 
 2010-06-07  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -7503,7 +7503,7 @@
 2010-05-28  Kenichi Handa  <handa@m17n.org>
 
 	* font.c (font_delete_unmatched): Check Vface_ignored_fonts.
-	Don't sheck SPEC if it is nil.
+	Don't check SPEC if it is nil.
 	(font_list_entities): Call font_delete_unmatched if
 	Vface_ignored_fonts is non-nil.  (Bug#6287)
 
@@ -7688,7 +7688,7 @@
 	* fileio.c (Fdelete_file): Change interactive spec to use
 	`read-file-name' like in `find-file-read-args' where the default
 	value is `default-directory' instead of `buffer-file-name'.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-05/msg00533.html
+	https://lists.gnu.org/r/emacs-devel/2010-05/msg00533.html
 
 2010-05-20  Kevin Ryde  <user42@zip.com.au>
 
@@ -7962,7 +7962,7 @@
 
 	* xdisp.c (init_iterator): Don't turn on bidi reordering in
 	unibyte buffers.  See
-	https://lists.gnu.org/archive/html/emacs-devel/2010-05/msg00263.html.
+	https://lists.gnu.org/r/emacs-devel/2010-05/msg00263.html.
 
 2010-05-10  Glenn Morris  <rgm@gnu.org>
 
@@ -8639,7 +8639,7 @@
 
 	* keyboard.c: QClabel is new.
 	(parse_tool_bar_item): Take out QClabel from tool bar items.
-	Try to construct a label if ther is no QClabel.
+	Try to construct a label if there is no QClabel.
 	(syms_of_keyboard): Intern :label as QClabel.
 
 	* dispextern.h (tool_bar_item_idx): TOOL_BAR_ITEM_LABEL is new.
@@ -8910,9 +8910,9 @@
 
 	* xdisp.c (display_line): Don't write beyond the last glyph row in
 	the desired matrix.  Fixes a crash in "emacs -nw" (bug#5972), see
-	https://lists.gnu.org/archive/html/emacs-devel/2010-04/msg00075.html
+	https://lists.gnu.org/r/emacs-devel/2010-04/msg00075.html
 	and
-	https://lists.gnu.org/archive/html/emacs-devel/2010-04/msg00213.html
+	https://lists.gnu.org/r/emacs-devel/2010-04/msg00213.html
 
 2010-04-18  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -9435,7 +9435,7 @@
 	continuation line, and start looking for a suitable row from
 	there.
 
-	* term.c (append_glyph): Reverse glyphs by pre-pending them,
+	* term.c (append_glyph): Reverse glyphs by prepending them,
 	rather than appending, if the glyph_row's reversed_p flag is set.
 	Set the resolved_level and bidi_type members of each glyph.
 
@@ -9492,7 +9492,7 @@
 	* coding.c (decode_coding_ccl): Fix previous change for the
 	multibyte case.
 	(encode_coding_ccl): Don't setup ccl program here.  Fix for the
-	case that the output buffer is fullfilled.
+	case that the output buffer is fulfilled.
 	(encode_coding): Setup ccl program here.
 
 2010-03-23  Dan Nicolaescu  <dann@ics.uci.edu>
@@ -9772,10 +9772,10 @@
 2010-02-17  Kenichi Handa  <handa@m17n.org>
 
 	* coding.c (decode_coding_ccl): Don't setup ccl program here.
-	Fix for the case that the output buffer is fullfilled.
+	Fix for the case that the output buffer is fulfilled.
 	(decode_coding): Setup ccl program here.  Keep looping when the
 	decoder stopped because the output buffer is
-	fullfilled (bug#5534).
+	fulfilled (bug#5534).
 
 	* ccl.c (ccl_driver): Never reset ic to CCL_HEADER_MAIN.
 
@@ -10126,7 +10126,7 @@
 
 2010-01-06  Jan Djärv  <jan.h.d@swipnet.se>
 
-	* font.c (font_open_entity): Enable chache and call cached_font_ok
+	* font.c (font_open_entity): Enable cache and call cached_font_ok
 	for the driver if defined.
 	(QCuser_spec): New symbol.
 	(font_spec_from_name): Save name as user-spec.
@@ -11510,7 +11510,7 @@
 
 	* frame.c (xrdb_get_resource): Return nil for empty string resources;
 	some parts of Emacs code (like font selection) don't grok them.
-	See https://lists.gnu.org/archive/html/emacs-devel/2009-09/msg00528.html
+	See https://lists.gnu.org/r/emacs-devel/2009-09/msg00528.html
 
 2009-09-24  Andreas Schwab  <schwab@redhat.com>
 
@@ -11988,7 +11988,7 @@
 
 	* cmds.c (nonundocount): New global variable.
 	(keys_of_cmds): Initialize it.
-	(Fself_insert_command): Use it to combine upto 20 sequential chars
+	(Fself_insert_command): Use it to combine up to 20 sequential chars
 	into a single undo entry, just like the Qself_insert_command code in
 	keyboard.c does.
 	Call frame_make_pointer_invisible, also like the Qself_insert_command
@@ -12876,7 +12876,7 @@
 
 	* editfns.c (Ftranspose_regions): Doc fix (Bug#3248).
 
-2009-05-10  Ulrich Mueller  <ulm@gentoo.org>
+2009-05-10  Ulrich Müller  <ulm@gentoo.org>
 
 	* s/gnu-linux.h: Make GCPROs and UNGCPRO no-ops also on SuperH.
 
@@ -12978,7 +12978,7 @@
 	* process.c (create_process): Clean up merger residues of
 	2008-07-17 change.
 
-2009-04-29  Ulrich Mueller  <ulm@gentoo.org>
+2009-04-29  Ulrich Müller  <ulm@gentoo.org>
 
 	* lread.c (Vread_circle): New variable.
 	(read1): Disable recursive read if Vread_circle is nil.
@@ -14235,7 +14235,7 @@
 	ns_alternate_modifier.  (Bug#1217)
 
 	* nsmenu.m (EmacsMenu-parseKeyEquiv:, addItemWithWidgetValue:):
-	Display all shortcuts, including those w/o super modifier.
+	Display all shortcuts, including those without super modifier.
 
 	* nsfns.m (ns-read-file-name): Fix typo in assignment statement.
 
@@ -14860,7 +14860,7 @@
 
 	* process.c (Fsystem_process_attributes, syms_of_process):
 	Fix typo in name of Ssystem_process_attributes.
-	Reported by Ulrich Mueller <ulm@kph.uni-mainz.de>.
+	Reported by Ulrich Müller <ulm@kph.uni-mainz.de>.
 
 2008-12-11  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -15356,7 +15356,7 @@
 	* keyboard.c (command_loop_1): Handle NORECORD in call of
 	Fselect_frame (currently ifdefd).
 
-2008-11-02  Ulrich Mueller  <ulm@kph.uni-mainz.de>
+2008-11-02  Ulrich Müller  <ulm@kph.uni-mainz.de>
 
 	* emacs.c (USAGE2): Untabify.
 
@@ -15626,7 +15626,7 @@
 	(Fset_window_buffer): Respect any non-nil dedicated value for
 	window.  Rename "buffer" argument to "buffer_or_name".
 
-2008-10-18  Ulrich Mueller  <ulm@gentoo.org>
+2008-10-18  Ulrich Müller  <ulm@gentoo.org>
 
 	* m/sh3.h: New file, machine description for SuperH.
 
@@ -20180,7 +20180,7 @@
 	(CHECK_FONT_GET_OBJECT): Likewise.
 	(XFONT_SPEC, XFONT_ENTITY, XFONT_OBJECT, XSETFONT): New macros.
 	(PT_PER_INCH, POINT_TO_PIXEL, PIXEL_TO_POINT): Move from font.h.
-	(struct font_driver): New members case_sensitive anc check.
+	(struct font_driver): New members case_sensitive and check.
 	Type of the member list and open changed.
 	(enable_font_backend, font_symbolic_weight, font_symbolic_slant)
 	(font_symbolic_width, font_find_object, font_get_spec)
@@ -22399,7 +22399,7 @@
 	* Makefile.in (${lispsource}international/charprop.el):
 	Delete this target.
 
-	* search.c (boyer_moore): Fix incorrect synching of the trunk and
+	* search.c (boyer_moore): Fix incorrect syncing of the trunk and
 	emacs-unicode-2.
 
 2008-02-11  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -23177,7 +23177,7 @@
 2008-02-01  Kenichi Handa  <handa@ni.aist.go.jp>
 
 	* xfaces.c (face_for_overlay_string): Call lookup_face with
-	correct arguments (fix of synching with the trunk).
+	correct arguments (fix of syncing with the trunk).
 
 2008-02-01  Kenichi Handa  <handa@m17n.org>
 
@@ -23186,7 +23186,7 @@
 	Delete argument prop_index.
 	(font_property_table): Change arguments to validator.  Change Callers.
 	(font_lispy_object): Delete.
-	(font_at): Use font_find_object instead fo font_lispy_object.
+	(font_at): Use font_find_object instead of font_lispy_object.
 
 2008-02-01  Kenichi Handa  <handa@ni.aist.go.jp>
 
@@ -23405,7 +23405,7 @@
 	* Makefile.in (lisp): Add ${lispsource}language/tai-viet.el.
 	(shortlisp): Add ../lisp/language/tai-viet.el.
 
-2008-02-01  Ulrich Mueller  <ulm@gentoo.org>
+2008-02-01  Ulrich Müller  <ulm@gentoo.org>
 
 	* Makefile.in (${lispsource}international/charprop.el): Depend on
 	temacs${EXEEXT}.
@@ -23923,7 +23923,7 @@
 
 2008-02-01  Kenichi Handa  <handa@m17n.org>
 
-	* alloc.c (NSTATICS): Increas to 0x600.
+	* alloc.c (NSTATICS): Increase to 0x600.
 
 2008-02-01  Kenichi Handa  <handa@m17n.org>
 
@@ -25309,12 +25309,12 @@
 
 	* coding.c (enum iso_code_class_type): Delete ISO_carriage_return.
 	(CODING_GET_INFO): Delete argument eol_type.  Change callers.
-	(decode_coding_utf_8): Don't do eol converion.
+	(decode_coding_utf_8): Don't do eol conversion.
 	(detect_coding_utf_16): Check coding->src_chars, not
 	coding->src_bytes.  Add heuristics for those that have no signature.
 	(decode_coding_emacs_mule, decode_coding_iso_2022)
 	(decode_coding_sjis, decode_coding_big5, decode_coding_charset):
-	Don't do eol converion.
+	Don't do eol conversion.
 	(adjust_coding_eol_type): Return a new coding system.
 	(detect_coding): Don't detect eol.  Fix for utf-16 detection.
 	(decode_eol): In case of CRLF->LF conversion, use del_range_2 on
@@ -25952,7 +25952,7 @@
 	(font_list): The argument REGISTRY is now a list of registry names.
 	(choose_face_font): If we are choosing an ASCII font, and ATTRS
 	specifies an explicit font name, return the name as is.  Make a
-	list of registy names.
+	list of registry names.
 
 	* xfns.c (x_set_font, x_create_tip_frame): Adjust for the change
 	of x_new_fontset.
@@ -26647,7 +26647,7 @@
 	(fontset_set): Delete.
 	(fontset_face): New arg FACE.  Return face ID, not face.
 	Complete re-write to handle new fontset structure.  Change caller.
-	(free_face_fontset): Use ASET istead of AREF (X) = Y.
+	(free_face_fontset): Use ASET instead of AREF (X) = Y.
 	(face_for_char): Don't call lookup_face.
 	(make_fontset_for_ascii_face): New arg FACE.
 	(fs_load_font): New arg CHARSET_ID.  Don't check
@@ -31141,7 +31141,7 @@
 	* term.c (term_mouse_highlight): Remove unused variables.
 	(Fterm_open_connection): Set gpm_zerobased to 1.
 	(term_mouse_movement, term_mouse_click, handle_one_term_event):
-	Use zero based co-ordinates.
+	Use zero based coordinates.
 	(handle_one_term_event): Report a drag as mouse movement too.
 
 	* Makefile.in (MOUSE_SUPPORT): Define for HAVE_GPM.
@@ -31385,7 +31385,7 @@ See ChangeLog.10 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2007-2017 Free Software Foundation, Inc.
+  Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

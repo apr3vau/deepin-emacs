@@ -1,13 +1,12 @@
+# getloadavg.m4
+# serial 13
+dnl Copyright (C) 1992-1996, 1999-2000, 2002-2003, 2006, 2008-2025 Free
+dnl Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
+dnl gives unlimited permission to copy and/or distribute it,
+dnl with or without modifications, as long as this notice is preserved.
+
 # Check for getloadavg.
-
-# Copyright (C) 1992-1996, 1999-2000, 2002-2003, 2006, 2008-2017 Free Software
-# Foundation, Inc.
-
-# This file is free software; the Free Software Foundation
-# gives unlimited permission to copy and/or distribute it,
-# with or without modifications, as long as this notice is preserved.
-
-#serial 6
 
 # Autoconf defines AC_FUNC_GETLOADAVG, but that is obsolescent.
 # New applications should use gl_GETLOADAVG instead.
@@ -20,13 +19,18 @@ AC_DEFUN([gl_GETLOADAVG],
 # Persuade glibc <stdlib.h> to declare getloadavg().
 AC_REQUIRE([AC_USE_SYSTEM_EXTENSIONS])
 
-gl_save_LIBS=$LIBS
+gl_saved_LIBS=$LIBS
 
-# getloadvg is present in libc on glibc >= 2.2, Mac OS X, FreeBSD >= 2.0,
+# getloadavg is present in libc on glibc >= 2.2, Mac OS X, FreeBSD >= 2.0,
 # NetBSD >= 0.9, OpenBSD >= 2.0, Solaris >= 7.
 HAVE_GETLOADAVG=1
-AC_CHECK_FUNC([getloadavg], [],
-  [gl_func_getloadavg_done=no
+gl_CHECK_FUNCS_ANDROID([getloadavg], [[#include <stdlib.h>]])
+if test $ac_cv_func_getloadavg != yes; then
+   case "$gl_cv_onwards_func_getloadavg" in
+     future*) REPLACE_GETLOADAVG=1 ;;
+   esac
+
+   gl_func_getloadavg_done=no
 
    # Some systems with -lutil have (and need) -lkvm as well, some do not.
    # On Solaris, -lkvm requires nlist from -lelf, so check that first
@@ -45,7 +49,9 @@ AC_CHECK_FUNC([getloadavg], [],
      # There is a commonly available library for RS/6000 AIX.
      # Since it is not a standard part of AIX, it might be installed locally.
      gl_getloadavg_LIBS=$LIBS
-     LIBS="-L/usr/local/lib $LIBS"
+     if test $cross_compiling != yes; then
+       LIBS="-L/usr/local/lib $LIBS"
+     fi
      AC_CHECK_LIB([getloadavg], [getloadavg],
                   [LIBS="-lgetloadavg $LIBS" gl_func_getloadavg_done=yes],
                   [LIBS=$gl_getloadavg_LIBS])
@@ -71,14 +77,15 @@ AC_CHECK_FUNC([getloadavg], [],
           AC_DEFINE([DGUX], [1], [Define to 1 for DGUX with <sys/dg_sys_info.h>.])
           AC_CHECK_LIB([dgc], [dg_sys_info])])
      fi
-   fi])
+   fi
+fi
 
-if test "x$gl_save_LIBS" = x; then
+if test "x$gl_saved_LIBS" = x; then
   GETLOADAVG_LIBS=$LIBS
 else
-  GETLOADAVG_LIBS=`echo "$LIBS" | sed "s!$gl_save_LIBS!!"`
+  GETLOADAVG_LIBS=`echo "$LIBS" | sed "s!$gl_saved_LIBS!!"`
 fi
-LIBS=$gl_save_LIBS
+LIBS=$gl_saved_LIBS
 
 AC_SUBST([GETLOADAVG_LIBS])dnl
 
@@ -92,6 +99,9 @@ else
 fi
 AC_CHECK_DECL([getloadavg], [], [HAVE_DECL_GETLOADAVG=0],
   [[#if HAVE_SYS_LOADAVG_H
+    /* OpenIndiana has a bug: <sys/time.h> must be included before
+       <sys/loadavg.h>.  */
+    # include <sys/time.h>
     # include <sys/loadavg.h>
     #endif
     #include <stdlib.h>]])
@@ -105,7 +115,7 @@ AC_DEFUN([gl_PREREQ_GETLOADAVG],
 [
 # Figure out what our getloadavg.c needs.
 
-AC_CHECK_HEADERS_ONCE([sys/param.h])
+AC_CHECK_HEADERS_ONCE([sys/param.h unistd.h])
 
 # On HPUX9, an unprivileged user can get load averages this way.
 if test $gl_func_getloadavg_done = no; then
@@ -142,7 +152,7 @@ fi
 AC_CHECK_HEADERS([nlist.h],
 [AC_CHECK_MEMBERS([struct nlist.n_un.n_name],
                   [], [],
-                  [@%:@include <nlist.h>])
+                  [#include <nlist.h>])
  AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <nlist.h>]],
                    [[struct nlist x;
                     #ifdef HAVE_STRUCT_NLIST_N_UN_N_NAME

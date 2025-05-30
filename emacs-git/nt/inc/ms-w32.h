@@ -1,6 +1,6 @@
 /* System description file for Windows NT.
 
-Copyright (C) 1993-1995, 2001-2017 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 2001-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -27,12 +27,43 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <mingw_time.h>
 
 /* MinGW-w64 gcc does not automotically define a macro for
-   differentiating it fom MinGW gcc. We need to test the presence of
+   differentiating it from MinGW gcc. We need to test the presence of
    __MINGW64_VERSION_MAJOR in _mingw.h: */
 #ifdef __MINGW32__
 # include <_mingw.h>
 # ifdef __MINGW64_VERSION_MAJOR
 #  define MINGW_W64
+# endif
+# if defined __MINGW32_VERSION && __MINGW32_VERSION >= 5001000L
+/* Avoid warnings about gettimeofday being deprecated.  */
+#  undef __POSIX_2008_DEPRECATED
+#  define __POSIX_2008_DEPRECATED
+# endif
+/* Old versions of MinGW don't have these in the w32api headers, and
+   Gnulib uses them in some files.  */
+# ifndef _WIN32_WINNT_WIN2K
+#  define _WIN32_WINNT_WIN2K	0x0500
+# endif
+# ifndef _WIN32_WINNT_WINXP
+#  define _WIN32_WINNT_WINXP	0x0501
+# endif
+# ifndef _WIN32_WINNT_WS03
+#  define _WIN32_WINNT_WS03	0x0502
+# endif
+# ifndef _WIN32_WINNT_VISTA
+#  define _WIN32_WINNT_VISTA	0x0600
+# endif
+# ifndef _WIN32_WINNT_WIN7
+#  define _WIN32_WINNT_WIN7	0x0601
+# endif
+# ifndef _WIN32_WINNT_WIN8
+#  define _WIN32_WINNT_WIN8	0x0602
+# endif
+# ifndef _WIN32_WINNT_WINBLUE
+#  define _WIN32_WINNT_WINBLUE	0x0603
+# endif
+# ifndef _WIN32_WINNT_WIN10
+#  define _WIN32_WINNT_WIN10	0x0A00
 # endif
 #endif
 
@@ -58,8 +89,8 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
    Look in <sys/time.h> for a timeval structure.  */
 #define HAVE_TIMEVAL 1
 
-/* And the select implementation does 1-byte read-ahead waiting
-   for received packets, so datagrams are broken too.  */
+/* Our select emulation does 1-byte read-ahead waiting for received
+   packets, so datagrams are broken.  */
 #define BROKEN_DATAGRAM_SOCKETS 1
 
 #define MAIL_USE_SYSTEM_LOCK 1
@@ -79,18 +110,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #  define HAVE___BUILTIN_UNWIND_INIT 1
 # endif
 #endif
-
-/* This isn't perfect, as some systems might have the page file in
-   another place.  Also, I suspect that the time stamp of that file
-   might also change when Windows enlarges the file due to
-   insufficient VM.  Still, this seems to be the most reliable way;
-   the alternative (of using GetSystemTimes) won't work on laptops
-   that hibernate, because the system clock is stopped then.  Other
-   possibility would be to run "net statistics workstation" and parse
-   the output, but that's gross.  So this should do; if the file is
-   not there, the boot time will be returned as zero, and filelock.c
-   already handles that.  */
-#define BOOT_TIME_FILE "C:/pagefile.sys"
 
 /* ============================================================ */
 
@@ -189,7 +208,7 @@ extern struct tm * sys_localtime (const time_t *);
 
 /* Unlike MS and mingw.org, MinGW64 doesn't define gai_strerror as an
    inline function in a system header file, and instead seems to
-   require to link against ws2_32.a.  But we don't want to link with
+   require linking against ws2_32.a.  But we don't want to link with
    -lws2_32, as that would make Emacs dependent on the respective DLL.
    So MinGW64 is amply punished here by the following:  */
 #undef HAVE_GAI_STRERROR
@@ -264,6 +283,7 @@ extern int sys_unlink (const char *);
 #undef umask
 #define umask   sys_umask
 extern int sys_umask (int);
+#define clock   sys_clock
 
 /* Subprocess calls that are emulated.  */
 #define spawnve sys_spawnve
@@ -295,18 +315,7 @@ extern int sys_umask (int);
 #define execvp    _execvp
 #include <stdint.h>		/* for intptr_t */
 extern intptr_t _execvp (const char *, char **);
-#ifdef MINGW_W64
-/* GCC 6 has a builtin execve with the prototype shown below.  MinGW64
-   changed the prototype in its process.h to match that, although the
-   library function still calls _execve, which still returns intptr_t.
-   However, using the prototype with intptr_t causes GCC to emit
-   warnings.  Fortunately, execve is not used in the MinGW build, but
-   the code that references it is still compiled.  */
-extern int execve (const char *, char * const *, char * const *);
-#else
-extern intptr_t execve (const char *, char * const *, char * const *);
-#endif
-#define fdatasync _commit
+#define tcdrain _commit
 #define fdopen	  _fdopen
 #define fsync	  _commit
 #define ftruncate _chsize
@@ -435,6 +444,7 @@ extern int alarm (int);
 
 extern int sys_kill (pid_t, int);
 
+extern void explicit_bzero (void *, size_t);
 
 /* For integration with MSDOS support.  */
 #define getdisk()               (_getdrive () - 1)
@@ -455,7 +465,12 @@ extern char *get_emacs_configuration_options (void);
    windows.h.  For this to have proper effect, config.h must always be
    included before windows.h.  */
 #define _WINSOCKAPI_    1
-#define _WINSOCK_H
+#if !(defined __MINGW32_VERSION && __MINGW32_VERSION >= 5000002L)
+/* mingw.org's MinGW 5.x changed how it includes winsock.h and time.h,
+   and now defining _WINSOCK_H skips the definition of struct timeval,
+   which we don't want.  */
+# define _WINSOCK_H
+#endif
 
 /* Defines size_t and alloca ().  */
 #include <stdlib.h>
@@ -489,6 +504,8 @@ extern void *malloc_after_dump_9x(size_t);
 extern void *realloc_after_dump_9x(void *, size_t);
 extern void free_after_dump_9x(void *);
 
+extern void *sys_calloc(size_t, size_t);
+
 extern malloc_fn the_malloc_fn;
 extern realloc_fn the_realloc_fn;
 extern free_fn the_free_fn;
@@ -496,6 +513,7 @@ extern free_fn the_free_fn;
 #define malloc(size) (*the_malloc_fn)(size)
 #define free(ptr)   (*the_free_fn)(ptr)
 #define realloc(ptr, size) (*the_realloc_fn)(ptr, size)
+#define calloc(num, size) sys_calloc(num, size)
 
 #endif
 
@@ -585,7 +603,7 @@ typedef unsigned int EMACS_UINT;
 
    Starting with MSVC 5.0, we must also place the uninitialized data
    into its own section.  VC5 intermingles uninitialized data from the CRT
-   between Emacs' static uninitialized data and its public uninitialized
+   between Emacs's static uninitialized data and its public uninitialized
    data.  A separate .bss section for Emacs groups both static and
    public uninitialized together.
 

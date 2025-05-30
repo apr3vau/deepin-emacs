@@ -1,6 +1,6 @@
 ;;; descr-text.el --- describe text mode  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1994-1996, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1996, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Boris Goldowsky <boris@gnu.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -42,24 +42,6 @@
   (insert-text-button
    "(widget)Top" 'type 'help-info 'help-args '("(widget)Top")))
 
-(defun describe-text-sexp (sexp)
-  "Insert a short description of SEXP in the current buffer."
-  (let ((pp (condition-case signal
-		(pp-to-string sexp)
-	      (error (prin1-to-string signal)))))
-    (when (string-match-p "\n\\'" pp)
-      (setq pp (substring pp 0 (1- (length pp)))))
-
-    (if (and (not (string-match-p "\n" pp))
-    	     (<= (length pp) (- (window-width) (current-column))))
-	(insert pp)
-      (insert-text-button
-       "[Show]" 'action (lambda (&rest _ignore)
-                          (with-output-to-temp-buffer
-                              "*Pp Eval Output*"
-                            (princ pp)))
-       'help-echo "mouse-2, RET: pretty print value in another buffer"))))
-
 (defun describe-property-list (properties)
   "Insert a description of PROPERTIES in the current buffer.
 PROPERTIES should be a list of overlay or text properties.
@@ -75,8 +57,9 @@ into help buttons that call `describe-text-category' or
 					    (prin1-to-string (nth 0 b) t)))))
     (let ((key (nth 0 elt))
 	  (value (nth 1 elt)))
-      (insert (propertize (format "  %-20s " key)
-			  'face 'help-argument-name))
+      (insert (format "  %-20s "
+                      (propertize (symbol-name key)
+                                  'face 'help-argument-name)))
       (cond ((eq key 'category)
 	     (insert-text-button
 	      (symbol-name value)
@@ -88,16 +71,16 @@ into help buttons that call `describe-text-category' or
 	     (insert-text-button
 	      (format "%S" value)
 	      'type 'help-face 'help-args (list value)))
-            ((widgetp value)
-	     (describe-text-widget value))
 	    (t
-	     (describe-text-sexp value))))
+	     (require 'pp)
+	     (declare-function pp-insert-short-sexp "pp" (sexp &optional width))
+	     (pp-insert-short-sexp value))))
     (insert "\n")))
 
 ;;; Describe-Text Commands.
 
 (defun describe-text-category (category)
-  "Describe a text property category."
+  "Describe a text property CATEGORY."
   (interactive "SCategory: ")
   (help-setup-xref (list #'describe-text-category category)
 		   (called-interactively-p 'interactive))
@@ -143,8 +126,7 @@ otherwise."
 	 (wid-field (get-char-property pos 'field))
 	 (wid-button (get-char-property pos 'button))
 	 (wid-doc (get-char-property pos 'widget-doc))
-	 ;; If button.el is not loaded, we have no buttons in the text.
-	 (button (and (fboundp 'button-at) (button-at pos)))
+	 (button (button-at pos))
 	 (button-type (and button (button-type button)))
 	 (button-label (and button (button-label button)))
 	 (widget (or wid-field wid-button wid-doc)))
@@ -177,6 +159,10 @@ otherwise."
 	(insert "\n"))
       ;; Text properties
       (when properties
+        (when (plist-get properties 'invisible)
+          (insert "\nNote that character has an invisibility property,\n"
+                  "  so the character displayed at point in the buffer may\n"
+                  "  differ from the character described here.\n"))
 	(newline)
 	(insert "There are text properties here:\n")
 	(describe-property-list properties)))))
@@ -213,7 +199,7 @@ multilingual development.
 
 This is a fairly large file, not typically present on GNU systems.
 At the time of writing it is at the URL
-`http://www.unicode.org/Public/UNIDATA/UnicodeData.txt'."
+`https://www.unicode.org/Public/UNIDATA/UnicodeData.txt'."
   :group 'mule
   :version "22.1"
   :type '(choice (const :tag "None" nil)
@@ -362,7 +348,7 @@ This function is semi-obsolete.  Use `get-char-code-property'."
 ;; description is added to the category name as a tooltip
 (defsubst describe-char-categories (category-set)
   (let ((mnemonics (category-set-mnemonics category-set)))
-    (unless (eq mnemonics "")
+    (unless (equal mnemonics "")
       (list (mapconcat
 	     (lambda (x)
 	       (let* ((c (category-docstring x))
@@ -386,13 +372,22 @@ The position information includes POS; the total size of BUFFER; the
 region limits, if narrowed; the column number; and the horizontal
 scroll amount, if the buffer is horizontally scrolled.
 
-The character information includes the character code; charset and
-code points in it; syntax; category; how the character is encoded in
-BUFFER and in BUFFER's file; character composition information (if
-relevant); the font and font glyphs used to display the character;
-the character's canonical name and other properties defined by the
-Unicode Data Base; and widgets, buttons, overlays, and text properties
-relevant to POS."
+The character information includes:
+ its codepoint;
+ its charset (see `char-charset'), overridden by the `charset' text
+   property at POS, if any;
+ the codepoint of the character in the above charset;
+ the character's script (as defined by `char-script-table')
+ the character's syntax, as produced by `syntax-after'
+   and `internal-describe-syntax-value';
+ its category (see `char-category-set' and `describe-char-categories');
+ how to input the character using the keyboard and input methods;
+ how the character is encoded in BUFFER and in BUFFER's file;
+ the font and font glyphs used to display the character;
+ the composition information for displaying the character (if relevant);
+ the character's canonical name and other properties defined by the
+   Unicode Data Base;
+ and widgets, buttons, overlays, and text properties relevant to POS."
   (interactive "d")
   (unless (buffer-live-p buffer) (setq buffer (current-buffer)))
   (let ((src-buf (current-buffer)))
@@ -409,6 +404,7 @@ relevant to POS."
            (display-table (or (window-display-table)
                               buffer-display-table
                               standard-display-table))
+           (composition-string nil)
            (disp-vector (and display-table (aref display-table char)))
            (multibyte-p enable-multibyte-characters)
            (overlays (mapcar (lambda (o) (overlay-properties o))
@@ -508,29 +504,30 @@ relevant to POS."
                         (setcar composition
                                 (concat
                                  " with the surrounding characters \""
-                                 (mapconcat 'describe-char-padded-string
-                                            (buffer-substring from pos) "")
+                                 (mapconcat #'describe-char-padded-string
+                                            (buffer-substring from pos))
                                  "\" and \""
-                                 (mapconcat 'describe-char-padded-string
-                                            (buffer-substring (1+ pos) to) "")
+                                 (mapconcat #'describe-char-padded-string
+                                            (buffer-substring (1+ pos) to))
                                  "\""))
                       (setcar composition
                               (concat
                                " with the preceding character(s) \""
-                               (mapconcat 'describe-char-padded-string
-                                          (buffer-substring from pos) "")
+                               (mapconcat #'describe-char-padded-string
+                                          (buffer-substring from pos))
                                "\"")))
                   (if (< (1+ pos) to)
                       (setcar composition
                               (concat
                                " with the following character(s) \""
-                               (mapconcat 'describe-char-padded-string
-                                          (buffer-substring (1+ pos) to) "")
+                               (mapconcat #'describe-char-padded-string
+                                          (buffer-substring (1+ pos) to))
                                "\""))
                     (setcar composition nil)))
                 (setcar (cdr composition)
                         (format "composed to form \"%s\" (see below)"
-                                (buffer-substring from to)))))
+                                (setq composition-string
+                                      (buffer-substring from to))))))
             (setq composition nil)))
 
       (setq item-list
@@ -553,10 +550,10 @@ relevant to POS."
               ("character"
                ,(format "%s (displayed as %s) (codepoint %d, #o%o, #x%x)"
 			char-description
-                        (apply 'propertize char-description
+                        (apply #'propertize char-description
                                (text-properties-at pos))
                         char char char))
-              ("preferred charset"
+              ("charset"
                ,`(insert-text-button
                   ,(symbol-name charset)
                   'type 'help-character-set 'help-args '(,charset))
@@ -605,7 +602,7 @@ relevant to POS."
                        (if (consp key-list)
                            (list "type"
                                  (concat "\""
-                                         (mapconcat 'identity
+                                         (mapconcat #'identity
                                                     key-list "\" or \"")
                                          "\"")
                                  "with"
@@ -641,7 +638,9 @@ relevant to POS."
               ("file code"
                ,@(if multibyte-p
                      (let* ((coding buffer-file-coding-system)
-                            (encoded (encode-coding-char char coding charset)))
+                            (encoded
+                             (and coding
+                                  (encode-coding-char char coding charset))))
                        (if encoded
                            (list (encoded-string-description encoded coding)
                                  (format "(encoded by coding system %S)"
@@ -669,11 +668,16 @@ relevant to POS."
                   (let ((display (describe-char-display pos char)))
                     (if (display-graphic-p (selected-frame))
                         (if display
-                            (concat "by this font (glyph code)\n    " display)
+                            (concat "by this font (glyph code):\n    " display)
                           "no font available")
                       (if display
                           (format "terminal code %s" display)
                         "not encodable for terminal"))))))
+              ,@(when-let ((composition-name
+                            (and composition-string
+                                 (eq (aref char-script-table char) 'emoji)
+                                 (emoji-describe composition-string))))
+                  (list (list "composition name" composition-name)))
               ,@(let ((face
                        (if (not (or disp-vector composition))
                            (cond
@@ -681,7 +685,9 @@ relevant to POS."
                                   (save-excursion (goto-char pos)
                                                   (looking-at-p "[ \t]+$")))
                              'trailing-whitespace)
-                            ((and nobreak-char-display char (eq char '#xa0))
+                            ((and nobreak-char-display char
+                                  (> char 127)
+                                  (eq (get-char-code-property char 'general-category) 'Zs))
                              'nobreak-space)
                             ((and nobreak-char-display char
 				  (memq char '(#xad #x2010 #x2011)))
@@ -697,7 +703,7 @@ relevant to POS."
                     (let ((unicodedata (describe-char-unicode-data char)))
                       (if unicodedata
                           (cons (list "Unicode data" "") unicodedata))))))
-      (setq max-width (apply 'max (mapcar (lambda (x)
+      (setq max-width (apply #'max (mapcar (lambda (x)
                                             (if (cadr x) (length (car x)) 0))
                                           item-list)))
       (set-buffer src-buf)
@@ -712,7 +718,7 @@ relevant to POS."
                 (dolist (clm (cdr elt))
 		  (cond ((eq (car-safe clm) 'insert-text-button)
 			 (insert " ")
-			 (eval clm))
+			 (eval clm t))
 			((not (zerop (length clm)))
 			 (insert " " clm))))
                 (insert "\n"))))
@@ -756,6 +762,8 @@ relevant to POS."
                        (to (nth 4 composition))
                        glyph)
                   (if (fontp font)
+                      ;; GUI frame: show composition in terms of
+                      ;; font glyphs and characters.
                       (progn
                         (insert " using this font:\n  "
                                 (symbol-name (font-get font :type))
@@ -765,12 +773,25 @@ relevant to POS."
                         (while (and (<= from to)
                                     (setq glyph (lgstring-glyph gstring from)))
                           (insert (format "  %S\n" glyph))
-                          (setq from (1+ from))))
+                          (setq from (1+ from)))
+                        (when (and (stringp (car composition))
+                                   (string-match "\"\\([^\"]+\\)\"" (car composition)))
+                          (insert "with these character(s):\n")
+                          (let ((chars (match-string 1 (car composition))))
+                            (dotimes (i (length chars))
+                              (let ((char (aref chars i)))
+                                (insert (format "  %s (#x%x) %s\n"
+                                                (describe-char-padded-string char) char
+                                                (get-char-code-property
+                                                 char 'name))))))))
+                    ;; TTY frame: show composition in terms of characters.
                     (insert " by these characters:\n")
                     (while (and (<= from to)
                                 (setq glyph (lgstring-glyph gstring from)))
-                      (insert (format " %c (#x%x)\n"
-                                      (lglyph-char glyph) (lglyph-char glyph)))
+                      (insert (format " %c (#x%x) %s\n"
+                                      (lglyph-char glyph) (lglyph-char glyph)
+                                      (get-char-code-property
+                                       (lglyph-char glyph) 'name)))
                       (setq from (1+ from)))))
               (insert " by the rule:\n\t(")
               (let ((first t))
@@ -816,7 +837,7 @@ relevant to POS."
             (insert "\n")
             (dolist (elt
                      (cond ((eq describe-char-unidata-list t)
-                            (nreverse (mapcar 'car char-code-property-alist)))
+                            (nreverse (mapcar #'car char-code-property-alist)))
                            ((< char 32)
                             ;; Temporary fix (2016-05-22): The
                             ;; decomposition item for \n corrupts the
@@ -834,8 +855,6 @@ relevant to POS."
 
           (if text-props-desc (insert text-props-desc))
           (setq buffer-read-only t))))))
-
-(define-obsolete-function-alias 'describe-char-after 'describe-char "22.1")
 
 ;;; Describe-Char-ElDoc
 
@@ -861,7 +880,7 @@ characters."
             (setq width (- width (length (car last)) 1)))
           (let ((ellipsis (and (cdr last) "...")))
             (setcdr last nil)
-            (concat (mapconcat 'identity words " ") ellipsis)))
+            (concat (mapconcat #'identity words " ") ellipsis)))
       "")))
 
 (defun describe-char-eldoc--format (ch &optional width)
@@ -914,7 +933,7 @@ condition, the function may return string longer than WIDTH, see
            (t name)))))))
 
 ;;;###autoload
-(defun describe-char-eldoc ()
+(defun describe-char-eldoc (_callback &rest _)
   "Return a description of character at point for use by ElDoc mode.
 
 Return nil if character at point is a printable ASCII
@@ -924,10 +943,17 @@ Otherwise return a description formatted by
 of `eldoc-echo-area-use-multiline-p' variable and width of
 minibuffer window for width limit.
 
-This function is meant to be used as a value of
-`eldoc-documentation-function' variable."
+This function can be used as a value of
+`eldoc-documentation-functions' variable."
   (let ((ch (following-char)))
     (when (and (not (zerop ch)) (or (< ch 32) (> ch 127)))
+      ;; TODO: investigate if the new `eldoc-documentation-functions'
+      ;; API could significantly improve this.  JT@2020-07-07: Indeed,
+      ;; instead of returning a string tailored here for the echo area
+      ;; exclusively, we could call the (now unused) argument
+      ;; _CALLBACK with hints on how to shorten the string if needed,
+      ;; or with multiple usable strings which ElDoc picks according
+      ;; to its space constraints.
       (describe-char-eldoc--format
        ch
        (unless (eq eldoc-echo-area-use-multiline-p t)

@@ -1,10 +1,10 @@
-;;; tildify-test.el --- ERT tests for tildify.el -*- lexical-binding: t -*-
+;;; tildify-tests.el --- ERT tests for tildify.el -*- lexical-binding: t -*-
 
-;; Copyright (C) 2014-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2014-2025 Free Software Foundation, Inc.
 
 ;; Author:     Michal Nazarewicz <mina86@mina86.com>
 ;; Version:    4.5
-;; Keywords:   text, TeX, SGML, wp
+;; Keywords:   text, TeX, SGML
 
 ;; This file is part of GNU Emacs.
 

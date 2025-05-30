@@ -1,6 +1,6 @@
-;;; cyrillic.el --- support for Cyrillic -*- coding: utf-8; -*-
+;;; cyrillic.el --- support for Cyrillic -*- coding: utf-8; lexical-binding: t; -*-
 
-;; Copyright (C) 1997-1998, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2025 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -9,7 +9,7 @@
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
 ;;   Registration Number H13PRO009
 
-;; Author: Kenichi Handa <handa@etl.go.jp>
+;; Author: Kenichi Handa <handa@gnu.org>
 ;; Keywords: multilingual, Cyrillic, i18n
 
 ;; This file is part of GNU Emacs.
@@ -33,23 +33,12 @@
 ;; are converted to Unicode internally.  See
 ;; <URL:http://www.ecma.ch/ecma1/STAND/ECMA-113.HTM>.  For more info
 ;; on Cyrillic charsets, see
-;; <URL:http://czyborra.com/charsets/cyrillic.html>.  The KOI and
-;; Alternativnyj coding systems should live in code-pages.el, but
-;; they've always been preloaded and the coding system autoload
-;; mechanism didn't get accepted, so they have to stay here and
-;; duplicate code-pages stuff.
+;; <URL:https://czyborra.com/charsets/cyrillic.html>.
 
 ;; Note that 8859-5 maps directly onto the Unicode Cyrillic block,
-;; apart from codepoints 160 (NBSP, c.f. U+0400), 173 (soft hyphen,
-;; c.f. U+04OD) and 253 (section sign, c.f U+045D).  The KOI-8 and
+;; apart from codepoints 160 (NBSP, cf. U+0400), 173 (soft hyphen,
+;; cf. U+04OD) and 253 (section sign, cf. U+045D).  The KOI-8 and
 ;; Alternativnyj coding systems encode both 8859-5 and Unicode.
-;; ucs-tables.el provides unification for cyrillic-iso-8bit.
-
-;; Customizing `utf-fragment-on-decoding' allows decoding characters
-;; from KOI and Alternativnyj into 8859-5 where that's possible.
-;; cyrillic-iso8859-5 characters take half as much space in the buffer
-;; as the mule-unicode-0100-24ff equivalents, though that's probably
-;; not normally a big deal.
 
 ;;; Code:
 
@@ -95,7 +84,7 @@
 (define-coding-system-alias 'cp878 'cyrillic-koi8)
 
 (set-language-info-alist
- "Cyrillic-KOI8" `((charset koi8)
+ "Cyrillic-KOI8" '((charset koi8)
 		   (coding-system cyrillic-koi8)
 		   (coding-priority cyrillic-koi8 cyrillic-iso-8bit)
 		   (ctext-non-standard-encodings "koi8-r")
@@ -126,18 +115,21 @@ Support for Russian using koi8-r and the russian-computer input method.")
 (define-coding-system 'koi8-u
   "KOI8-U 8-bit encoding for Cyrillic (MIME: KOI8-U)"
   :coding-type 'charset
-  :mnemonic ?U
+  ;; This used to be ?U which collided with UTF-8.
+  :mnemonic ?У                          ; CYRILLIC CAPITAL LETTER U
   :charset-list '(koi8-u)
   :mime-charset 'koi8-u)
 
 (set-language-info-alist
- "Ukrainian" `((charset koi8-u)
+ "Ukrainian" '((tutorial . "TUTORIAL.uk")
+	       (charset koi8-u)
 	       (coding-system koi8-u)
 	       (coding-priority koi8-u)
 	       (nonascii-translation . koi8-u)
 	       (input-method . "ukrainian-computer")
+	       (sample-text . "Ukrainian (Українська)	Вітаю / Добрий день! / Привіт")
 	       (documentation
-		. "Support for Ukrainian with KOI8-U character set."))
+		. "Support for Ukrainian with koi8-u character set."))
  '("Cyrillic"))
 
 ;;; ALTERNATIVNYJ stuff
@@ -151,7 +143,7 @@ Support for Russian using koi8-r and the russian-computer input method.")
 (define-coding-system-alias 'alternativnyj 'cyrillic-alternativnyj)
 
 (set-language-info-alist
- "Cyrillic-ALT" `((charset alternativnyj)
+ "Cyrillic-ALT" '((charset alternativnyj)
 		  (coding-system cyrillic-alternativnyj)
 		  (coding-priority cyrillic-alternativnyj)
 		  (nonascii-translation . alternativnyj)
@@ -168,13 +160,6 @@ Support for Russian using koi8-r and the russian-computer input method.")
   :mnemonic ?*
   :charset-list '(ibm866)
   :mime-charset 'cp866)
-
-(define-coding-system 'koi8-u
-  "KOI8-U 8-bit encoding for Cyrillic (MIME: KOI8-U)"
-  :coding-type 'charset
-  :mnemonic ?U
-  :charset-list '(koi8-u)
-  :mime-charset 'koi8-u)
 
 (define-coding-system 'koi8-t
   "KOI8-T 8-bit encoding for Cyrillic"
@@ -229,7 +214,7 @@ Support for Russian using koi8-r and the russian-computer input method.")
 ;;  '("Cyrillic"))
 
 (set-language-info-alist
- "Tajik" `((coding-system koi8-t)
+ "Tajik" '((coding-system koi8-t)
 	   (coding-priority koi8-t)
 	   (nonascii-translation . cyrillic-koi8-t)
 	   (charset koi8-t)
@@ -239,7 +224,7 @@ Support for Russian using koi8-r and the russian-computer input method.")
  '("Cyrillic"))
 
 (set-language-info-alist
- "Bulgarian" `((coding-system windows-1251)
+ "Bulgarian" '((coding-system windows-1251)
 	       (coding-priority windows-1251)
 	       (nonascii-translation . windows-1251)
 	       (charset windows-1251)
@@ -250,7 +235,7 @@ Support for Russian using koi8-r and the russian-computer input method.")
  '("Cyrillic"))
 
 (set-language-info-alist
- "Belarusian" `((coding-system windows-1251)
+ "Belarusian" '((coding-system windows-1251)
 		(coding-priority windows-1251)
 		(nonascii-translation . windows-1251)
 		(charset windows-1251)
@@ -261,12 +246,14 @@ Support for Russian using koi8-r and the russian-computer input method.")
 \(The name Belarusian replaced Byelorussian in the early 1990s.)"))
  '("Cyrillic"))
 
+;; The Mongolian-traditional language environment is in misc-lang.el.
 (set-language-info-alist
- "Ukrainian" `((coding-system koi8-u)
-	       (coding-priority koi8-u)
-	       (input-method . "ukrainian-computer")
-	       (documentation
-		. "Support for Ukrainian with koi8-u character set."))
+ "Mongolian-cyrillic" '((coding-system utf-8)
+	                (coding-priority utf-8)
+	                (input-method . "cyrillic-mongolian")
+		        (sample-text . "Mongolian (монгол хэл)	Сайн байна уу?")
+	                (documentation
+		         . "Support for Mongolian language with Cyrillic alphabet."))
  '("Cyrillic"))
 
 (provide 'cyrillic)

@@ -1,9 +1,9 @@
 ;;; nxml-util.el --- utility functions for nxml-*.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: James Clark
-;; Keywords: wp, hypermedia, languages, XML
+;; Keywords: text, hypermedia, languages, XML
 
 ;; This file is part of GNU Emacs.
 
@@ -64,12 +64,6 @@ This is the inverse of `nxml-make-namespace'."
            (error
             (nxml-degrade ,context ,error-symbol))))
     `(progn ,@body)))
-
-(defmacro nxml-with-invisible-motion (&rest body)
-  "Evaluate body without calling any point motion hooks."
-  (declare (indent 0) (debug t))
-  `(let ((inhibit-point-motion-hooks t))
-     ,@body))
 
 (defun nxml-display-file-parse-error (err)
   (let* ((filename (nth 1 err))

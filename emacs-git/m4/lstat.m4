@@ -1,23 +1,23 @@
-# serial 29
-
-# Copyright (C) 1997-2001, 2003-2017 Free Software Foundation, Inc.
-#
-# This file is free software; the Free Software Foundation
-# gives unlimited permission to copy and/or distribute it,
-# with or without modifications, as long as this notice is preserved.
+# lstat.m4
+# serial 36
+dnl Copyright (C) 1997-2001, 2003-2025 Free Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
+dnl gives unlimited permission to copy and/or distribute it,
+dnl with or without modifications, as long as this notice is preserved.
 
 dnl From Jim Meyering.
 
 AC_DEFUN([gl_FUNC_LSTAT],
 [
+  AC_REQUIRE([AC_CANONICAL_HOST])
   AC_REQUIRE([gl_SYS_STAT_H_DEFAULTS])
   dnl If lstat does not exist, the replacement <sys/stat.h> does
   dnl "#define lstat stat", and lstat.c is a no-op.
   AC_CHECK_FUNCS_ONCE([lstat])
   if test $ac_cv_func_lstat = yes; then
     AC_REQUIRE([gl_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK])
-    case "$gl_cv_func_lstat_dereferences_slashed_symlink" in
-      *no)
+    case $host_os,$gl_cv_func_lstat_dereferences_slashed_symlink in
+      darwin* | solaris* | *no)
         REPLACE_LSTAT=1
         ;;
     esac
@@ -52,15 +52,21 @@ AC_DEFUN([gl_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK],
        [gl_cv_func_lstat_dereferences_slashed_symlink=yes],
        [gl_cv_func_lstat_dereferences_slashed_symlink=no],
        [case "$host_os" in
-          *-gnu*)
+          linux-* | linux)
+            # Guess yes on Linux systems.
+            gl_cv_func_lstat_dereferences_slashed_symlink="guessing yes" ;;
+          midipix*)
+            # Guess yes on systems that emulate the Linux system calls.
+            gl_cv_func_lstat_dereferences_slashed_symlink="guessing yes" ;;
+          *-gnu* | gnu*)
             # Guess yes on glibc systems.
             gl_cv_func_lstat_dereferences_slashed_symlink="guessing yes" ;;
-          mingw*)
+          mingw* | windows*)
             # Guess no on native Windows.
             gl_cv_func_lstat_dereferences_slashed_symlink="guessing no" ;;
           *)
-            # If we don't know, assume the worst.
-            gl_cv_func_lstat_dereferences_slashed_symlink="guessing no" ;;
+            # If we don't know, obey --enable-cross-guesses.
+            gl_cv_func_lstat_dereferences_slashed_symlink="$gl_cross_guess_normal" ;;
         esac
        ])
      rm -f conftest.sym conftest.file

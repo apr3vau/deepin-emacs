@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2017 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 2000--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Keyboard Macros
@@ -42,6 +42,8 @@ intelligent or general.  For such things, Lisp must be used.
 * Edit Keyboard Macro::      Editing keyboard macros.
 * Keyboard Macro Step-Edit:: Interactively executing and editing a keyboard
                                macro.
+* Kmacro Menu::              An interface for listing and editing
+                               keyboard macros and the keyboard macro ring.
 @end menu
 
 @node Basic Keyboard Macro
@@ -62,6 +64,17 @@ Append keys to the last keyboard macro without re-executing it.
 @item C-x C-k r
 Run the last keyboard macro on each line that begins in the region
 (@code{apply-macro-to-region-lines}).
+@item C-x (
+Start defining a keyboard macro (old style)
+(@code{kmacro-start-macro}); with a prefix argument, append keys to
+the last macro.
+@item C-x )
+End a macro definition (old style) (@code{kmacro-end-macro}); prefix
+argument serves as the repeat count for executing the macro.
+@item C-x e
+Execute the most recently defined keyboard macro
+(@code{kmacro-end-and-call-macro}); prefix argument serves as repeat
+count.
 @end table
 
 @kindex F3
@@ -91,7 +104,7 @@ are in the process of defining one, or calls the last macro
 otherwise.)  You can also supply @key{F4} with a numeric prefix
 argument @samp{n}, which means to invoke the macro @samp{n} times.  An
 argument of zero repeats the macro indefinitely, until it gets an
-error or you type @kbd{C-g} (or, on MS-DOS, @kbd{C-@key{BREAK}}).
+error or you type @kbd{C-g} (or, on MS-DOS, @kbd{C-@key{Break}}).
 
   The above example demonstrates a handy trick that you can employ
 with keyboard macros: if you wish to repeat an operation at regularly
@@ -157,15 +170,24 @@ definition, type @kbd{C-x )} (@code{kmacro-end-macro}).  To execute
 the most recent macro, type @kbd{C-x e}
 (@code{kmacro-end-and-call-macro}).  If you enter @kbd{C-x e} while
 defining a macro, the macro is terminated and executed immediately.
-Immediately after typing @kbd{C-x e}, you can type @key{e} repeatedly
+Immediately after typing @kbd{C-x e}, you can type @kbd{e} repeatedly
 to immediately repeat the macro one or more times.  You can also give
-@kbd{C-x e} a repeat argument, just like @key{F4}.
+@kbd{C-x e} a repeat argument, just like @key{F4} (when it is used to
+execute a macro).
 
   @kbd{C-x )} can be given a repeat count as an argument.  This means
 to repeat the macro right after defining it.  The macro definition
 itself counts as the first repetition, since it is executed as you
 define it, so @kbd{C-u 4 C-x )} executes the macro immediately 3
 additional times.
+
+@findex kmacro-redisplay
+@kindex C-x C-k d
+  While executing a long-running keyboard macro, it can sometimes be
+useful to trigger a redisplay (to show how far we've gotten).  The
+@kbd{C-x C-k d} command can be used for this.  As a not very useful
+example, @kbd{C-x ( M-f C-x C-k d C-x )} will create a macro that will
+redisplay once per iteration when saying @kbd{C-u 42 C-x e}.
 
 @node Keyboard Macro Ring
 @section The Keyboard Macro Ring
@@ -236,10 +258,17 @@ determined by the customizable variable @code{kmacro-ring-max}.
 @section The Keyboard Macro Counter
 
   Each keyboard macro has an associated counter, which is initialized
-to 0 when you start defining the macro.  This counter allows you to
-insert a number into the buffer that depends on the number of times
-the macro has been called.  The counter is incremented each time its
-value is inserted into the buffer.
+to 0 when you start defining the macro.  This @dfn{current counter}
+allows you to insert a number into the buffer that depends on the
+number of times the macro has been called.  The counter is normally
+incremented each time its value is inserted into the buffer.
+
+In addition to the current counter, keyboard macros also maintain the
+@dfn{previous counter}, which records the value the current counter
+had last time it was incremented or set.  Note that incrementing the
+current counter by zero, e.g., with @w{@kbd{C-u 0 C-x C-k C-i}}, also
+records the value of the current counter as the previous counter
+value.
 
 @table @kbd
 @item @key{F3}
@@ -265,8 +294,8 @@ value of the keyboard macro's counter into the buffer, and increments
 the counter by 1.  (If you are not defining a macro, @key{F3} begins a
 macro definition instead.  @xref{Basic Keyboard Macro}.)  You can use
 a numeric prefix argument to specify a different increment.  If you
-just specify a @kbd{C-u} prefix, that is the same as an increment of
-zero: it inserts the current counter value without changing it.
+just specify a @kbd{C-u} prefix, that inserts the previous counter
+value, and doesn't change the current value.
 
   As an example, let us show how the keyboard macro counter can be
 used to build a numbered list.  Consider the following key sequence:
@@ -379,7 +408,7 @@ macro definition is executed.  It is up to you to leave point and the
 text in a state such that the rest of the macro will do what you want.
 @end table
 
-  @kbd{C-u C-x q}, which is @kbd{C-x q} with a numeric argument,
+  @kbd{C-u C-x q}, which is @kbd{C-x q} with a prefix argument,
 performs a completely different function.  It enters a recursive edit
 reading input from the keyboard, both when you type it during the
 definition of the macro, and when it is executed from the macro.  During
@@ -412,7 +441,7 @@ name to execute the last keyboard macro, in its current form.  (If you
 later add to the definition of this macro, that does not alter the
 name's definition as a macro.)  The macro name is a Lisp symbol, and
 defining it in this way makes it a valid command name for calling with
-@kbd{M-x} or for binding a key to with @code{global-set-key}
+@kbd{M-x} or for binding a key to with @code{keymap-global-set}
 (@pxref{Keymaps}).  If you specify a name that has a prior definition
 other than a keyboard macro, an error message is shown and nothing is
 changed.
@@ -453,14 +482,14 @@ M-x insert-kbd-macro @key{RET} @var{macroname} @key{RET}
 
 @noindent
 This inserts some Lisp code that, when executed later, will define the
-same macro with the same definition it has now.  (You need not
+same macro with the same definition it has now.  (You don't need to
 understand Lisp code to do this, because @code{insert-kbd-macro} writes
 the Lisp code for you.)  Then save the file.  You can load the file
 later with @code{load-file} (@pxref{Lisp Libraries}).  If the file you
 save in is your init file @file{~/.emacs} (@pxref{Init File}) then the
 macro will be defined each time you run Emacs.
 
-  If you give @code{insert-kbd-macro} a numeric argument, it makes
+  If you give @code{insert-kbd-macro} a prefix argument, it makes
 additional Lisp code to record the keys (if any) that you have bound
 to @var{macroname}, so that the macro will be reassigned the same keys
 when you load the file.
@@ -488,6 +517,19 @@ editing it.  Type @kbd{C-h m} once in that buffer to display details
 of how to edit the macro.  When you are finished editing, type
 @kbd{C-c C-c}.
 
+@findex edmacro-insert-key
+@findex edmacro-set-macro-to-region-lines
+  @code{edmacro-mode}, the major mode used by
+@code{kmacro-edit-macro}, provides commands for more easily editing
+the formatted macro.  Use @kbd{C-c C-q} (@code{edmacro-insert-key}) to
+insert the next key sequence that you type into the buffer using the
+correct format, similar to @kbd{C-q} (@code{quoted-insert}).  Use
+@kbd{C-c C-r} (@code{edmacro-set-macro-to-region-lines}) to replace
+the macro's text with the text in the region.  If the region does not
+begin at the start of a line or if it does not end at the end of a
+line, the region is extended to include complete lines.  If the region
+ends at the beginning of a line, that final line is excluded.
+
 @findex edit-kbd-macro
 @kindex C-x C-k e
   You can edit a named keyboard macro or a macro bound to a key by typing
@@ -496,9 +538,13 @@ keyboard input that you would use to invoke the macro---@kbd{C-x e} or
 @kbd{M-x @var{name}} or some other key sequence.
 
 @findex kmacro-edit-lossage
+@vindex edmacro-reverse-macro-lines
 @kindex C-x C-k l
   You can edit the last 300 keystrokes as a macro by typing
-@kbd{C-x C-k l} (@code{kmacro-edit-lossage}).
+@kbd{C-x C-k l} (@code{kmacro-edit-lossage}).  By default,
+your most recent keystrokes are listed at the bottom of the buffer.
+To list a macro's key sequences in reverse order, set
+@code{edmacro-reverse-macro-lines} to @code{t}.
 
 @node Keyboard Macro Step-Edit
 @section Stepwise Editing a Keyboard Macro
@@ -572,3 +618,163 @@ including the final @kbd{C-j}), and appends them at the end of the
 keyboard macro; it then terminates the step-editing and replaces the
 original keyboard macro with the edited macro.
 @end itemize
+
+@node Kmacro Menu
+@section Listing and Editing Keyboard Macros
+@cindex Kmacro Menu
+
+@cindex listing current keyboard macros
+@kindex M-x list-keyboard-macros @key{RET}
+@findex kmacro-menu
+@findex list-keyboard-macros
+  To display a list of existing keyboard macros, type @kbd{M-x
+list-keyboard-macros @key{RET}}.  This pops up the @dfn{Kmacro Menu} in
+a buffer named @file{*Keyboard Macro List*}.  Each line in the list
+shows one macro's position, counter value, counter format, that counter
+value using that format, and macro keys.  Here is an example of a macro
+list:
+
+@smallexample
+Position  Counter  Format  Formatted  Keys
+0               8  %02d    08         N : SPC <F3> RET
+1               0  %d      0          l o n g SPC p h r a s e
+@end smallexample
+
+@noindent
+The macros are listed with the current macro at the top in position
+number zero and the older macros in the order in which they are found in
+the keyboard macro ring (@pxref{Keyboard Macro Ring}).  Using the Kmacro
+Menu, you can change the order of the macros and change their counters,
+counter formats, and keys.  The Kmacro Menu is a read-only buffer, and
+can be changed only through the special commands described in this
+section.  After a command is run, the Kmacro Menu displays changes to
+reflect the new values of the macro properties and the macro ring.  You
+can use the usual cursor motion commands in this buffer, as well as
+special motion commands for navigating the table.  To view a list of the
+special commands, type @kbd{C-h m} or @kbd{?} (@code{describe-mode}) in
+the Kmacro Menu.
+
+  You can use the following commands to change a macro's properties:
+
+@table @kbd
+@item #
+@findex kmacro-menu-edit-position
+@kindex # @r{(Kmacro Menu)}
+Change the position of the macro on the current line
+(@pxref{Keyboard Macro Ring}).
+
+@item C-x C-t
+@findex kmacro-menu-transpose
+@kindex C-x C-t @r{(Kmacro Menu)}
+Move the macro on the current line to the line above, like in
+@code{transpose-lines}.
+
+@item c
+@findex kmacro-menu-edit-counter
+@kindex c @r{(Kmacro Menu)}
+Change the counter value of the macro on the current line
+(@pxref{Keyboard Macro Counter}).
+
+@item f
+@findex kmacro-menu-edit-format
+@kindex f @r{(Kmacro Menu)}
+Change the counter format of the macro on the current line.
+
+@item e
+@findex kmacro-menu-edit-keys
+@kindex e @r{(Kmacro Menu)}
+Change the keys of the macro on the current line using
+@code{edit-kbd-macro} (@pxref{Edit Keyboard Macro}).
+
+@item @key{RET}
+@findex kmacro-menu-edit-column
+@kindex @key{RET} @r{(Kmacro Menu)}
+Change the value in the current column of the macro on the current line
+using commands above.
+@end table
+
+  The following commands delete or duplicate macros in the list:
+
+@table @kbd
+@item d
+@findex kmacro-menu-flag-for-deletion
+@item d @r{(Kmacro Menu)}
+Flag the macro on the current line for deletion, then move point to the
+next line (@code{kmacro-menu-flag-for-deletion}).  The deletion flag is
+indicated by the character @samp{D} at the start of line.  The deletion
+occurs only when you type the @kbd{x} command (see below).
+
+  If the region is active, this command flags all of the macros in the
+region.
+
+@item x
+@findex kmacro-menu-do-flagged-delete
+@item x @r{(Kmacro Menu)}
+Delete the macros in the list that have been flagged for deletion
+(@code{kmacro-menu-do-flagged-delete}).
+
+@item m
+@findex kmacro-menu-mark
+@item m @r{(Kmacro Menu)}
+Mark the macro on the current line, then move point to the next line
+(@code{kmacro-menu-mark}).  Marked macros are indicated by the character
+@samp{*} at the start of line.  Marked macros can be operated on by the
+@kbd{C} and @kbd{D} commands (see below).
+
+  If the region is active, this command marks all of the macros in the
+region.
+
+@item C
+@findex kmacro-menu-do-copy
+@item C @r{(Kmacro Menu)}
+This command copies macros by duplicating them at their current
+positions in the list (@code{kmacro-menu-do-copy}).  For example,
+running this command on the macro at position number zero will insert a
+copy of that macro into position number one and move the remaining
+macros down.
+
+  If the region is active, this command duplicates the macros in the
+region.  Otherwise, if there are marked macros, this command duplicates
+the marked macros.  If there is no region nor are there marked macros,
+this command duplicates the macro on the current line.  In the first two
+cases, the command prompts for confirmation before duplication.
+
+@item D
+@findex kmacro-menu-do-delete
+@item D @r{(Kmacro Menu)}
+This command deletes macros, removing them from the ring
+(@code{kmacro-menu-do-delete}).  For example, running this command on
+the macro at position number zero will delete the current macro and then
+make the first macro in the macro ring (previously at position number
+one) the new current macro, popping it from the ring.
+
+  If the region is active, this command deletes the macros in the
+region.  Otherwise, if there are marked macros, this command deletes the
+marked macros.  If there is no region nor are there marked macros, this
+command deletes the macro on the current line.  In all cases, the
+command prompts for confirmation before deletion.
+
+  This command is an alternative to the @kbd{d} and @kbd{x} commands
+(see above).
+
+@item u
+@findex kmacro-menu-unmark
+@item u @r{(Kmacro Menu)}
+Unmark and unflag the macro on the current line, then move point down
+to the next line (@code{kmacro-menu-unmark}).  If there is an active
+region, this command unmarks and unflags all of the macros in the
+region.
+
+@item @key{DEL}
+@findex kmacro-menu-unmark-backward
+@item @key{DEL} @r{(Kmacro Menu)}
+Like the @kbd{u} command (see above), but move point up to the previous
+line when there is no active region
+(@code{kmacro-menu-unmark-backward}).
+
+@item U
+@findex kmacro-menu-unmark-all
+@item U @r{(Kmacro Menu)}
+Unmark and unflag all macros in the list
+(@code{kmacro-menu-unmark-all}).
+@end table

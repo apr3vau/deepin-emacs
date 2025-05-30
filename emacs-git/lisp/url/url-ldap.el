@@ -1,6 +1,6 @@
-;;; url-ldap.el --- LDAP Uniform Resource Locator retrieval code
+;;; url-ldap.el --- LDAP Uniform Resource Locator retrieval code  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1998-1999, 2004-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2025 Free Software Foundation, Inc.
 
 ;; Keywords: comm, data, processes
 
@@ -92,12 +92,8 @@
 	  "'>" dn "</a>"))
 
 (defun url-ldap-certificate-formatter (data)
-  (condition-case ()
-      (require 'ssl)
-    (error nil))
-  (let ((vals (if (fboundp 'ssl-certificate-information)
-		  (ssl-certificate-information data)
-		(tls-certificate-information data))))
+  ;; FIXME: tls.el is obsolete.
+  (let ((vals (tls-certificate-information data)))
     (if (not vals)
 	"<b>Unable to parse certificate</b>"
       (concat "<table border=0>\n"
@@ -218,7 +214,7 @@ URL can be a URL string, or a URL record of the type returned by
 				    "</td></tr>\n")
 			  ;; Multiple matches, slightly uglier
 			  (insert "   <tr>\n"
-				  (format "    <td valign=top>")
+				  "    <td valign=top>"
 				  (url-ldap-attribute-pretty-name (car attr)) "</td><td>"
 				  (mapconcat (lambda (x)
 					       (url-ldap-attribute-pretty-desc (car attr) x))

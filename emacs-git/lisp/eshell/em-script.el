@@ -1,6 +1,6 @@
 ;;; em-script.el --- Eshell script files  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -23,10 +23,10 @@
 
 ;;; Code:
 
-(require 'eshell)
-(require 'esh-opt)
+(require 'esh-mode)
+(require 'esh-io)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-script nil
   "This module allows for the execution of files containing Eshell
@@ -57,92 +57,135 @@ This includes when running `eshell-command'."
 
 ;;; Functions:
 
-(defun eshell-script-initialize ()
+(defun eshell-script-initialize ()  ;Called from `eshell-mode' via intern-soft!
   "Initialize the script parsing code."
-  (make-local-variable 'eshell-interpreter-alist)
-  (setq eshell-interpreter-alist
-	(cons (cons #'(lambda (file args)
-                        (string= (file-name-nondirectory file)
-                                 "eshell"))
-                    'eshell/source)
-	      eshell-interpreter-alist))
-  (make-local-variable 'eshell-complex-commands)
-  (setq eshell-complex-commands
+  (setq-local eshell-interpreter-alist
+              (cons (cons (lambda (file _args)
+                            (and (file-regular-p file)
+                                 (string= (file-name-nondirectory file)
+                                          "eshell")))
+                          'eshell/source)
+                    eshell-interpreter-alist))
+  (setq-local eshell-complex-commands
 	(append '("source" ".") eshell-complex-commands))
   ;; these two variables are changed through usage, but we don't want
   ;; to ruin it for other modules
   (let (eshell-inside-quote-regexp
 	eshell-outside-quote-regexp)
-    (and (not eshell-non-interactive-p)
+    (and (not (bound-and-true-p eshell-non-interactive-p))
 	 eshell-login-script
 	 (file-readable-p eshell-login-script)
 	 (eshell-do-eval
-	  (list 'eshell-commands
-		(catch 'eshell-replace-command
-		  (eshell-source-file eshell-login-script))) t))
+	  `(eshell-commands ,(eshell--source-file eshell-login-script))
+          t))
     (and eshell-rc-script
 	 (file-readable-p eshell-rc-script)
 	 (eshell-do-eval
-	  (list 'eshell-commands
-		(catch 'eshell-replace-command
-		  (eshell-source-file eshell-rc-script))) t))))
+	  `(eshell-commands ,(eshell--source-file eshell-rc-script))
+          t))))
+
+(defun eshell--source-file (file &optional args subcommand-p)
+  "Return a Lisp form for executing the Eshell commands in FILE, passing ARGS.
+If SUBCOMMAND-P is non-nil, execute this as a subcommand."
+  (let ((cmd (eshell-parse-command `(:file . ,file))))
+    (when subcommand-p
+      (setq cmd `(eshell-as-subcommand ,cmd)))
+    `(let ((eshell-command-name ',file)
+           (eshell-command-arguments ',args)
+           ;; Don't print subjob messages by default.  Otherwise, if
+           ;; this function was called as a subjob, then *all* commands
+           ;; in the script would print start/stop messages.
+           (eshell-subjob-messages nil))
+       ,cmd)))
 
 (defun eshell-source-file (file &optional args subcommand-p)
   "Execute a series of Eshell commands in FILE, passing ARGS.
 Comments begin with `#'."
-  (interactive "f")
-  (let ((orig (point))
-	(here (point-max))
-	(inhibit-point-motion-hooks t))
-    (goto-char (point-max))
-    (with-silent-modifications
-      ;; FIXME: Why not use a temporary buffer and avoid this
-      ;; "insert&delete" business?  --Stef
-      (insert-file-contents file)
-      (goto-char (point-max))
-      (throw 'eshell-replace-command
-             (prog1
-                 (list 'let
-                       (list (list 'eshell-command-name (list 'quote file))
-                             (list 'eshell-command-arguments
-                                   (list 'quote args)))
-                       (let ((cmd (eshell-parse-command (cons here (point)))))
-                         (if subcommand-p
-                             (setq cmd (list 'eshell-as-subcommand cmd)))
-                         cmd))
-               (delete-region here (point))
-               (goto-char orig))))))
+  (declare (obsolete nil "30.1"))
+  (throw 'eshell-replace-command
+         (eshell--source-file file args subcommand-p)))
 
-(defun eshell/source (&rest args)
-  "Source a file in a subshell environment."
-  (eshell-eval-using-options
-   "source" args
-   '((?h "help" nil nil "show this usage screen")
-     :show-usage
-     :usage "FILE [ARGS]
-Invoke the Eshell commands in FILE in a subshell, binding ARGS to $1,
-$2, etc.")
-   (eshell-source-file (car args) (cdr args) t)))
+;;;###autoload
+(defun eshell-execute-file (file &optional args destination)
+  "Execute a series of Eshell commands in FILE, passing ARGS.
+If DESTINATION is t, write the command output to the current buffer.  If
+nil, don't write the output anywhere.  For any other value, output to
+the corresponding Eshell target (see `eshell-get-target').
+
+Comments begin with `#'."
+  (let ((eshell-non-interactive-p t)
+        (stdout (if (eq destination t) (current-buffer) destination)))
+    (with-temp-buffer
+      (eshell-mode)
+      (eshell-do-eval
+       `(let ((eshell-current-handles
+               (eshell-create-handles ',stdout 'insert))
+              (eshell-current-subjob-p))
+          ,(eshell--source-file file args))
+       t))))
+
+(cl-defstruct (eshell-princ-target
+               (:include eshell-generic-target)
+               (:constructor nil)
+               (:constructor eshell-princ-target-create
+                             (&optional printcharfun)))
+  "A virtual target calling `princ' (see `eshell-virtual-targets')."
+  printcharfun)
+
+(cl-defmethod eshell-output-object-to-target (object
+                                              (target eshell-princ-target))
+  "Output OBJECT to the `princ' function TARGET."
+  (princ object (eshell-princ-target-printcharfun target)))
+
+(cl-defmethod eshell-target-line-oriented-p ((_target eshell-princ-target))
+  "Return non-nil to indicate that the display is line-oriented."
+  t)
+
+(cl-defmethod eshell-close-target ((_target eshell-princ-target) _status)
+  "Close the `princ' function TARGET."
+  nil)
+
+;;;###autoload
+(defun eshell-batch-file ()
+  "Execute an Eshell script as a batch script from the command line.
+Inside your Eshell script file, you can add the following at the
+top in order to make it into an executable script:
+
+  #!/usr/bin/env -S emacs --batch -f eshell-batch-file"
+  (let ((file (pop command-line-args-left))
+        (args command-line-args-left)
+        (eshell-non-interactive-p t)
+        (eshell-module-loading-messages nil)
+        (eshell-virtual-targets
+         (append `(("/dev/stdout" ,(eshell-princ-target-create) nil)
+                   ("/dev/stderr" ,(eshell-princ-target-create
+                                    #'external-debugging-output)
+                   nil))
+                 eshell-virtual-targets)))
+    (setq command-line-args-left nil)
+    (with-temp-buffer
+      (eshell-mode)
+      (eshell-do-eval
+       `(let ((eshell-current-handles
+               (eshell-create-handles "/dev/stdout" 'append
+                                      "/dev/stderr" 'append))
+              (eshell-current-subjob-p))
+          ,(eshell--source-file file args))
+       t))))
+
+(defun eshell/source (file &rest args)
+  "Source a FILE in a subshell environment."
+  (throw 'eshell-replace-command
+         (eshell--source-file file args t)))
 
 (put 'eshell/source 'eshell-no-numeric-conversions t)
 
-(defun eshell/. (&rest args)
-  "Source a file in the current environment."
-  (eshell-eval-using-options
-   "." args
-   '((?h "help" nil nil "show this usage screen")
-     :show-usage
-     :usage "FILE [ARGS]
-Invoke the Eshell commands in FILE within the current shell
-environment, binding ARGS to $1, $2, etc.")
-   (eshell-source-file (car args) (cdr args))))
+(defun eshell/. (file &rest args)
+  "Source a FILE in the current environment."
+  (throw 'eshell-replace-command
+         (eshell--source-file file args)))
 
 (put 'eshell/. 'eshell-no-numeric-conversions t)
 
 (provide 'em-script)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-script.el ends here

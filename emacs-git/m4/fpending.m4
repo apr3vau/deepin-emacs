@@ -1,9 +1,9 @@
-# serial 22
-
-# Copyright (C) 2000-2001, 2004-2017 Free Software Foundation, Inc.
-# This file is free software; the Free Software Foundation
-# gives unlimited permission to copy and/or distribute it,
-# with or without modifications, as long as this notice is preserved.
+# fpending.m4
+# serial 23
+dnl Copyright (C) 2000-2001, 2004-2025 Free Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
+dnl gives unlimited permission to copy and/or distribute it,
+dnl with or without modifications, as long as this notice is preserved.
 
 dnl From Jim Meyering
 dnl Using code from emacs, based on suggestions from Paul Eggert
@@ -25,7 +25,7 @@ AC_DEFUN([gl_FUNC_FPENDING],
   AC_CACHE_CHECK([for __fpending], [gl_cv_func___fpending],
     [
       AC_LINK_IFELSE(
-        [AC_LANG_PROGRAM([$fp_headers],
+        [AC_LANG_PROGRAM([[$fp_headers]],
            [[return ! __fpending (stdin);]])],
         [gl_cv_func___fpending=yes],
         [gl_cv_func___fpending=no])

@@ -1,10 +1,10 @@
 ;;; flymake-proc.el --- Flymake backend for external tools  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
-;; Author:  Pavel Kobyakov <pk_at_work@yahoo.com>
-;; Maintainer: Leo Liu <sdl.web@gmail.com>
-;; Version: 0.3
+;; Author: Pavel Kobyakov <pk_at_work@yahoo.com>
+;; Maintainer: João Távora <joaotavora@gmail.com>
+;; Version: 1.0
 ;; Keywords: c languages tools
 
 ;; This file is part of GNU Emacs.
@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 ;;
@@ -37,16 +37,24 @@
 ;;; Bugs/todo:
 
 ;; - Only uses "Makefile", not "makefile" or "GNUmakefile"
-;;   (from http://bugs.debian.org/337339).
+;;   (from https://bugs.debian.org/337339).
 
 ;;; Code:
 
+(require 'cl-lib)
+
 (require 'flymake)
+
+(define-obsolete-variable-alias 'flymake-compilation-prevents-syntax-check
+  'flymake-proc-compilation-prevents-syntax-check "26.1")
 
 (defcustom flymake-proc-compilation-prevents-syntax-check t
   "If non-nil, don't start syntax check if compilation is running."
   :group 'flymake
   :type 'boolean)
+
+(define-obsolete-variable-alias 'flymake-xml-program
+  'flymake-proc-xml-program "26.1")
 
 (defcustom flymake-proc-xml-program
   (if (executable-find "xmlstarlet") "xmlstarlet" "xml")
@@ -55,15 +63,31 @@
   :group 'flymake
   :version "24.4")
 
+(define-obsolete-variable-alias 'flymake-master-file-dirs
+  'flymake-proc-master-file-dirs "26.1")
+
 (defcustom flymake-proc-master-file-dirs '("." "./src" "./UnitTest")
   "Dirs where to look for master files."
   :group 'flymake
   :type '(repeat (string)))
 
+(define-obsolete-variable-alias 'flymake-master-file-count-limit
+  'flymake-proc-master-file-count-limit "26.1")
+
 (defcustom flymake-proc-master-file-count-limit 32
   "Max number of master files to check."
   :group 'flymake
   :type 'integer)
+
+(defcustom flymake-proc-ignored-file-name-regexps '()
+  "Files syntax checking is forbidden for.
+Overrides `flymake-proc-allowed-file-name-masks'."
+  :group 'flymake
+  :type '(repeat (regexp))
+  :version "27.1")
+
+(define-obsolete-variable-alias 'flymake-allowed-file-name-masks
+  'flymake-proc-allowed-file-name-masks "26.1")
 
 (defcustom flymake-proc-allowed-file-name-masks
   '(("\\.\\(?:c\\(?:pp\\|xx\\|\\+\\+\\)?\\|CC\\)\\'"
@@ -73,7 +97,7 @@
     ("\\.xml\\'" flymake-proc-xml-init)
     ("\\.html?\\'" flymake-proc-xml-init)
     ("\\.cs\\'" flymake-proc-simple-make-init)
-    ("\\.p[ml]\\'" flymake-proc-perl-init)
+    ;; ("\\.p[ml]\\'" flymake-proc-perl-init)
     ("\\.php[345]?\\'" flymake-proc-php-init)
     ("\\.h\\'" flymake-proc-master-make-header-init flymake-proc-master-cleanup)
     ("\\.java\\'" flymake-proc-simple-make-java-init flymake-proc-simple-java-cleanup)
@@ -91,12 +115,15 @@
     ;; ("\\.tex\\'" 1)
     )
   "Files syntax checking is allowed for.
+Variable `flymake-proc-ignored-file-name-regexps' overrides this variable.
 This is an alist with elements of the form:
   REGEXP INIT [CLEANUP [NAME]]
 REGEXP is a regular expression that matches a file name.
 INIT is the init function to use.
-CLEANUP is the cleanup function to use, default `flymake-proc-simple-cleanup'.
-NAME is the file name function to use, default `flymake-proc-get-real-file-name'."
+CLEANUP is the cleanup function to use, default
+  `flymake-proc-simple-cleanup'.
+NAME is the file name function to use, default
+  `flymake-proc-get-real-file-name'."
   :group 'flymake
   :type '(alist :key-type (regexp :tag "File regexp")
                 :value-type
@@ -133,6 +160,9 @@ Convert it to Flymake internal format."
 	  (setq converted-list (cons (list regexp file line col) converted-list)))))
     converted-list))
 
+(define-obsolete-variable-alias 'flymake-err-line-patterns
+  'flymake-proc-err-line-patterns "26.1")
+
 (defvar flymake-proc-err-line-patterns ; regexp file-idx line-idx col-idx (optional) text-idx(optional), match-end to end of string is error text
   (append
    '(
@@ -158,24 +188,27 @@ Convert it to Flymake internal format."
       2 4 5 6))
    ;; compilation-error-regexp-alist)
    (flymake-proc-reformat-err-line-patterns-from-compile-el compilation-error-regexp-alist-alist))
-  "Patterns for matching error/warning lines.  Each pattern has the form
-\(REGEXP FILE-IDX LINE-IDX COL-IDX ERR-TEXT-IDX).
-Use `flymake-proc-reformat-err-line-patterns-from-compile-el' to add patterns
-from compile.el")
+  "Patterns for matching error/warning lines.
+
+Each pattern has the form:
+
+    (REGEXP FILE-IDX LINE-IDX COL-IDX ERR-TEXT-IDX)
+
+Use `flymake-proc-reformat-err-line-patterns-from-compile-el' to
+add patterns from compile.el.")
 
 (define-obsolete-variable-alias 'flymake-warning-re 'flymake-proc-diagnostic-type-pred "26.1")
 (defvar flymake-proc-diagnostic-type-pred
   'flymake-proc-default-guess
   "Predicate matching against diagnostic text to detect its type.
 Takes a single argument, the diagnostic's text and should return
-a value suitable for indexing
-`flymake-diagnostic-types-alist' (which see). If the returned
-value is nil, a type of `:error' is assumed. For some backward
-compatibility, if a non-nil value is returned that that doesn't
-index that alist, a type of `:warning' is assumed.
+a diagnostic symbol naming a type.  If the returned value is nil,
+a type of `:error' is assumed.  For some backward compatibility,
+if a non-nil value is returned that doesn't name a type,
+`:warning' is assumed.
 
 Instead of a function, it can also be a string, a regular
-expression. A match indicates `:warning' type, otherwise
+expression.  A match indicates `:warning' type, otherwise
 `:error'")
 
 (defun flymake-proc-default-guess (text)
@@ -188,17 +221,22 @@ expression. A match indicates `:warning' type, otherwise
          :error)))
 
 (defun flymake-proc--get-file-name-mode-and-masks (file-name)
-  "Return the corresponding entry from `flymake-proc-allowed-file-name-masks'."
+  "Return the corresponding entry from `flymake-proc-allowed-file-name-masks'.
+If the FILE-NAME matches a regexp from `flymake-proc-ignored-file-name-regexps',
+`flymake-proc-allowed-file-name-masks' is not searched."
   (unless (stringp file-name)
     (error "Invalid file-name"))
-  (let ((fnm flymake-proc-allowed-file-name-masks)
-	(mode-and-masks nil))
-    (while (and (not mode-and-masks) fnm)
-      (if (string-match (car (car fnm)) file-name)
-	  (setq mode-and-masks (cdr (car fnm))))
-      (setq fnm (cdr fnm)))
-    (flymake-log 3 "file %s, init=%s" file-name (car mode-and-masks))
-    mode-and-masks))
+  (if (cl-find file-name flymake-proc-ignored-file-name-regexps
+               :test (lambda (fn rex) (string-match rex fn)))
+      (flymake-log 3 "file %s ignored")
+    (let ((fnm flymake-proc-allowed-file-name-masks)
+          (mode-and-masks nil))
+      (while (and (not mode-and-masks) fnm)
+        (if (string-match (car (car fnm)) file-name)
+            (setq mode-and-masks (cdr (car fnm))))
+        (setq fnm (cdr fnm)))
+      (flymake-log 3 "file %s, init=%s" file-name (car mode-and-masks))
+      mode-and-masks)))
 
 (defun flymake-proc--get-init-function (file-name)
   "Return init function to be used for the file."
@@ -305,6 +343,9 @@ to the beginning of the list (File.h -> File.cpp moved to top)."
 	      (file-name-base file-one))
        (not (equal file-one file-two))))
 
+(define-obsolete-variable-alias 'flymake-check-file-limit
+  'flymake-proc-check-file-limit "26.1")
+
 (defvar flymake-proc-check-file-limit 8192
   "Maximum number of chars to look at when checking possible master file.
 Nil means search the entire file.")
@@ -358,10 +399,7 @@ instead of reading master file from disk."
                    (not (string-match (format "\\.%s\\'" source-file-extension)
                                       inc-name))
                    (setq inc-name (concat inc-name "." source-file-extension)))
-              (when (eq t (compare-strings
-                           source-file-nondir nil nil
-                           inc-name (- (length inc-name)
-                                       (length source-file-nondir)) nil))
+              (when (string-suffix-p source-file-nondir inc-name)
                 (flymake-log 3 "inc-name=%s" inc-name)
                 (when (flymake-proc--check-include source-file-name inc-name
                                                    include-dirs)
@@ -394,22 +432,21 @@ instead of reading master file from disk."
 
 (defun flymake-proc--read-file-to-temp-buffer (file-name)
   "Insert contents of FILE-NAME into newly created temp buffer."
-  (let* ((temp-buffer (get-buffer-create (generate-new-buffer-name (concat "flymake:" (file-name-nondirectory file-name))))))
-    (with-current-buffer temp-buffer
-      (insert-file-contents file-name))
-    temp-buffer))
+  (with-current-buffer (generate-new-buffer
+                        (concat "flymake:" (file-name-nondirectory file-name)))
+    (insert-file-contents file-name)
+    (current-buffer)))
 
 (defun flymake-proc--copy-buffer-to-temp-buffer (buffer)
   "Copy contents of BUFFER into newly created temp buffer."
-  (with-current-buffer
-      (get-buffer-create (generate-new-buffer-name
-                          (concat "flymake:" (buffer-name buffer))))
+  (with-current-buffer (generate-new-buffer
+                        (concat "flymake:" (buffer-name buffer)))
     (insert-buffer-substring buffer)
     (current-buffer)))
 
 (defun flymake-proc--check-include (source-file-name inc-name include-dirs)
   "Check if SOURCE-FILE-NAME can be found in include path.
-Return t if it can be found via include path using INC-NAME."
+Return non-nil if it can be found via include path using INC-NAME."
   (if (file-name-absolute-p inc-name)
       (flymake-proc--same-files source-file-name inc-name)
     (while (and include-dirs
@@ -423,7 +460,7 @@ Return t if it can be found via include path using INC-NAME."
 
 (defun flymake-proc--find-buffer-for-file (file-name)
   "Check if there exists a buffer visiting FILE-NAME.
-Return t if so, nil if not."
+Return the buffer if it exists, nil if not."
   (let ((buffer-name (get-file-buffer file-name)))
     (if buffer-name
 	(get-buffer buffer-name))))
@@ -480,8 +517,8 @@ Create parent directories as needed."
                       :error))
                    ((functionp pred)
                     (let ((probe (funcall pred message)))
-                      (cond ((assoc-default probe
-                                            flymake-diagnostic-types-alist)
+                      (cond ((and (symbolp probe)
+                                  (get probe 'flymake-category))
                              probe)
                             (probe
                              :warning)
@@ -570,6 +607,9 @@ Create parent directories as needed."
             (process-put proc 'flymake-proc--unprocessed-mark
                          (point-marker))))))))
 
+(defvar-local flymake-proc--temp-source-file-name nil)
+(defvar-local flymake-proc--temp-master-file-name nil)
+
 (defun flymake-proc--process-sentinel (proc _event)
   "Sentinel for syntax check buffers."
   (let (debug
@@ -619,7 +659,14 @@ Create parent directories as needed."
                    (let ((cleanup-f (flymake-proc--get-cleanup-function
                                      (buffer-file-name))))
                      (flymake-log 3 "cleaning up using %s" cleanup-f)
-                     (funcall cleanup-f))))
+                     ;; Make cleanup-f see the temporary file names
+                     ;; created by its corresponding init function
+                     ;; (bug#31981).
+                     (let ((flymake-proc--temp-source-file-name
+                            (process-get proc 'flymake-proc--temp-source-file-name))
+                           (flymake-proc--temp-master-file-name
+                            (process-get proc 'flymake-proc--temp-master-file-name)))
+                       (funcall cleanup-f)))))
                (kill-buffer output-buffer)))))))
 
 (defun flymake-proc--panic (problem explanation)
@@ -717,7 +764,7 @@ May only be called in a dynamic environment where
 (defun flymake-proc-legacy-flymake (report-fn &rest args)
   "Flymake backend based on the original Flymake implementation.
 This function is suitable for inclusion in
-`flymake-diagnostic-functions'. For backward compatibility, it
+`flymake-diagnostic-functions'.  For backward compatibility, it
 can also be executed interactively independently of
 `flymake-mode'."
   ;; Interactively, behave as if flymake had invoked us through its
@@ -753,47 +800,51 @@ can also be executed interactively independently of
               ;; trying if the directory is read-only (bug#8954).
               (file-writable-p (file-name-directory buffer-file-name))
               (flymake-proc--get-init-function buffer-file-name))))
-        (unless init-f (error "Can find a suitable init function"))
+        (unless init-f (error "Can't find a suitable init function"))
         (flymake-proc--clear-buildfile-cache)
         (flymake-proc--clear-project-include-dirs-cache)
 
-        (let* ((cleanup-f (flymake-proc--get-cleanup-function buffer-file-name))
-               (cmd-and-args (funcall init-f))
-               (cmd          (nth 0 cmd-and-args))
-               (args         (nth 1 cmd-and-args))
-               (dir          (nth 2 cmd-and-args))
-               (success nil))
+        (let ((cleanup-f (flymake-proc--get-cleanup-function buffer-file-name))
+              (success nil))
           (unwind-protect
-              (cond
-               ((not cmd-and-args)
-                (flymake-log 1 "init function %s for %s failed, cleaning up"
-                             init-f buffer-file-name))
-               (t
-                (setq proc
-                      (let ((default-directory (or dir default-directory)))
-                        (when dir
-                          (flymake-log 3 "starting process on dir %s" dir))
-                        (make-process
-                         :name "flymake-proc"
-                         :buffer (current-buffer)
-                         :command (cons cmd args)
-                         :noquery t
-                         :filter
-                         (lambda (proc string)
-                           (let ((flymake-proc--report-fn report-fn))
-                             (flymake-proc--process-filter proc string)))
-                         :sentinel
-                         (lambda (proc event)
-                           (let ((flymake-proc--report-fn report-fn))
-                             (flymake-proc--process-sentinel proc event))))))
-                (process-put proc 'flymake-proc--output-buffer
-                             (generate-new-buffer
-                              (format " *flymake output for %s*" (current-buffer))))
-                (setq flymake-proc--current-process proc)
-                (flymake-log 2 "started process %d, command=%s, dir=%s"
-                             (process-id proc) (process-command proc)
-                             default-directory)
-                (setq success t)))
+              (let* ((cmd-and-args (funcall init-f))
+                     (cmd          (nth 0 cmd-and-args))
+                     (args         (nth 1 cmd-and-args))
+                     (dir          (nth 2 cmd-and-args)))
+                (cond
+                 ((not cmd-and-args)
+                  (flymake-log 1 "init function %s for %s failed, cleaning up"
+                               init-f buffer-file-name))
+                 (t
+                  (setq proc
+                        (let ((default-directory (or dir default-directory)))
+                          (when dir
+                            (flymake-log 3 "starting process on dir %s" dir))
+                          (make-process
+                           :name "flymake-proc"
+                           :buffer (current-buffer)
+                           :command (cons cmd args)
+                           :noquery t
+                           :filter
+                           (lambda (proc string)
+                             (let ((flymake-proc--report-fn report-fn))
+                               (flymake-proc--process-filter proc string)))
+                           :sentinel
+                           (lambda (proc event)
+                             (let ((flymake-proc--report-fn report-fn))
+                               (flymake-proc--process-sentinel proc event))))))
+                  (process-put proc 'flymake-proc--output-buffer
+                               (generate-new-buffer
+                                (format " *flymake output for %s*" (current-buffer))))
+                  (process-put proc 'flymake-proc--temp-source-file-name
+                               flymake-proc--temp-source-file-name)
+                  (process-put proc 'flymake-proc--temp-master-file-name
+                               flymake-proc--temp-master-file-name)
+                  (setq flymake-proc--current-process proc)
+                  (flymake-log 2 "started process %d, command=%s, dir=%s"
+                               (process-id proc) (process-command proc)
+                               default-directory)
+                  (setq success t))))
             (unless success
               (funcall cleanup-f))))))))
 
@@ -805,7 +856,7 @@ can also be executed interactively independently of
   (interactive (list "Interrupted by user"))
   (dolist (buf (buffer-list))
     (with-current-buffer buf
-      (let (p flymake-proc--current-process)
+      (let ((p flymake-proc--current-process))
         (when (process-live-p p)
           (kill-process p)
           (process-put p 'flymake-proc--interrupted reason)
@@ -830,6 +881,7 @@ can also be executed interactively independently of
   (let* ((ext (file-name-extension file-name))
 	 (temp-name (file-truename
 		     (concat (file-name-sans-extension file-name)
+                             "_" (format-time-string "%H%M%S%N")
 			     "_" prefix
 			     (and ext (concat "." ext))))))
     (flymake-log 3 "create-temp-inplace: file=%s temp=%s" file-name temp-name)
@@ -839,7 +891,7 @@ can also be executed interactively independently of
   (unless (stringp file-name)
     (error "Invalid file-name"))
 
-  (let* ((dir       (file-name-directory file-name))
+  (let* ((dir       (file-name-directory (file-name-unquote file-name)))
          ;; Not sure what this slash-pos is all about, but I guess it's just
          ;; trying to remove the leading / of absolute file names.
 	 (slash-pos (string-match "/" dir))
@@ -850,9 +902,9 @@ can also be executed interactively independently of
                                      temp-dir))))
 
 (defun flymake-proc--delete-temp-directory (dir-name)
-  "Attempt to delete temp dir created by `flymake-proc-create-temp-with-folder-structure', do not fail on error."
-  (let* ((temp-dir    temporary-file-directory)
-	 (suffix      (substring dir-name (1+ (length temp-dir)))))
+  "Attempt to delete temp dir DIR-NAME, do not fail on error."
+  (let* ((temp-dir    (file-truename temporary-file-directory))
+	 (suffix      (substring dir-name (1+ (length (directory-file-name temp-dir))))))
 
     (while (> (length suffix) 0)
       (setq suffix (directory-file-name suffix))
@@ -861,13 +913,12 @@ can also be executed interactively independently of
        (file-truename (expand-file-name suffix temp-dir)))
       (setq suffix (file-name-directory suffix)))))
 
-(defvar-local flymake-proc--temp-source-file-name nil)
 (defvar-local flymake-proc--master-file-name nil)
-(defvar-local flymake-proc--temp-master-file-name nil)
 (defvar-local flymake-proc--base-dir nil)
 
 (defun flymake-proc-init-create-temp-buffer-copy (create-temp-f)
-  "Make a temporary copy of the current buffer, save its name in buffer data and return the name."
+  "Make a temporary copy of the current buffer, save its name in buffer data.
+Return the name."
   (let*  ((source-file-name       buffer-file-name)
 	  (temp-source-file-name  (funcall create-temp-f source-file-name "flymake")))
 
@@ -955,7 +1006,7 @@ Return full-name.  Names are real, not patched."
                       buildfile-name source-file-name)))))
 
 (defun flymake-proc--init-create-temp-source-and-master-buffer-copy (get-incl-dirs-f create-temp-f master-file-masks include-regexp)
-  "Find master file (or buffer), create its copy along with a copy of the source file."
+  "Find master file (or buffer), create its copy and a copy of the source file."
   (let* ((source-file-name       buffer-file-name)
 	 (temp-source-file-name  (flymake-proc-init-create-temp-buffer-copy create-temp-f))
 	 (master-and-temp-master (flymake-proc--create-master-file
@@ -1098,7 +1149,7 @@ Use CREATE-TEMP-F for creating temp copy."
   (let* ((temp-master-file-name (flymake-proc--init-create-temp-source-and-master-buffer-copy
                                  'flymake-proc-get-include-dirs-dot 'flymake-proc-create-temp-inplace
 				 '("\\.tex\\'")
-				 "[ \t]*\\in\\(?:put\\|clude\\)[ \t]*{\\(.*%s\\)}")))
+				 "[ \t]*in\\(?:put\\|clude\\)[ \t]*{\\(.*%s\\)}")))
     (when temp-master-file-name
       (flymake-proc--get-tex-args temp-master-file-name))))
 
@@ -1118,76 +1169,58 @@ Use CREATE-TEMP-F for creating temp copy."
 
 ;;;;
 
-(progn
-  (define-obsolete-variable-alias 'flymake-compilation-prevents-syntax-check
-    'flymake-proc-compilation-prevents-syntax-check "26.1")
-  (define-obsolete-variable-alias 'flymake-xml-program
-    'flymake-proc-xml-program "26.1")
-  (define-obsolete-variable-alias 'flymake-master-file-dirs
-    'flymake-proc-master-file-dirs "26.1")
-  (define-obsolete-variable-alias 'flymake-master-file-count-limit
-    'flymake-proc-master-file-count-limit "26.1"
-    "Max number of master files to check.")
-  (define-obsolete-variable-alias 'flymake-allowed-file-name-masks
-    'flymake-proc-allowed-file-name-masks "26.1")
-  (define-obsolete-variable-alias 'flymake-check-file-limit
-    'flymake-proc-check-file-limit "26.1")
-  (define-obsolete-function-alias 'flymake-reformat-err-line-patterns-from-compile-el
-    'flymake-proc-reformat-err-line-patterns-from-compile-el "26.1")
-  (define-obsolete-variable-alias 'flymake-err-line-patterns
-    'flymake-proc-err-line-patterns "26.1")
-  (define-obsolete-function-alias 'flymake-parse-line
-    'flymake-proc-parse-line "26.1")
-  (define-obsolete-function-alias 'flymake-get-include-dirs
-    'flymake-proc-get-include-dirs "26.1")
-  (define-obsolete-function-alias 'flymake-stop-all-syntax-checks
-    'flymake-proc-stop-all-syntax-checks "26.1")
-  (define-obsolete-function-alias 'flymake-compile
-    'flymake-proc-compile "26.1")
-  (define-obsolete-function-alias 'flymake-create-temp-inplace
-    'flymake-proc-create-temp-inplace "26.1")
-  (define-obsolete-function-alias 'flymake-create-temp-with-folder-structure
-    'flymake-proc-create-temp-with-folder-structure "26.1")
-  (define-obsolete-function-alias 'flymake-init-create-temp-buffer-copy
-    'flymake-proc-init-create-temp-buffer-copy "26.1")
-  (define-obsolete-function-alias 'flymake-simple-cleanup
-    'flymake-proc-simple-cleanup "26.1")
-  (define-obsolete-function-alias 'flymake-get-real-file-name
-    'flymake-proc-get-real-file-name "26.1")
-  (define-obsolete-function-alias 'flymake-master-cleanup
-    'flymake-proc-master-cleanup "26.1")
-  (define-obsolete-function-alias 'flymake-get-make-cmdline
-    'flymake-proc-get-make-cmdline "26.1")
-  (define-obsolete-function-alias 'flymake-get-ant-cmdline
-    'flymake-proc-get-ant-cmdline "26.1")
-  (define-obsolete-function-alias 'flymake-simple-make-init-impl
-    'flymake-proc-simple-make-init-impl "26.1")
-  (define-obsolete-function-alias 'flymake-simple-make-init
-    'flymake-proc-simple-make-init "26.1")
-  (define-obsolete-function-alias 'flymake-master-make-init
-    'flymake-proc-master-make-init "26.1")
-  (define-obsolete-function-alias 'flymake-find-make-buildfile
-    'flymake-proc--find-make-buildfile "26.1")
-  (define-obsolete-function-alias 'flymake-master-make-header-init
-    'flymake-proc-master-make-header-init "26.1")
-  (define-obsolete-function-alias 'flymake-simple-make-java-init
-    'flymake-proc-simple-make-java-init "26.1")
-  (define-obsolete-function-alias 'flymake-simple-ant-java-init
-    'flymake-proc-simple-ant-java-init "26.1")
-  (define-obsolete-function-alias 'flymake-simple-java-cleanup
-    'flymake-proc-simple-java-cleanup "26.1")
-  (define-obsolete-function-alias 'flymake-perl-init
-    'flymake-proc-perl-init "26.1")
-  (define-obsolete-function-alias 'flymake-php-init
-    'flymake-proc-php-init "26.1")
-  (define-obsolete-function-alias 'flymake-simple-tex-init
-    'flymake-proc-simple-tex-init "26.1")
-  (define-obsolete-function-alias 'flymake-master-tex-init
-    'flymake-proc-master-tex-init "26.1")
-  (define-obsolete-function-alias 'flymake-xml-init
-    'flymake-proc-xml-init "26.1"))
-
-
+(define-obsolete-function-alias 'flymake-reformat-err-line-patterns-from-compile-el
+  'flymake-proc-reformat-err-line-patterns-from-compile-el "26.1")
+(define-obsolete-function-alias 'flymake-parse-line
+  'flymake-proc-parse-line "26.1")
+(define-obsolete-function-alias 'flymake-get-include-dirs
+  'flymake-proc-get-include-dirs "26.1")
+(define-obsolete-function-alias 'flymake-stop-all-syntax-checks
+  'flymake-proc-stop-all-syntax-checks "26.1")
+(define-obsolete-function-alias 'flymake-compile
+  'flymake-proc-compile "26.1")
+(define-obsolete-function-alias 'flymake-create-temp-inplace
+  'flymake-proc-create-temp-inplace "26.1")
+(define-obsolete-function-alias 'flymake-create-temp-with-folder-structure
+  'flymake-proc-create-temp-with-folder-structure "26.1")
+(define-obsolete-function-alias 'flymake-init-create-temp-buffer-copy
+  'flymake-proc-init-create-temp-buffer-copy "26.1")
+(define-obsolete-function-alias 'flymake-simple-cleanup
+  'flymake-proc-simple-cleanup "26.1")
+(define-obsolete-function-alias 'flymake-get-real-file-name
+  'flymake-proc-get-real-file-name "26.1")
+(define-obsolete-function-alias 'flymake-master-cleanup
+  'flymake-proc-master-cleanup "26.1")
+(define-obsolete-function-alias 'flymake-get-make-cmdline
+  'flymake-proc-get-make-cmdline "26.1")
+(define-obsolete-function-alias 'flymake-get-ant-cmdline
+  'flymake-proc-get-ant-cmdline "26.1")
+(define-obsolete-function-alias 'flymake-simple-make-init-impl
+  'flymake-proc-simple-make-init-impl "26.1")
+(define-obsolete-function-alias 'flymake-simple-make-init
+  'flymake-proc-simple-make-init "26.1")
+(define-obsolete-function-alias 'flymake-master-make-init
+  'flymake-proc-master-make-init "26.1")
+(define-obsolete-function-alias 'flymake-find-make-buildfile
+  'flymake-proc--find-make-buildfile "26.1")
+(define-obsolete-function-alias 'flymake-master-make-header-init
+  'flymake-proc-master-make-header-init "26.1")
+(define-obsolete-function-alias 'flymake-simple-make-java-init
+  'flymake-proc-simple-make-java-init "26.1")
+(define-obsolete-function-alias 'flymake-simple-ant-java-init
+  'flymake-proc-simple-ant-java-init "26.1")
+(define-obsolete-function-alias 'flymake-simple-java-cleanup
+  'flymake-proc-simple-java-cleanup "26.1")
+(define-obsolete-function-alias 'flymake-perl-init
+  'flymake-proc-perl-init "26.1")
+(define-obsolete-function-alias 'flymake-php-init
+  'flymake-proc-php-init "26.1")
+(define-obsolete-function-alias 'flymake-simple-tex-init
+  'flymake-proc-simple-tex-init "26.1")
+(define-obsolete-function-alias 'flymake-master-tex-init
+  'flymake-proc-master-tex-init "26.1")
+(define-obsolete-function-alias 'flymake-xml-init
+  'flymake-proc-xml-init "26.1")
 
 (provide 'flymake-proc)
 ;;; flymake-proc.el ends here

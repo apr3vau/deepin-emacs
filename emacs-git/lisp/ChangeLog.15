@@ -2803,7 +2803,7 @@
 2010-12-29  Karl Fogel  <kfogel@red-bean.com>
 
 	* saveplace.el (save-place-alist-to-file): Save list sorted and
-	pretty-printed, so that it is mergable by line-based text merging,
+	pretty-printed, so that it is mergeable by line-based text merging,
 	as suggested by Iain Dalton <iain.dalton {_AT_} gmail.com>.
 
 2010-12-28  Ken Manheimer  <ken.manheimer@gmail.com>
@@ -3931,7 +3931,7 @@
 	* emacs-lisp/autoload.el (autoload-find-destination): The function
 	coding-system-eol-type may return non-numeric values.  (Bug#7414)
 
-2010-11-18  Ulrich Mueller  <ulm@gentoo.org>
+2010-11-18  Ulrich Müller  <ulm@gentoo.org>
 
 	* server.el (server-force-stop): Ensure the server is stopped (Bug#7409).
 
@@ -4156,7 +4156,7 @@
 	coreutils.  Reported by Klaus Reichl
 	<Klaus.Reichl@thalesgroup.com>.
 
-2010-11-13  Hrvoje Niksic  <hniksic@xemacs.org>
+2010-11-13  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* simple.el (count-words-region): New function.
 
@@ -5135,10 +5135,10 @@
 
 	* progmodes/verilog-mode.el (verilog-directive-re): Make this variable
 	auto-built for efficiency of execution and updating.
-	(verilog-extended-complete-re): Support 'pure' fucntion & task
+	(verilog-extended-complete-re): Support 'pure' function & task
 	declarations (these have no bodies).
 	(verilog-beg-of-statement): General cleanup to enable support of
-	'pure' fucntion & task declarations (these have no bodies).
+	'pure' function & task declarations (these have no bodies).
 	These efforts together fix Verilog bug210 from veripool; which was also
 	noticed by Steve Pearlmutter.
 	(verilog-directive-re, verilog-directive-begin, verilog-indent-re)
@@ -6386,7 +6386,7 @@
 	* eshell/esh-util.el, eshell/esh-var.el:
 	Remove leading `*' from docs of faces and defcustoms.
 
-2010-09-25  Ulrich Mueller  <ulm@gentoo.org>
+2010-09-25  Ulrich Müller  <ulm@gentoo.org>
 
 	* eshell/em-ls.el (eshell-ls-archive-regexp):
 	* eshell/esh-util.el (eshell-tar-regexp):
@@ -7702,7 +7702,7 @@
 
 	* finder.el: Load finder-inf using `require'.
 	(finder-list-matches): Sorting by status is now the default.
-	(finder-compile-keywords): Simpify printing.
+	(finder-compile-keywords): Simplify printing.
 
 2010-08-30  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -9833,7 +9833,7 @@
 	* window.el (pop-to-buffer): Remove the conditional that
 	compares new-window and old-window, so it will reselect
 	the selected window unconditionally.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-06/msg00078.html
+	https://lists.gnu.org/r/emacs-devel/2010-06/msg00078.html
 
 2010-06-07  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -9882,7 +9882,7 @@
 	of kill-ring: don't call menu-bar-update-yank-menu, don't push
 	interprogram-paste strings to kill-ring, and don't push the input
 	argument `string' to kill-ring.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-06/msg00072.html
+	https://lists.gnu.org/r/emacs-devel/2010-06/msg00072.html
 
 2010-06-04  Juanma Barranquero  <lekktu@gmail.com>
 
@@ -10320,7 +10320,7 @@
 	* bs.el, expand.el, ido.el, image-dired.el, lpr.el, pcomplete.el,
 	* skeleton.el, term.el, time.el, wid-edit.el, woman.el,
 	* calc/calc-graph.el, calc/calc-help.el, calc/calc-incom.el,
-	* calc/calc.el, emacs-lisp/cl-extra.el, emacs-lips/cl-loaddefs.el,
+	* calc/calc.el, emacs-lisp/cl-extra.el, emacs-lisp/cl-loaddefs.el,
 	* emulation/cua-rect.el, emulation/viper-ex.el, eshell/esh-test.el,
 	* eshell/eshell.el, gnus/gnus-uu.el, gnus/nndoc.el, gnus/nnrss.el,
 	* gnus/rfc2047.el, gnus/utf7.el, international/utf-7.el,
@@ -10445,7 +10445,7 @@
 	* dired-x.el (dired-jump, dired-jump-other-window): Add arg
 	FILE-NAME to read from the minibuffer when called interactively
 	with prefix argument instead of using buffer-file-name.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-05/msg00534.html
+	https://lists.gnu.org/r/emacs-devel/2010-05/msg00534.html
 
 	* dired.el: Update autoloads.
 
@@ -10689,7 +10689,7 @@
 2010-05-13  Agustín Martín  <agustin.martin@hispalinux.es>
 
 	* textmodes/ispell.el (ispell-init-process): Do not kill ispell
-	process everytime when spellchecking from the minibuffer (bug#6143).
+	process every time when spellchecking from the minibuffer (bug#6143).
 
 2010-05-13  Stefan Monnier  <monnier@iro.umontreal.ca>
 
@@ -11888,7 +11888,7 @@
 	(log-edit-mode, log-edit-extra-flags, log-edit-mode):
 	New declarations.
 
-2010-04-09  Eric Raymond  <esr@snark.thyrsus.com>
+2010-04-09  Eric S. Raymond  <esr@thyrsus.com>
 
 	* vc-hooks.el, vc-git.el: Improve documentation comments.
 
@@ -11955,7 +11955,7 @@
 	(verilog-skip-backward-comments, verilog-skip-forward-comment-p):
 	fix bug for /* / comments.
 	(verilog-backward-syntactic-ws, verilog-forward-syntactic-ws):
-	Speed up and simplfy as this is never called with a bound.
+	Speed up and simplify as this is never called with a bound.
 	(verilog-pretty-declarations): Enhance to line up declarations
 	inside a parameter list, suggested by Alan Morgan.
 	(verilog-pretty-expr): Tune assignment regular expression match
@@ -11998,7 +11998,7 @@
 2010-04-05  Juri Linkov  <juri@jurta.org>
 
 	Scrolling commands which scroll a line instead of full screen.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01452.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg01452.html
 
 	* simple.el (scroll-up-line, scroll-down-line): New commands.
 	Put property isearch-scroll=t on them.
@@ -12009,7 +12009,7 @@
 2010-04-05  Juri Linkov  <juri@jurta.org>
 
 	Scrolling commands which do not signal errors at top/bottom.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01452.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg01452.html
 
 	* simple.el (scroll-up-command, scroll-down-command): New commands.
 	Put property isearch-scroll=t on them.
@@ -12063,7 +12063,7 @@
 	(electric-help-mode): Set it to original major-mode.  Doc fix.
 	(with-electric-help): Use `electric-help-orig-major-mode' instead
 	of (default-value 'major-mode).  Doc fix.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-04/msg00069.html
+	https://lists.gnu.org/r/emacs-devel/2010-04/msg00069.html
 
 2010-04-02  Sam Steingold  <sds@gnu.org>
 
@@ -12089,18 +12089,18 @@
 
 	* simple.el (next-line, previous-line): Re-throw a signal
 	with `signal' instead of using `ding'.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01432.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg01432.html
 
 2010-03-31  Juri Linkov  <juri@jurta.org>
 
 	* simple.el (keyboard-escape-quit): Raise deselecting the active
 	region higher than exiting the minibuffer.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg00904.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg00904.html
 
 2010-03-31  Juri Linkov  <juri@jurta.org>
 
 	* image.el (image-animated-p): Use `image-metadata' instead of
-	`image-extension-data'.  Get GIF extenstion data from metadata
+	`image-extension-data'.  Get GIF extension data from metadata
 	property `extension-data'.
 
 2010-03-31  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -12184,7 +12184,7 @@
 2010-03-30  Juri Linkov  <juri@jurta.org>
 
 	Make occur handle multi-line matches cleanly with context.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01280.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg01280.html
 
 	* replace.el (occur-accumulate-lines): Add optional arg `pt'.
 	(occur-engine): Add local variables `ret', `prev-after-lines',
@@ -12379,7 +12379,7 @@
 2010-03-23  Juri Linkov  <juri@jurta.org>
 
 	Implement Occur multi-line matches.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01044.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg01044.html
 
 	* replace.el (occur): Doc fix.
 	(occur-engine): Set `begpt' to the beginning of the first line.
@@ -12456,7 +12456,7 @@
 2010-03-21  Juri Linkov  <juri@jurta.org>
 
 	Fix message of multi-line occur regexps and multi-buffer header lines.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg00457.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg00457.html
 
 	* replace.el (occur-1): Don't display regexp if it is longer
 	than window-width.  Use `query-replace-descr' to display regexp.
@@ -12750,7 +12750,7 @@
 2010-03-10  Kim F. Storm  <storm@cua.dk>
 
 	Animated image API.
-	https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg00211.html
+	https://lists.gnu.org/r/emacs-devel/2010-03/msg00211.html
 
 	* image.el (image-animate-max-time): New defcustom.
 	(image-animated-types): New defconst.
@@ -13908,7 +13908,7 @@
 	positions by using `bookmark-bmenu-marks-width', instead of hardcoding.
 	This fixes the `bookmark-bmenu-execute-deletions' bug reported here:
 
-	https://lists.gnu.org/archive/html/emacs-devel/2009-12/msg00819.html
+	https://lists.gnu.org/r/emacs-devel/2009-12/msg00819.html
 	From: Sun Yijiang <sunyijiang {_AT_} gmail.com>
 	To: emacs-devel {_AT_} gnu.org
 	Subject: bookmark.el bug report
@@ -14019,7 +14019,7 @@
 	* font-lock.el (font-lock-refresh-defaults): New function, which
 	can be used to let font-lock react to external changes in
 	variables like font-lock-defaults and keywords.
-	See http://thread.gmane.org/gmane.emacs.devel/118777/focus=118802
+	See http://thread.gmane.org/gmane.emacs.devel/118777/focus=118802 [dead link]
 
 2009-12-28  Dan Nicolaescu  <dann@ics.uci.edu>
 
@@ -14485,7 +14485,7 @@
 	color queries.  Recompute faces after getting the background
 	color.
 
-2009-12-07  Ulrich Mueller  <ulm@gentoo.org>
+2009-12-07  Ulrich Müller  <ulm@gentoo.org>
 
 	* emacs-lisp/bytecomp.el (byte-compile-insert-header): Put the version
 	number comment back on its own line, for easier parsing.
@@ -14907,7 +14907,7 @@
 	Use complete-with-action rather than pascal-completion-response and
 	let it apply the predicate as well.
 	(pascal-goto-defun): Change buffer before calling pascal-comp-defun
-	when neded.
+	when needed.
 
 2009-12-02  Kenichi Handa  <handa@m17n.org>
 
@@ -15783,7 +15783,7 @@
 	* simple.el (with-wrapper-hook): Fix thinko.
 
 	* hfy-cmap.el (hfy-rgb-file): Use locate-file.
-	(htmlfontify-load-rgb-file): Remove unnused var `ff'.
+	(htmlfontify-load-rgb-file): Remove unused var `ff'.
 	Use with-current-buffer and string-to-number.
 	(hfy-fallback-colour-values): Use assoc-string.
 	* htmlfontify.el (hfy-face-to-css): Remove unused var `style'.
@@ -17307,7 +17307,7 @@
 	* simple.el (normal-erase-is-backspace-mode): Use input-decode-map
 	rather than fiddling with global-map bindings, since it should only
 	affect per-terminal settings.
-	See http://bugs.gentoo.org/show_bug.cgi?id=289709.
+	See https://bugs.gentoo.org/show_bug.cgi?id=289709.
 
 	* minibuffer.el (completion-table-with-terminator): Allow to specify
 	the terminator-regexp.
@@ -17532,7 +17532,7 @@
 	(flyspell-word-search-backward): Remove nil argument in calls to
 	flyspell-get-word, since it is not needed now.
 
-2009-10-17  Ulrich Mueller  <ulm@gentoo.org>
+2009-10-17  Ulrich Müller  <ulm@gentoo.org>
 
 	* play/doctor.el (doctor-adverbp): Exclude some nouns.  (Bug#4565)
 
@@ -18684,7 +18684,7 @@
 2009-09-24  Vinicius Jose Latorre  <viniciusjl@ig.com.br>
 
 	* whitespace.el: Does not highlight trailing spaces While point is
-	at end of line.  Does not highligt spaces at beginning of buffer
+	at end of line.  Does not highlight spaces at beginning of buffer
 	while point is at beginning of buffer.  Does not highlight spaces
 	at end of buffer while point is at end of buffer.  (Bug#4177)
 	New version 12.0.
@@ -19816,7 +19816,7 @@
 	* files.el (find-alternate-file): If the old buffer is modified
 	and visiting a file, behave similarly to `kill-buffer' when
 	killing it, thus reverting to the pre-1.878 behavior; see
-	https://lists.gnu.org/archive/html/emacs-devel/2009-09/msg00101.html
+	https://lists.gnu.org/r/emacs-devel/2009-09/msg00101.html
 	for discussion.  Also, consult `buffer-file-name' as a variable
 	not as a function, for consistency with the rest of the code.
 
@@ -22575,7 +22575,7 @@
 
 2009-06-28  Juri Linkov  <juri@jurta.org>
 
-	* help-fns.el (describe-function-1): Correctly locate adviced
+	* help-fns.el (describe-function-1): Correctly locate advised
 	functions in hyperlink (Bug#2438).
 
 2009-06-28  Chong Yidong  <cyd@stupidchicken.com>
@@ -22762,7 +22762,7 @@
 
 	Automatically handle .xz suffix (XZ-compressed files), too.
 	* jka-cmpr-hook.el (jka-compr-compression-info-list): Add xz.
-	XZ is the successor to LZMA: <http://tukaani.org/xz/>
+	XZ is the successor to LZMA: <https://tukaani.org/xz/>
 
 2009-06-22  Dmitry Dzhus  <dima@sphinx.net.ru>
 	    Nick Roberts  <nickrob@snap.net.nz>
@@ -22802,7 +22802,7 @@ See ChangeLog.14 for earlier changes.
 ;; coding: utf-8
 ;; End:
 
-  Copyright (C) 2009-2017 Free Software Foundation, Inc.
+  Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

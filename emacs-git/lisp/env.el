@@ -1,6 +1,6 @@
 ;;; env.el --- functions to manipulate environment variables  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1991, 1994, 2000-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1991-2025 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: processes, unix
@@ -38,13 +38,13 @@
 (defvar read-envvar-name-history nil)
 
 (defun read-envvar-name (prompt &optional mustmatch)
-  "Read environment variable name, prompting with PROMPT.
+  "Read and return an environment variable name string, prompting with PROMPT.
 Optional second arg MUSTMATCH, if non-nil, means require existing envvar name.
 If it is also not t, RET does not exit if it does non-null completion."
   (completing-read prompt
 		   (mapcar (lambda (enventry)
                              (let ((str (substring enventry 0
-                                             (string-match "=" enventry))))
+                                             (string-search "=" enventry))))
                                (if (multibyte-string-p str)
                                    (decode-coding-string
                                     str locale-coding-system t)
@@ -68,14 +68,15 @@ with a character not a letter, digit or underscore; otherwise, enclose
 the entire variable name in braces.  For instance, in `ab$cd-x',
 `$cd' is treated as an environment variable.
 
-If WHEN-DEFINED is nil, references to undefined environment variables
-are replaced by the empty string; if it is a function, the function is called
-with the variable name as argument and should return the text with which
-to replace it or nil to leave it unchanged.
+If WHEN-UNDEFINED is omitted or nil, references to undefined environment
+variables are replaced by the empty string; if it is a function, the
+function is called with the variable's name as argument, and should return
+the text with which to replace it, or nil to leave it unchanged.
 If it is non-nil and not a function, references to undefined variables are
 left unchanged.
 
 Use `$$' to insert a single dollar sign."
+  (declare (important-return-value t))
   (let ((start 0))
     (while (string-match env--substitute-vars-regexp string start)
       (cond ((match-beginning 1)
@@ -94,6 +95,7 @@ Use `$$' to insert a single dollar sign."
     string))
 
 (defun substitute-env-in-file-name (filename)
+  (declare (important-return-value t))
   (substitute-env-vars filename
                        ;; How 'bout we lookup other tables than the env?
                        ;; E.g. we could accept bookmark names as well!
@@ -104,6 +106,7 @@ Use `$$' to insert a single dollar sign."
 (defun setenv-internal (env variable value keep-empty)
   "Set VARIABLE to VALUE in ENV, adding empty entries if KEEP-EMPTY.
 Changes ENV by side-effect, and returns its new value."
+  (declare (important-return-value t))
   (let ((pattern (concat "\\`" (regexp-quote variable) "\\(=\\|\\'\\)"))
 	(case-fold-search nil)
 	(scan env)
@@ -113,11 +116,11 @@ Changes ENV by side-effect, and returns its new value."
 	     (not keep-empty)
 	     env
 	     (stringp (car env))
-	     (string-match pattern (car env)))
+             (string-match-p pattern (car env)))
 	(cdr env)
       ;; Try to find existing entry for VARIABLE in ENV.
       (while (and scan (stringp (car scan)))
-	(when (string-match pattern (car scan))
+        (when (string-match-p pattern (car scan))
 	  (if value
 	      (setcar scan (concat variable "=" value))
 	    (if keep-empty
@@ -184,7 +187,7 @@ a side-effect."
       (setq variable (encode-coding-string variable locale-coding-system)))
   (if (and value (multibyte-string-p value))
       (setq value (encode-coding-string value locale-coding-system)))
-  (if (string-match "=" variable)
+  (if (string-search "=" variable)
       (error "Environment variable name `%s' contains `='" variable))
   (if (string-equal "TZ" variable)
       (set-time-zone-rule value))
@@ -204,6 +207,8 @@ parameter.
 Otherwise, this function searches `process-environment' for
 VARIABLE.  If it is not found there, then it continues the search
 in the environment list of the selected frame."
+  (declare (ftype (function (string &optional frame) (or null string)))
+           (side-effect-free t))
   (interactive (list (read-envvar-name "Get environment variable: " t)))
   (let ((value (getenv-internal (if (multibyte-string-p variable)
 				    (encode-coding-string
@@ -217,6 +222,23 @@ in the environment list of the selected frame."
     (when (called-interactively-p 'interactive)
       (message "%s" (if value value "Not set")))
     value))
+
+;;;###autoload
+(defmacro with-environment-variables (variables &rest body)
+  "Set VARIABLES in the environment and execute BODY.
+VARIABLES is a list of variable settings of the form (VAR VALUE),
+where VAR is the name of the variable (a string) and VALUE
+is its value (also a string).
+
+The previous values will be restored upon exit."
+  (declare (indent 1) (debug (sexp body)))
+  (unless (consp variables)
+    (error "Invalid VARIABLES: %s" variables))
+  `(let ((process-environment (copy-sequence process-environment)))
+     ,@(mapcar (lambda (elem)
+                 `(setenv ,(car elem) ,(cadr elem)))
+               variables)
+     ,@body))
 
 (provide 'env)
 

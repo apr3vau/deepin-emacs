@@ -1,31 +1,33 @@
-;;; manoj-dark.el --- A dark theme from Manoj
+;;; manoj-dark-theme.el --- A dark theme from Manoj  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Author: Manoj Srivastava <srivasta@ieee.org>
 ;; Keywords: lisp, faces
 
-;; This program is free software; you can redistribute it and/or modify
+;; This file is part of GNU Emacs.
+
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
 ;; I spend a lot of time working in front of a screen (many hours in a
-;; dimly lit room) and eye fatigue is an issue. This is a dark color
-;; theme for emacs, which is easier on the eyes than light themes.
+;; dimly lit room) and eye fatigue is an issue.  This is a dark color
+;; theme for Emacs, which is easier on the eyes than light themes.
 
 ;; It does not help that I am blue-green color blind, so subtle
-;; variations are often lost on me. I do want to use color contrast to
+;; variations are often lost on me.  I do want to use color contrast to
 ;; increase productivity, but I also want to avoid the jarring angry
 ;; fruit salad look, and so I am in the process of crafting a logical
 ;; color scheme that is high contrast enough for me, without being too
@@ -33,9 +35,9 @@
 
 ;; In circumstances where there a lot of related faces that can be
 ;; viewed, for example, the Gnus group buffer, consistent and logical
-;; color choices are the only sane option. Gnus groups can be newa
+;; color choices are the only sane option.  Gnus groups can be newa
 ;; (blueish) or mail (greenish), have states (large number of under
-;; messages, normal, and empty). The large number unread groups have
+;; messages, normal, and empty).  The large number unread groups have
 ;; highest luminance (appear brighter), and the empty one have lower
 ;; luminance (appear grayer), but have the same chroma and saturation.
 ;; Sub states and group priorities are rendered using a color series
@@ -43,32 +45,32 @@
 ;; constant separation -- so all the related groups have the same
 ;; brightness ({mail,news}/{unread,normal,empty}), and a graded
 ;; selection of foreground colors.  It sounds more complicated that it
-;; looks. The eye is drawn naturally to the unread groups, and first
-;; to the mail, then USENET groups (which is my preference).
+;; looks.  The eye is drawn naturally to the unread groups, and first
+;; to the mail, then Usenet groups (which is my preference).
 
 ;; Similar color variations occur for individual messages in a group;
 ;; high scoring messages bubble to the top, and have a higher
 ;; luminance.  This color schema has made me slightly faster at
-;; reading mail/USENET.
+;; reading mail/Usenet.
 
 ;; In the message itself, quoted mail messages from different people
 ;; are color coordinated, with high contrast between citations that are
 ;; close to each other in the hierarchy, so it is less likely that one
 ;; misunderstands who said what in a long conversation.
 
-;; The following scheme covers programming languages, Gnus, Erc, mail,
-;; org-mode, CUA-mode, apt-utils, bbdb, compilation buffers, changelog
-;; mode, diff and ediff, eshell, and more. You need emacs-goodies
-;; package on Debian to use this.  See the wiki page at
-;; http://www.emacswiki.org/cgi-bin/wiki?ColorTheme for details. The
-;; project home page is at https://gna.org/projects/color-theme.
+;; This theme covers programming languages, Gnus, Erc, mail, org-mode,
+;; CUA-mode, apt-utils, bbdb, compilation buffers, changelog mode,
+;; diff and ediff, eshell, and more.
 
 ;;; Code:
 
+;;;###theme-autoload
 (deftheme manoj-dark
   "Very high contrast faces with a black background.
 This theme avoids subtle color variations, while avoiding the
-jarring angry fruit salad look to reduce eye fatigue.")
+jarring angry fruit salad look to reduce eye fatigue."
+  :background-mode 'dark
+  :kind 'color-scheme)
 
 (custom-theme-set-faces
  'manoj-dark
@@ -83,12 +85,11 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(font-lock-regexp-grouping-construct ((t (:bold t :weight bold))))
  '(font-lock-variable-name-face ((t (:foreground "Aquamarine"))))
  '(font-lock-function-name-face ((t (:foreground "mediumspringgreen"
-				     :weight bold :height 1.1))))
+				     :weight bold))))
  '(font-lock-string-face        ((t (:foreground "RosyBrown1"))))
  '(font-lock-comment-face       ((t (:italic t :slant oblique :foreground "chocolate1"))))
  '(font-lock-comment-delimiter-face ((t (:foreground "Salmon"))))
  '(font-lock-doc-face           ((t (:italic t :slant oblique :foreground "LightCoral"))))
- '(font-lock-doc-string-face    ((t (:foreground "Plum"))))
  '(font-lock-warning-face ((t (:bold t :foreground "Pink" :weight bold))))
 
  '(cperl-array-face ((t (:foreground "LawnGreen" :background "Black" :bold t))))
@@ -222,6 +223,9 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(gnus-group-news-low-face ((t (:bold t :foreground "DarkTurquoise" :weight bold))))
  '(gnus-group-news-low-empty ((t (:foreground "DarkTurquoise"))))
  '(gnus-group-news-low-empty-face ((t (:foreground "DarkTurquoise"))))
+
+ ;; '(image-dired-thumb-flagged ((t (:background "red"))))
+ ;; '(image-dired-thumb-mark ((t (:background "Pink"))))
 
  ;;message faces
  '(message-cited-text ((t (:foreground "red3"))))
@@ -379,7 +383,7 @@ jarring angry fruit salad look to reduce eye fatigue.")
                           :foreground "black" :background "grey"
                           :weight bold ))))
  '(calendar-today-face ((t (:underline t :bold t :foreground "cornsilk"))))
- '(change-log-acknowledgement-face ((t (:italic t :slant oblique :foreground "AntiqueWhite3"))))
+ '(change-log-acknowledgment ((t (:italic t :slant oblique :foreground "AntiqueWhite3"))))
  '(change-log-conditionals-face ((t (:foreground "Aquamarine"))))
  '(change-log-date-face ((t (:italic t :slant oblique :foreground "BurlyWood"))))
  '(change-log-email-face ((t (:foreground "Aquamarine"))))
@@ -399,7 +403,7 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(compilation-warning-face ((t (:bold t :foreground "Orange" :weight bold))))
  '(completions-common-part ((t (:width normal :weight normal
                                 :slant normal :foreground "WhiteSmoke"
-				:background "black" :height 81))))
+				:background "black" :height 0.9))))
  '(completions-first-difference ((t (:bold t :weight bold))))
 
  '(css-selector ((t (:foreground "LightSteelBlue"))))
@@ -407,10 +411,10 @@ jarring angry fruit salad look to reduce eye fatigue.")
 
  '(cursor ((t (:background "orchid"))))
  '(custom-button-face ((t (:background "lightgrey" :foreground "black"
-                                       :box '(:line-width 2 :style released-button)))))
+                                       :box (:line-width 2 :style released-button)))))
  '(custom-button-pressed-face ((t (:background "lightgrey"
                                                :foreground "black"
-                                               :box '(:line-width 2 :style pressed-button)))))
+                                               :box (:line-width 2 :style pressed-button)))))
  '(custom-changed-face ((t (:foreground "wheat" :background "blue"))))
  '(custom-comment-face ((t (:background "dim gray"))))
  '(custom-comment-tag-face ((t (:foreground "gray80"))))
@@ -426,7 +430,7 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(custom-variable-button-face ((t (:bold t :underline t :weight bold
                                           :background "lightgrey"
                                           :foreground "black"
-                                          :box '(:line-width 2 :style released-button)))))
+                                          :box (:line-width 2 :style released-button)))))
  '(custom-variable-tag-face ((t (:bold t :foreground "light blue"
                                          :weight bold :height 1.2))))
 
@@ -522,8 +526,8 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(widget-mouse-face  ((t (:background "darkseagreen2" :foreground "blue"))))
 
  '(highlight-beyond-fill-column-face ((t (:underline t))))
- '(highlight-changes ((t (:foreground nil :background "#382f2f"))))
- '(highlight-changes-delete ((t (:foreground nil :background "#916868"))))
+ '(highlight-changes ((t (:foreground unspecified :background "#382f2f"))))
+ '(highlight-changes-delete ((t (:foreground unspecified :background "#916868"))))
 
  '(holiday ((t (:background "chocolate4"))))
  '(holiday-face ((t (:background "chocolate4"))))
@@ -540,7 +544,6 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(ido-indicator ((t (:background "red1" :foreground "yellow1" :width condensed))))
  '(ido-only-match ((t (:foreground "ForestGreen"))))
  '(ido-subdir ((t (:foreground "red1"))))
- '(info-menu-5 ((t (:underline t))))
  '(info-menu-header ((t (:bold t :weight bold))))
  '(info-node ((t (:bold t :italic t :foreground "yellow"))))
  '(info-node ((t (:italic t :bold t :foreground "white" :slant italic :weight bold))))
@@ -583,15 +586,16 @@ jarring angry fruit salad look to reduce eye fatigue.")
  '(match ((t (:background "RoyalBlue3"))))
  '(minibuffer-prompt ((t (:foreground "cyan"))))
  '(mode-line ((t (:background "grey75" :foreground "Blue"
-                  :box '(:line-width -1 :style released-button)
+                  :box (:line-width -1 :style released-button)
                   :height 0.9))))
  '(mode-line-buffer-id ((t (:background "grey65" :foreground "red"
                                         :bold t :weight bold :height 0.9))))
  '(mode-line-emphasis ((t (:bold t :weight bold))))
  '(mode-line-highlight ((t (:box (:line-width 2 :color "grey40"
-                                              :style released-button :height 0.9)))))
+                                              :style released-button)
+                                 :height 0.9))))
  '(mode-line-inactive ((t (:background "grey30" :foreground "grey80"
-                                       :box '(:line-width -1 :color "grey40")
+                                       :box (:line-width -1 :color "grey40")
                                        :weight light :height 0.9))))
  '(mouse ((t (:background "OrangeRed"))))
 
@@ -700,8 +704,4 @@ jarring angry fruit salad look to reduce eye fatigue.")
 
 (provide-theme 'manoj-dark)
 
-;; Local Variables:
-;; no-byte-compile: t
-;; End:
-
-;;; manoj-dark.el ends here
+;;; manoj-dark-theme.el ends here

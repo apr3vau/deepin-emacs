@@ -1,6 +1,6 @@
 ;;; em-unix.el --- UNIX command aliases  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -35,11 +35,10 @@
 
 ;;; Code:
 
-(require 'eshell)
-(require 'esh-opt)
+(require 'esh-mode)
 (require 'pcomplete)
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-unix nil
   "This module defines many of the more common UNIX utilities as
@@ -92,14 +91,29 @@ Otherwise, `rmdir' is required."
   :type 'boolean
   :group 'eshell-unix)
 
-(defcustom eshell-rm-interactive-query (= (user-uid) 0)
-  "If non-nil, `rm' will query before removing anything."
-  :type 'boolean
+(define-widget 'eshell-interactive-query 'radio
+  "When to interactively query the user about a particular operation.
+If t, always query.  If nil, never query.  If `root', query when
+the user is logged in as root (including when `default-directory'
+is remote with a root user)."
+  :args '((const :tag "Never" nil)
+          (const :tag "Always" t)
+          (const :tag "When root" root)))
+
+(defcustom eshell-rm-interactive-query 'root
+  "When `rm' should query before removing anything.
+If t, always query.  If nil, never query.  If `root', query when
+the user is logged in as root (including when `default-directory'
+is remote with a root user)."
+  :type 'eshell-interactive-query
   :group 'eshell-unix)
 
-(defcustom eshell-mv-interactive-query (= (user-uid) 0)
-  "If non-nil, `mv' will query before overwriting anything."
-  :type 'boolean
+(defcustom eshell-mv-interactive-query 'root
+  "When `mv' should query before overwriting anything.
+If t, always query.  If nil, never query.  If `root', query when
+the user is logged in as root (including when `default-directory'
+is remote with a root user)."
+  :type 'eshell-interactive-query
   :group 'eshell-unix)
 
 (defcustom eshell-mv-overwrite-files t
@@ -107,9 +121,12 @@ Otherwise, `rmdir' is required."
   :type 'boolean
   :group 'eshell-unix)
 
-(defcustom eshell-cp-interactive-query (= (user-uid) 0)
-  "If non-nil, `cp' will query before overwriting anything."
-  :type 'boolean
+(defcustom eshell-cp-interactive-query 'root
+  "When `cp' should query before overwriting anything.
+If t, always query.  If nil, never query.  If `root', query when
+the user is logged in as root (including when `default-directory'
+is remote with a root user)."
+  :type 'eshell-interactive-query
   :group 'eshell-unix)
 
 (defcustom eshell-cp-overwrite-files t
@@ -117,9 +134,12 @@ Otherwise, `rmdir' is required."
   :type 'boolean
   :group 'eshell-unix)
 
-(defcustom eshell-ln-interactive-query (= (user-uid) 0)
-  "If non-nil, `ln' will query before overwriting anything."
-  :type 'boolean
+(defcustom eshell-ln-interactive-query 'root
+  "When `ln' should query before overwriting anything.
+If t, always query.  If nil, never query.  If `root', query when
+the user is logged in as root (including when `default-directory'
+is remote with a root user)."
+  :type 'eshell-interactive-query
   :group 'eshell-unix)
 
 (defcustom eshell-ln-overwrite-files nil
@@ -140,16 +160,16 @@ Otherwise, Emacs will attempt to use rsh to invoke du on the remote machine."
 
 ;;; Functions:
 
-(defun eshell-unix-initialize ()
+(defun eshell-unix-initialize ()    ;Called from `eshell-mode' via intern-soft!
   "Initialize the UNIX support/emulation code."
   (when (eshell-using-module 'eshell-cmpl)
     (add-hook 'pcomplete-try-first-hook
 	      'eshell-complete-host-reference nil t))
-  (make-local-variable 'eshell-complex-commands)
-  (setq eshell-complex-commands
-	(append '("grep" "egrep" "fgrep" "agrep" "glimpse" "locate"
-		  "cat" "time" "cp" "mv" "make" "du" "diff")
-		eshell-complex-commands)))
+  (setq-local eshell-complex-commands
+	      (append '("compile" "grep" "egrep" "fgrep" "agrep"
+                        "rgrep" "glimpse" "locate" "cat" "time" "cp"
+                        "mv" "make" "du" "diff")
+		      eshell-complex-commands)))
 
 (defalias 'eshell/date     'current-time-string)
 (defalias 'eshell/basename 'file-name-nondirectory)
@@ -160,6 +180,17 @@ Otherwise, Emacs will attempt to use rsh to invoke du on the remote machine."
 (defvar em-recursive)
 (defvar em-verbose)
 
+(defun eshell-interactive-query-p (value)
+  "Return non-nil if a command should query the user according to VALUE.
+If VALUE is nil, return nil (never query).  If `root', return
+non-nil if the user is logged in as root (including when
+`default-directory' is remote with a root user; see
+`file-user-uid').  If VALUE is any other non-nil value, return
+non-nil (always query)."
+  (if (eq value 'root)
+      (= (file-user-uid) 0)
+    value))
+
 (defun eshell/man (&rest args)
   "Invoke man, flattening the arguments appropriately."
   (funcall 'man (apply 'eshell-flatten-and-stringify args)))
@@ -167,11 +198,13 @@ Otherwise, Emacs will attempt to use rsh to invoke du on the remote machine."
 (put 'eshell/man 'eshell-no-numeric-conversions t)
 
 (defun eshell/info (&rest args)
-  "Run the info command in-frame with the same behavior as command-line `info', ie:
+  "Run the info command in-frame with the same behavior as command-line `info'.
+For example:
   `info'           => goes to top info window
   `info arg1'      => IF arg1 is a file, then visits arg1
   `info arg1'      => OTHERWISE goes to top info window and then menu item arg1
-  `info arg1 arg2' => does action for arg1 (either visit-file or menu-item) and then menu item arg2
+  `info arg1 arg2' => does action for arg1 (either visit-file or menu-item) and
+                      then menu item arg2
   etc."
   (eval-and-compile (require 'info))
   (let ((file (cond
@@ -231,7 +264,7 @@ Otherwise, Emacs will attempt to use rsh to invoke du on the remote machine."
 This is implemented to call either `delete-file', `kill-buffer',
 `kill-process', or `unintern', depending on the nature of the
 argument."
-  (setq args (eshell-flatten-list args))
+  (setq args (flatten-tree args))
   (eshell-eval-using-options
    "rm" args
    '((?h "help" nil nil "show this usage screen")
@@ -248,7 +281,8 @@ argument."
      :usage "[OPTION]... FILE...
 Remove (unlink) the FILE(s).")
    (unless em-interactive
-     (setq em-interactive eshell-rm-interactive-query))
+     (setq em-interactive (eshell-interactive-query-p
+                           eshell-rm-interactive-query)))
    (if (and force-removal em-interactive)
        (setq em-interactive nil))
    (while args
@@ -307,6 +341,7 @@ Remove (unlink) the FILE(s).")
    nil))
 
 (put 'eshell/rm 'eshell-no-numeric-conversions t)
+(put 'eshell/rm 'eshell-filename-arguments t)
 
 (defun eshell/mkdir (&rest args)
   "Implementation of mkdir in Lisp."
@@ -324,6 +359,7 @@ Create the DIRECTORY(ies), if they do not already exist.")
    nil))
 
 (put 'eshell/mkdir 'eshell-no-numeric-conversions t)
+(put 'eshell/mkdir 'eshell-filename-arguments t)
 
 (defun eshell/rmdir (&rest args)
   "Implementation of rmdir in Lisp."
@@ -340,6 +376,7 @@ Remove the DIRECTORY(ies), if they are empty.")
    nil))
 
 (put 'eshell/rmdir 'eshell-no-numeric-conversions t)
+(put 'eshell/rmdir 'eshell-filename-arguments t)
 
 (defvar no-dereference)
 
@@ -367,12 +404,12 @@ Remove the DIRECTORY(ies), if they are empty.")
 	     (or (not (eshell-under-windows-p))
 		 (eq system-type 'ms-dos))
 	     (setq attr (eshell-file-attributes (car files)))
-	     (nth 10 attr-target) (nth 10 attr)
-	     ;; Use equal, not -, since the inode and the device could
-	     ;; cons cells.
-	     (equal (nth 10 attr-target) (nth 10 attr))
-	     (nth 11 attr-target) (nth 11 attr)
-	     (equal (nth 11 attr-target) (nth 11 attr)))
+	     (file-attribute-inode-number attr-target)
+	     (file-attribute-inode-number attr)
+	     (file-attribute-device-number attr-target)
+	     (file-attribute-device-number attr)
+	     (equal (file-attribute-file-identifier attr-target)
+		    (file-attribute-file-identifier attr)))
 	(eshell-error (format-message "%s: `%s' and `%s' are the same file\n"
 				      command (car files) target)))
        (t
@@ -394,16 +431,16 @@ Remove the DIRECTORY(ies), if they are empty.")
 		(let (eshell-warn-dot-directories)
 		  (if (and (not deep)
 			   (eq func 'rename-file)
-			   ;; Use equal, since the device might be a
-			   ;; cons cell.
-			   (equal (nth 11 (eshell-file-attributes
-					   (file-name-directory
-					    (directory-file-name
-					     (expand-file-name source)))))
-				  (nth 11 (eshell-file-attributes
-					   (file-name-directory
-					    (directory-file-name
-					     (expand-file-name target)))))))
+			   (equal (file-attribute-device-number
+				   (eshell-file-attributes
+				    (file-name-directory
+				     (directory-file-name
+				      (expand-file-name source)))))
+				  (file-attribute-device-number
+				   (eshell-file-attributes
+				    (file-name-directory
+				     (directory-file-name
+				      (expand-file-name target)))))))
 		      (apply 'eshell-funcalln func source target args)
 		  (unless (file-directory-p target)
 		    (if em-verbose
@@ -415,9 +452,8 @@ Remove the DIRECTORY(ies), if they are empty.")
 		  (apply 'eshell-shuffle-files
 			 command action
 			 (mapcar
-			  (function
-			   (lambda (file)
-			     (concat source "/" file)))
+                          (lambda (file)
+                            (concat source "/" file))
 			  (directory-files source))
 			 target func t args)
 		  (when (eq func 'rename-file)
@@ -435,7 +471,10 @@ Remove the DIRECTORY(ies), if they are empty.")
 		       (setq link (file-symlink-p source)))
 		  (progn
 		    (apply 'eshell-funcalln 'make-symbolic-link
-			   link target args)
+			   link target
+                           ;; `make-symbolic-link' doesn't have
+                           ;; KEEP-TIME; just OK-IF-ALREADY-EXISTS.
+                           (list (car args)))
 		    (if (eq func 'rename-file)
 			(if (and (file-directory-p source)
 				 (not (file-symlink-p source)))
@@ -465,8 +504,6 @@ Remove the DIRECTORY(ies), if they are empty.")
 	   (eshell-parse-command
 	    (format "tar %s %s" tar-args archive) args))))
 
-(defvar ange-cache)			; XEmacs?  See esh-util
-
 ;; this is to avoid duplicating code...
 (defmacro eshell-mvcpln-template (command action func query-var
 					  force-var &optional preserve)
@@ -476,7 +513,7 @@ Remove the DIRECTORY(ies), if they are empty.")
 	 (error "%s: missing destination file or directory" ,command))
      (if (= len 1)
 	 (nconc args '(".")))
-     (setq args (eshell-stringify-list (eshell-flatten-list args)))
+     (setq args (eshell-stringify-list (flatten-tree args)))
      (if (and ,(not (equal command "ln"))
 	      (string-match eshell-tar-regexp (car (last args)))
 	      (or (> (length args) 2)
@@ -484,8 +521,7 @@ Remove the DIRECTORY(ies), if they are empty.")
 		       (or (not no-dereference)
 			   (not (file-symlink-p (car args)))))))
 	 (eshell-shorthand-tar-command ,command args)
-       (let ((target (car (last args)))
-	     ange-cache)
+       (let ((target (car (last args))))
 	 (setcdr (last args 2) nil)
 	 (eshell-shuffle-files
 	  ,command ,action args target ,func nil
@@ -520,10 +556,12 @@ Rename SOURCE to DEST, or move SOURCE(s) to DIRECTORY.
 [OPTION] DIRECTORY...")
    (let ((no-dereference t))
      (eshell-mvcpln-template "mv" "moving" 'rename-file
-			     eshell-mv-interactive-query
+                             (eshell-interactive-query-p
+                              eshell-mv-interactive-query)
 			     eshell-mv-overwrite-files))))
 
 (put 'eshell/mv 'eshell-no-numeric-conversions t)
+(put 'eshell/mv 'eshell-filename-arguments t)
 
 (defun eshell/cp (&rest args)
   "Implementation of cp in Lisp."
@@ -552,15 +590,17 @@ Rename SOURCE to DEST, or move SOURCE(s) to DIRECTORY.
      :external "cp"
      :show-usage
      :usage "[OPTION]... SOURCE DEST
-   or:  cp [OPTION]... SOURCE... DIRECTORY
+   or: cp [OPTION]... SOURCE... DIRECTORY
 Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.")
    (if archive
        (setq preserve t no-dereference t em-recursive t))
    (eshell-mvcpln-template "cp" "copying" 'copy-file
-			   eshell-cp-interactive-query
+                           (eshell-interactive-query-p
+                            eshell-cp-interactive-query)
 			   eshell-cp-overwrite-files preserve)))
 
 (put 'eshell/cp 'eshell-no-numeric-conversions t)
+(put 'eshell/cp 'eshell-filename-arguments t)
 
 (defun eshell/ln (&rest args)
   "Implementation of ln in Lisp."
@@ -578,27 +618,29 @@ Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.")
      :preserve-args
      :external "ln"
      :show-usage
-     :usage "[OPTION]... TARGET [LINK_NAME]
-   or:  ln [OPTION]... TARGET... DIRECTORY
-Create a link to the specified TARGET with optional LINK_NAME.  If there is
-more than one TARGET, the last argument must be a directory;  create links
-in DIRECTORY to each TARGET.  Create hard links by default, symbolic links
+     :usage "[OPTION]... TARGET LINK_NAME
+   or: ln [OPTION]... TARGET... DIRECTORY
+Create a link to the specified TARGET with LINK_NAME.  If there is more
+than one TARGET, the last argument must be a directory;  create links in
+DIRECTORY to each TARGET.  Create hard links by default, symbolic links
 with `--symbolic'.  When creating hard links, each TARGET must exist.")
    (let ((no-dereference t))
      (eshell-mvcpln-template "ln" "linking"
 			     (if symbolic
 				 'make-symbolic-link
 			       'add-name-to-file)
-			     eshell-ln-interactive-query
+                             (eshell-interactive-query-p
+                              eshell-ln-interactive-query)
 			     eshell-ln-overwrite-files))))
 
 (put 'eshell/ln 'eshell-no-numeric-conversions t)
+(put 'eshell/ln 'eshell-filename-arguments t)
 
 (defun eshell/cat (&rest args)
   "Implementation of cat in Lisp.
 If in a pipeline, or the file is not a regular file, directory or
 symlink, then revert to the system's definition of cat."
-  (setq args (eshell-stringify-list (eshell-flatten-list args)))
+  (setq args (eshell-stringify-list (flatten-tree args)))
   (if (or eshell-in-pipeline-p
 	  (catch 'special
 	    (dolist (arg args)
@@ -606,17 +648,16 @@ symlink, then revert to the system's definition of cat."
 			       (> (length arg) 0)
 			       (eq (aref arg 0) ?-))
 			  (let ((attrs (eshell-file-attributes arg)))
-			    (and attrs (memq (aref (nth 8 attrs) 0)
+			    (and attrs
+				 (memq (aref (file-attribute-modes attrs) 0)
 					     '(?d ?l ?-)))))
 		(throw 'special t)))))
       (let ((ext-cat (eshell-search-path "cat")))
 	(if ext-cat
-	    (throw 'eshell-replace-command
-		   (eshell-parse-command (eshell-quote-argument ext-cat) args))
+	    (throw 'eshell-external (eshell-external-command ext-cat args))
 	  (if eshell-in-pipeline-p
 	      (error "Eshell's `cat' does not work in pipelines")
 	    (error "Eshell's `cat' cannot display one of the files given"))))
-    (eshell-init-print-buffer)
     (eshell-eval-using-options
      "cat" args
      '((?h "help" nil nil "show this usage screen")
@@ -629,37 +670,74 @@ Concatenate FILE(s), or standard input, to standard output.")
 	   (throw 'eshell-external
 		  (eshell-external-command "cat" args))))
      (let ((curbuf (current-buffer)))
-       (dolist (file args)
-	 (with-temp-buffer
-	   (insert-file-contents file)
-	   (goto-char (point-min))
-	   (while (not (eobp))
-	     (let ((str (buffer-substring
-			 (point) (min (1+ (line-end-position))
-				      (point-max)))))
-	       (with-current-buffer curbuf
-		 (eshell-buffered-print str)))
-	     (forward-line)))))
-     (eshell-flush)
-     ;; if the file does not end in a newline, do not emit one
-     (setq eshell-ensure-newline-p nil))))
+       (eshell-with-buffered-print
+         (dolist (file args)
+	   (with-temp-buffer
+	     (insert-file-contents file)
+	     (goto-char (point-min))
+             (while (not (eobp))
+               (let* ((pos (min (+ (point) eshell-buffered-print-size)
+                                (point-max)))
+                      (str (buffer-substring (point) pos)))
+                 (with-current-buffer curbuf
+                   (eshell-buffered-print str))
+                 (goto-char pos))))))))))
 
 (put 'eshell/cat 'eshell-no-numeric-conversions t)
+(put 'eshell/cat 'eshell-filename-arguments t)
 
 ;; special front-end functions for compilation-mode buffers
 
+(defun eshell-compile (command args &optional method mode)
+  "Run an external COMMAND with ARGS using a compilation buffer when possible.
+COMMAND should be a list of command-line arguments.  By default,
+if the command is outputting to the screen and is not part of a
+pipeline or subcommand, open an compilation buffer to hold the
+results; otherwise, write the output on stdout.
+
+If METHOD is `interactive', always open a compilation buffer.  If
+METHOD is `plain', always write to stdout.
+
+MODE, if specified, is the major mode to set in the compilation
+buffer (see `compilation-start')."
+  (if (and (not (eq method 'interactive))
+           (or (eq method 'plain)
+               eshell-in-pipeline-p
+               eshell-in-subcommand-p
+               (not (eshell-interactive-output-p))))
+      (throw 'eshell-replace-command
+              (eshell-parse-command (concat "*" command) args))
+    (compile
+     (mapconcat #'shell-quote-argument
+                (eshell-stringify-list (flatten-tree (cons command args)))
+                " ")
+     mode)))
+
+(defun eshell/compile (&rest args)
+  "Run an external COMMAND using a compilation buffer when possible.
+See `eshell-compile'."
+  (eshell-eval-using-options
+   "compile" args
+   '((?m "mode" t mode "the mode to set in the compilation buffer")
+     (?i "interactive" 'interactive method "always open a compilation buffer")
+     (?p "plain" 'plain method "always write to stdout")
+     :usage "[-p | -i] [-m MODE] COMMAND...
+Run COMMAND in a compilation buffer when outputting to the screen and
+not part of a pipeline or subcommand."
+     :parse-leading-options-only)
+   (when (stringp mode)
+     (setq mode (intern mode)))
+   (eshell-compile (car args) (cdr args) method mode)))
+
+(put 'eshell/compile 'eshell-no-numeric-conversions t)
+
 (defun eshell/make (&rest args)
-  "Use `compile' to do background makes."
-  (if (and eshell-current-subjob-p
-	   (eshell-interactive-output-p))
-      (let ((compilation-process-setup-function
-	     (list 'lambda nil
-		   (list 'setq 'process-environment
-			 (list 'quote (eshell-copy-environment))))))
-	(compile (concat "make " (eshell-flatten-and-stringify args))))
-    (throw 'eshell-replace-command
-	   (eshell-parse-command "*make" (eshell-stringify-list
-					  (eshell-flatten-list args))))))
+  "Use `compile' to do background makes.
+Fallback to standard make when called synchronously."
+  (eshell-compile "make" args
+                  ;; Use plain output unless we're executing in the
+                  ;; background.
+                  (unless eshell-current-subjob-p 'plain)))
 
 (put 'eshell/make 'eshell-no-numeric-conversions t)
 
@@ -694,7 +772,7 @@ available..."
 	  (erase-buffer)
 	  (occur-mode)
 	  (let ((files (eshell-stringify-list
-			(eshell-flatten-list (cdr args))))
+			(flatten-tree (cdr args))))
 		(inhibit-redisplay t)
 		string)
 	    (when (car args)
@@ -707,7 +785,7 @@ available..."
 		    (ignore-errors
 		      (occur (car args))))
 		  (if (get-buffer "*Occur*")
-		      (with-current-buffer (get-buffer "*Occur*")
+		      (with-current-buffer "*Occur*"
 			(setq string (buffer-string))
 			(kill-buffer (current-buffer)))))
 		(if string (insert string))
@@ -732,85 +810,53 @@ and if it's not part of a command pipeline.  Otherwise, it calls the
 external command."
   (if (and maybe-use-occur eshell-no-grep-available)
       (eshell-poor-mans-grep args)
-    (if (or eshell-plain-grep-behavior
-	    (not (and (eshell-interactive-output-p)
-		      (not eshell-in-pipeline-p)
-		      (not eshell-in-subcommand-p))))
-	(throw 'eshell-replace-command
-	       (eshell-parse-command (concat "*" command)
-				     (eshell-stringify-list
-				      (eshell-flatten-list args))))
-      (let* ((args (mapconcat 'identity
-			      (mapcar 'shell-quote-argument
-				      (eshell-stringify-list
-				       (eshell-flatten-list args)))
-			      " "))
-	     (cmd (progn
-		    (set-text-properties 0 (length args)
-					 '(invisible t) args)
-		    (format "%s -n %s"
-			    (pcase command
-			      ("egrep" "grep -E")
-			      ("fgrep" "grep -F")
-			      (x x))
-			    args)))
-	     compilation-scroll-output)
-	(grep cmd)))))
+    (eshell-compile command (cons "-n" args)
+                    (when eshell-plain-grep-behavior
+                      'plain)
+                     #'grep-mode)))
 
 (defun eshell/grep (&rest args)
   "Use Emacs grep facility instead of calling external grep."
-  (eshell-grep "grep" args t))
+  (eshell-grep "grep" (append '("-H") args) t))
 
 (defun eshell/egrep (&rest args)
   "Use Emacs grep facility instead of calling external grep -E."
-  (eshell-grep "egrep" args t))
+  (eshell-grep "grep" (append '("-EH") args) t))
 
 (defun eshell/fgrep (&rest args)
   "Use Emacs grep facility instead of calling external grep -F."
-  (eshell-grep "fgrep" args t))
+  (eshell-grep "grep" (append '("-FH") args) t))
 
 (defun eshell/agrep (&rest args)
   "Use Emacs grep facility instead of calling external agrep."
   (eshell-grep "agrep" args))
 
+(defun eshell/rgrep (&rest args)
+  "Use Emacs grep facility instead of calling external rgrep."
+  (eshell-grep "grep" (append '("-rH") args) t))
+
 (defun eshell/glimpse (&rest args)
   "Use Emacs grep facility instead of calling external glimpse."
-  (let (null-device)
-    (eshell-grep "glimpse" (append '("-z" "-y") args))))
+  (eshell-grep "glimpse" (append '("-z" "-y") args)))
 
 ;; completions rules for some common UNIX commands
 
-(defsubst eshell-complete-hostname ()
-  "Complete a command that wants a hostname for an argument."
-  (pcomplete-here (eshell-read-host-names)))
+(autoload 'pcmpl-unix-complete-hostname "pcmpl-unix")
+(define-obsolete-function-alias 'eshell-complete-hostname
+  #'pcmpl-unix-complete-hostname "28.1")
 
 (defun eshell-complete-host-reference ()
   "If there is a host reference, complete it."
-  (let ((arg (pcomplete-actual-arg))
-	index)
-    (when (setq index (string-match "@[a-z.]*\\'" arg))
-      (setq pcomplete-stub (substring arg (1+ index))
+  (let ((arg (pcomplete-actual-arg)))
+    (when (string-match
+           (rx ;; Match an "@", but not immediately following a "$".
+               (or string-start (not "$")) "@"
+               (group (* (any "a-z.")))
+               string-end)
+           arg)
+      (setq pcomplete-stub (substring arg (match-beginning 1))
 	    pcomplete-last-completion-raw t)
-      (throw 'pcomplete-completions (eshell-read-host-names)))))
-
-(defalias 'pcomplete/ftp    'eshell-complete-hostname)
-(defalias 'pcomplete/ncftp  'eshell-complete-hostname)
-(defalias 'pcomplete/ping   'eshell-complete-hostname)
-(defalias 'pcomplete/rlogin 'eshell-complete-hostname)
-
-(defun pcomplete/telnet ()
-  (require 'pcmpl-unix)
-  (pcomplete-opt "xl(pcmpl-unix-user-names)")
-  (eshell-complete-hostname))
-
-(defun pcomplete/rsh ()
-  "Complete `rsh', which, after the user and hostname, is like xargs."
-  (require 'pcmpl-unix)
-  (pcomplete-opt "l(pcmpl-unix-user-names)")
-  (eshell-complete-hostname)
-  (pcomplete-here (funcall pcomplete-command-completion-function))
-  (funcall (or (pcomplete-find-completion-function (pcomplete-arg 1))
-	       pcomplete-default-completion-function)))
+      (throw 'pcomplete-completions (pcomplete-read-host-names)))))
 
 (defvar block-size)
 (defvar by-bytes)
@@ -835,19 +881,19 @@ external command."
       (unless (string-match "\\`\\.\\.?\\'" (caar entries))
 	(let* ((entry (concat path "/"
 			      (caar entries)))
-	       (symlink (and (stringp (cadr (car entries)))
-			     (cadr (car entries)))))
+	       (symlink (and (stringp (file-attribute-type (cdar entries)))
+			     (file-attribute-type (cdar entries)))))
 	  (unless (or (and symlink (not dereference-links))
 		      (and only-one-filesystem
 			   (/= only-one-filesystem
-			       (nth 12 (car entries)))))
+			       (file-attribute-device-number (cdar entries)))))
 	    (if symlink
 		(setq entry symlink))
 	    (setq size
 		  (+ size
-		     (if (eq t (cadr (car entries)))
+		     (if (eq t (car (cdar entries)))
 			 (eshell-du-sum-directory entry (1+ depth))
-		       (let ((file-size (nth 8 (car entries))))
+		       (let ((file-size (file-attribute-size (cdar entries))))
 			 (prog1
 			     file-size
 			   (if show-all
@@ -865,7 +911,7 @@ external command."
 (defun eshell/du (&rest args)
   "Implementation of \"du\" in Lisp, passing ARGS."
   (setq args (if args
-		 (eshell-stringify-list (eshell-flatten-list args))
+		 (eshell-stringify-list (flatten-tree args))
 	       '(".")))
   (let ((ext-du (eshell-search-path "du")))
     (if (and ext-du
@@ -874,8 +920,7 @@ external command."
 		      (if (string-equal
 			   (file-remote-p (expand-file-name arg) 'method) "ftp")
 			  (throw 'have-ange-path t))))))
-	(throw 'eshell-replace-command
-	       (eshell-parse-command (eshell-quote-argument ext-du) args))
+	(throw 'eshell-external (eshell-external-command ext-du args))
       (eshell-eval-using-options
        "du" args
        '((?a "all" nil show-all
@@ -890,7 +935,7 @@ external command."
 	     "display data only this many levels of data")
 	 (?h "human-readable" 1024 human-readable
 	     "print sizes in human readable format")
-	 (?H "is" 1000 human-readable
+	 (?H "si" 1000 human-readable
 	     "likewise, but use powers of 1000 not 1024")
 	 (?k "kilobytes" 1024 block-size
 	     "like --block-size 1024")
@@ -914,11 +959,11 @@ Summarize disk usage of each FILE, recursively for directories.")
        ;; filesystem support means nothing under Windows
        (if (eshell-under-windows-p)
 	   (setq only-one-filesystem nil))
-       (let ((size 0.0) ange-cache)
+       (let ((size 0.0))
 	 (while args
 	   (if only-one-filesystem
 	       (setq only-one-filesystem
-		     (nth 11 (eshell-file-attributes
+		     (file-attribute-device-number (eshell-file-attributes
 			      (file-name-as-directory (car args))))))
 	   (setq size (+ size (eshell-du-sum-directory
 			       (directory-file-name (car args)) 0)))
@@ -927,10 +972,13 @@ Summarize disk usage of each FILE, recursively for directories.")
 	     (eshell-print (concat (eshell-du-size-string size)
 				   "total\n"))))))))
 
+(put 'eshell/du 'eshell-filename-arguments t)
+
 (defvar eshell-time-start nil)
 
 (defun eshell-show-elapsed-time ()
-  (let ((elapsed (format "%.3f secs\n" (- (float-time) eshell-time-start))))
+  (let ((elapsed (format "%.3f secs\n"
+			 (float-time (time-since eshell-time-start)))))
     (set-text-properties 0 (length elapsed) '(face bold) elapsed)
     (eshell-interactive-print elapsed))
   (remove-hook 'eshell-post-command-hook 'eshell-show-elapsed-time t))
@@ -961,24 +1009,16 @@ Show wall-clock time elapsed during execution of COMMAND.")
      ;; after setting
      (throw 'eshell-replace-command
 	    (eshell-parse-command (car time-args)
-;;; https://lists.gnu.org/archive/html/bug-gnu-emacs/2007-08/msg00205.html
+;;; https://lists.gnu.org/r/bug-gnu-emacs/2007-08/msg00205.html
 				  (eshell-stringify-list
-				   (eshell-flatten-list (cdr time-args))))))))
+				   (flatten-tree (cdr time-args))))))))
 
-(defun eshell/whoami (&rest args)
+(defun eshell/whoami ()
   "Make \"whoami\" Tramp aware."
-  (or (file-remote-p default-directory 'user) (user-login-name)))
+  (eshell-user-login-name))
 
-(defvar eshell-diff-window-config nil)
-
-(defun eshell-diff-quit ()
-  "Restore the window configuration previous to diff'ing."
-  (interactive)
-  (if eshell-diff-window-config
-      (set-window-configuration eshell-diff-window-config)))
-
-(defun nil-blank-string (string)
-  "Return STRING, or nil if STRING contains only non-blank characters."
+(defun eshell-nil-blank-string (string)
+  "Return STRING, or nil if STRING contains only blank characters."
   (cond
     ((string-match "[^[:blank:]]" string) string)
     (nil)))
@@ -987,7 +1027,7 @@ Show wall-clock time elapsed during execution of COMMAND.")
 
 (defun eshell/diff (&rest args)
   "Alias \"diff\" to call Emacs `diff' function."
-  (let ((orig-args (eshell-stringify-list (eshell-flatten-list args))))
+  (let ((orig-args (eshell-stringify-list (flatten-tree args))))
     (if (or eshell-plain-diff-behavior
 	    (not (and (eshell-interactive-output-p)
 		      (not eshell-in-pipeline-p)
@@ -999,8 +1039,7 @@ Show wall-clock time elapsed during execution of COMMAND.")
 	  (throw 'eshell-replace-command
 		 (eshell-parse-command "*diff" orig-args)))
       (let ((old (car (last args 2)))
-	    (new (car (last args)))
-	    (config (current-window-configuration)))
+            (new (car (last args))))
 	(if (= (length args) 2)
 	    (setq args nil)
 	  (setcdr (last args 3) nil))
@@ -1008,27 +1047,15 @@ Show wall-clock time elapsed during execution of COMMAND.")
 	    (condition-case nil
 		(diff-no-select
 		 old new
-		 (nil-blank-string (eshell-flatten-and-stringify args)))
+                 (eshell-nil-blank-string (eshell-flatten-and-stringify args)))
 	      (error
 	       (throw 'eshell-replace-command
 		      (eshell-parse-command "*diff" orig-args))))
-	  (when (fboundp 'diff-mode)
-	    (make-local-variable 'compilation-finish-functions)
-	    (add-hook
-	     'compilation-finish-functions
-	     `(lambda (buff msg)
-		(with-current-buffer buff
-		  (diff-mode)
-		  (set (make-local-variable 'eshell-diff-window-config)
-		       ,config)
-		  (local-set-key [?q] 'eshell-diff-quit)
-		  (if (fboundp 'turn-on-font-lock-if-enabled)
-		      (turn-on-font-lock-if-enabled))
-		  (goto-char (point-min))))))
 	  (pop-to-buffer (current-buffer))))))
   nil)
 
 (put 'eshell/diff 'eshell-no-numeric-conversions t)
+(put 'eshell/diff 'eshell-filename-arguments t)
 
 (defvar locate-history-list)
 
@@ -1042,7 +1069,7 @@ Show wall-clock time elapsed during execution of COMMAND.")
 	       (string-match "^-" (car args))))
       (throw 'eshell-replace-command
 	     (eshell-parse-command "*locate" (eshell-stringify-list
-					      (eshell-flatten-list args))))
+					      (flatten-tree args))))
     (save-selected-window
       (let ((locate-history-list (list (car args))))
 	(locate-with-filter (car args) (cadr args))))))
@@ -1058,10 +1085,10 @@ Show wall-clock time elapsed during execution of COMMAND.")
 
 (put 'eshell/occur 'eshell-no-numeric-conversions t)
 
+(define-obsolete-function-alias 'nil-blank-string #'eshell-nil-blank-string "29.1")
+(defvar eshell-diff-window-config nil)
+(make-obsolete-variable 'eshell-diff-window-config "no longer used." "30.1")
+(define-obsolete-function-alias 'eshell-diff-quit #'ignore "30.1")
+
 (provide 'em-unix)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-unix.el ends here

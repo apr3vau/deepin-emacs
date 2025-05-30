@@ -1,3 +1,9 @@
+deepin-emacs (3.0+r2) unstable; urgency=medium
+
+  * Bump version
+
+ -- April Lu <apr3vau@outlook.com>  Fri, 30 May 2025 12:30:00 +0800
+
 deepin-emacs (3.0+r1) UNRELEASED; urgency=medium
 
   * Auto Build
@@ -7,7 +13,7 @@ deepin-emacs (3.0+r1) UNRELEASED; urgency=medium
 
 deepin-emacs (2.0.1+20151112) unstable; urgency=medium
 
-  * Port to Debian. 
+  * Port to Debian.
 
  -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 17 Nov 2015 20:02:53 +0800
 

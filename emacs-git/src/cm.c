@@ -1,5 +1,5 @@
 /* Cursor motion subroutines for GNU Emacs.
-   Copyright (C) 1985, 1995, 2001-2017 Free Software Foundation, Inc.
+   Copyright (C) 1985, 1995, 2001-2025 Free Software Foundation, Inc.
     based primarily on public domain code written by Chris Torek
 
 This file is part of GNU Emacs.
@@ -22,6 +22,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include "lisp.h"
 #include "cm.h"
+#include "frame.h"
 #include "sysstdio.h"
 #include "termchar.h"
 #include "tparam.h"
@@ -30,7 +31,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 int cost;		/* sums up costs */
 
-/* ARGSUSED */
 int
 evalcost (int c)
 {
@@ -45,8 +45,8 @@ int
 cmputc (int c)
 {
   if (current_tty->termscript)
-    putc_unlocked (c & 0177, current_tty->termscript);
-  putc_unlocked (c & 0177, current_tty->output);
+    putc (c & 0177, current_tty->termscript);
+  putc (c & 0177, current_tty->output);
   return c;
 }
 
@@ -112,16 +112,20 @@ addcol (tty, n) {
 void
 cmcheckmagic (struct tty_display_info *tty)
 {
+  /* If we have an unhandled SIGWINCH, we don't really know what our
+     up-to-date frame dimensions are.  */
+  if (frame_size_change_delayed (XFRAME (tty->top_frame)))
+    return;
   if (curX (tty) == FrameCols (tty))
     {
       if (!MagicWrap (tty) || curY (tty) >= FrameRows (tty) - 1)
 	emacs_abort ();
       if (tty->termscript)
-	putc_unlocked ('\r', tty->termscript);
-      putc_unlocked ('\r', tty->output);
+	putc ('\r', tty->termscript);
+      putc ('\r', tty->output);
       if (tty->termscript)
-	putc_unlocked ('\n', tty->termscript);
-      putc_unlocked ('\n', tty->output);
+	putc ('\n', tty->termscript);
+      putc ('\n', tty->output);
       curX (tty) = 0;
       curY (tty)++;
     }
@@ -205,7 +209,7 @@ calccost (struct tty_display_info *tty,
 	p = tty->Wcm->cm_down, c = tty->Wcm->cc_down;
     if (c == BIG) {		/* caint get thar from here */
 	if (doit)
-	    printf ("OOPS");
+	  fputs ("OOPS", stdout);
 	return c;
     }
     totalcost = c * deltay;
@@ -288,7 +292,7 @@ dodelta:
     if (c == BIG) {		/* caint get thar from here */
 fail:
 	if (doit)
-	    printf ("OOPS");
+	  fputs ("OOPS", stdout);
 	return BIG;
     }
     totalcost += c * deltax;

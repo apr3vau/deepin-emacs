@@ -1,170 +1,136 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 2005-2017 Free Software Foundation, Inc.
+@c Copyright (C) 2005--2025 Free Software Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 
 @node Antinews
-@appendix Emacs 25 Antinews
+@appendix Emacs 29 Antinews
 @c Update the emacs.texi Antinews menu entry with the above version number.
 
   For those users who live backwards in time, here is information
-about downgrading to Emacs version 25.2.  We hope you will enjoy the
+about downgrading to Emacs version 29.4.  We hope you will enjoy the
 greater simplicity that results from the absence of many @w{Emacs
 @value{EMACSVER}} features.
 
 @itemize @bullet
 @item
-Emacs no longer defaults to requiring the GnuTLS library when you
-build it.  Those who want the TLS functionality built-in will have to
-explicitly request it at build time---or forever hold their peace.  We
-decided that having the TLS functionality doesn't justify annoying
-users or package builders with error messages about libgnutls absence.
-We also decided that if you do build with GnuTLS, we will allow
-versions of the library older than 2.12.2, as that version will become
-less and less available/popular as you move farther back in time.
+Emacs can no longer be built for Android mobile devices.  We have
+removed the Android support because it was deemed unnecessary, what with
+the screens of the mobile devices becoming smaller and smaller as you
+move back in time.  We expect Android users to enjoy the much simpler
+text editors available on their devices.  As a nice bonus, removing
+Android support allowed us to get rid of gobs of related files, thus
+making the release tarballs much leaner.
 
 @item
-For similar reasons, we've reverted back to building our own version
-of @command{movemail} that retrieves POP3 mail as clear text via
-insecure channels.  As you move back in time, the availability of
-secure alternatives to POP3 will diminish, and we are only keen to
-support that.  We've also removed the @option{--with-mailutils}
-configure-time option, as it no longer makes sense for the observable
-past.
+We have deleted much of the enhanced support for touchscreen devices,
+for the same reason we dropped Android: there will be no need for that
+as you move back in time.
 
 @item
-We have removed support for @command{systemd} and similar services: we
-no longer provide a user init file for enabling Emacs support via
-those services, and we removed from the Emacs server the
-socket-launching support important for Emacs client operation under
-these services.  Again, these services will lose popularity as you
-move back in time, so the code supporting them will be just dead code,
-bloating Emacs unnecessarily.
+We also dropped support for sophisticated input methods that include
+text conversions, again because those are mostly needed on mobile and
+hand-held devices, which we gradually remove from Emacs in each past
+version.
 
 @item
-Reproducible builds of Emacs are no longer supported, as past
-development will make that unnecessary.
+Like its newer releases, Emacs 29 can still be built with support of
+native compilation of Lisp programs.  However, in preparation for
+removal of this feature in some previous version, we've made the native
+compiler support off by default; you will now have to request it
+explicitly at configure time.  This makes the default Emacs build
+process much faster.
 
 @item
-The @option{--fg-daemon} is gone, leaving only @option{--daemon}.  No
-need to procrastinate on the dilemma whether you do or don't want the
-new shiny ``headless Emacs'' thingy.  Hail, simplicity!
+JSON interfaces slowly move into oblivion as past years come closer, so
+we have removed our internal implementation of JSON; you will now need
+to build Emacs with the libjansson library, if you need JSON.
+Eventually, we plan on removing JSON support from Emacs altogether; this
+move will make the removal much simpler.
 
 @item
-As text terminals supporting true color will lose ground as you move
-back in time, we've removed support for 24-bit colors on text
-terminals.  If you want colors on a text terminal, you should be fine
-with just 8 of them.  (Truth being told, we think text terminals
-should be monochrome, but you will have to keep downgrading to older
-Emacs versions to have that feature back.)
+Tree-sitter based modes are now completely independent of their
+non-Tree-Sitter counterparts.  We decided that keeping the settings
+separate and independent goes a long way toward simplicity, which is one
+of our main motivations for removing stuff from Emacs.
 
 @item
-Emacs 25.2 no longer supports magic signatures of the form
-@samp{#!/usr/bin/env @var{interpreter}} in scripts.  Moving back in
-time means you are getting closer to the ideal of the original Unix
-design where all the interpreters lived in a single directory
-@file{/bin}, so this fancy feature is simply becoming unnecessary
-ballast.
+Various Help commands no longer turn on Outline minor mode.  With less
+material to display in the *Help* buffers, due to removing of excess
+documentation from Emacs, we think using outlining is an unnecessary
+complication, as scrolling through plain text is so much simpler.
+
+For the same reasons, Emacs no longer shows Unicode names of characters
+in *Help* buffers shown by @code{describe-bindings}.
 
 @item
-The double-buffering feature of Emacs display on X has been removed.
-We decided that its complexity and a few random surprising
-side-effects aren't justified by the gains, even though those gains
-were hailed in some quarters.  Yes, Emacs 25.2 will flicker in some
-use cases, but we are sure Emacs users will be able to suck it, a they
-have been doing for years.  Since this feature is gone, we've also
-removed the @code{inhibit-double-buffering} frame parameter, which is
-now unnecessary.
+To make Emacs configuration simpler and easier to control, the tool bar
+can now be displayed only in its natural and logical position: on the
+top of the frame; no more of that @code{tool-bar-position} nonsense with
+tool bars on the bottom.  For the same reasons @code{modifier-bar-mode}
+is now gone.
 
 @item
-Non-breaking hyphens and ASCII characters displayed instead of
-unsupported quote characters are now again displayed using the
-@code{escape-glyph} face.  We think having a single face instead of 3
-different ones will make Emacs customization a much simpler job for
-users.  For the same reason, we've removed the
-@code{header-line-highlight} face, leaving just @code{highlight} for
-any element of the Emacs display besides the mode line.
+The command @code{recover-file} no longer lets you display the diffs
+between a file and its auto-save file.  You either want to recover a
+file or you don't; confusing users with a third alternative when they
+are anxious already by the possibility of losing precious edits is
+considered a bad idea, certainly so as we move further towards smaller,
+simpler Emacs.
 
 @item
-You can no longer disable attempts of recovery from fatal exceptions
-such as C stack overflows and fatal signals.  Since the recovery
-included in Emacs is reliable enough, we decided there was no reason
-to put your edits in danger of becoming lost when these situations
-happen.  The variables @code{'attempt-stack-overflow-recovery} and
-@code{attempt-orderly-shutdown-on-fatal-signal} are therefore removed.
+Several languages and input methods, which will fall in disuse as you
+move back in time, were removed.  This includes Urdu, Pashto, and Sindhi
+languages, and the input method for the Colemak keyboard layout.  Many
+@kbd{C-x 8} key sequences, including those which insert various
+quotation characters and guillemets, were deleted for the same reason.
 
 @item
-The @code{list-timers} command was removed, as we decided timers are
-not user-level feature, and therefore users should not be allowed to
-mess with them.  Ask an Emacs Lisp guru near you for help if you have
-a runaway timer in your session.  (Of course, as you move back in
-time, such runaway timers will become less and less frequent, and
-actually timers might start shutting down automatically, as they
-cannot cope with time reversal.)
+The support for @code{lzip}-compressed Info manuals was removed from the
+Info mode.  We anticipate that @command{lzip} will disappear from the
+face of the Earth in the near past, and are preparing Emacs for that in
+advance.
 
 @item
-Horizontal scrolling using the mouse or touchpad has been removed.  In
-the past, wide monitors will become less popular, so horizontal
-scrolling will no longer be needed.  Removal of the mouse support for
-horizontal scrolling is the first step towards its complete removal in
-prior Emacs versions.
+Support for LLDB in Grand Unified Debugger mode was dropped.  We decided
+that given LLDB's diminishing popularity, its support is just code
+bloat.
 
 @item
-We have found the @option{--tramp} option of @command{emacsclient} too
-risky and too complicated, so we removed it to simplify the client
-code and its usage.
+Several fancy Project and VC commands were deleted, as part of our
+consistent effort of making Emacs simpler to use.
 
 @item
-The @code{display-raw-bytes-as-hex} variable is gone, so raw bytes can
-only be displayed as octal escapes.  Emacs users should be able to
-convert from octal to any other base in their sleep!
+The user option @code{shell-command-guess-functions} and the context
+menu @samp{Open With} in Dired are gone.  We trust Emacs users to always
+know themselves which shell command is the appropriate one for a given
+file, so no guessing by Dired is needed, or welcome.  The
+@code{dired-do-open} command was deleted for the same reasons.
 
 @item
-Displaying line numbers for a buffer is only possibly using add-on
-features, such as @code{linum-mode}, which can only display the
-numbers in the display margins.  Line-number display using these
-features is also slow, as we firmly believe such a feature is
-un-Emacsy and should not have been included in Emacs to begin with.
-Consequently, @code{display-line-numbers-mode} was removed.
+We went back to the original lean-and-mean interface for specifying
+registers for register-related commands.  The fancy preview and the
+options to go with it were deemed gratuitous and were removed.
 
 @item
-On our permanent quest for simplifying Emacs, we've removed the
-support for passing command-line arguments and options to Emacs via
-the @option{--alternate-editor} option of @command{emacsclient} and
-@env{ALTERNATE_EDITOR} environment variable.  There's only one True
-Emacs---the one that comes up when invoked as @kbd{emacs}, no need for
-all those fancy options!
+Eshell is now much smaller and easier to use, due to dropping quite a
+few of the new commands and fancy new options.
 
 @item
-The complication known as ``single-line horizontal scrolling'' is no
-longer with you in Emacs 25.2.  This feature was a bow to ``other
-editors''; instead, let those other editors bow to Emacs by hscrolling
-the entire window at all times.  Repeat after me: ``The Emacs way is
-the Only Way!''
+The command @code{customize-dirlocals} was removed.  Editing the
+@file{.dir-locals.el} files as plain text is so much simpler, and quite
+enough.
 
 @item
-The fancy case conversions of non-ASCII characters used in several
-locales, like Turkish and Greek, are removed, leaving the relations
-between upper and lower letter-case simple again, as they were in
-7-bit ASCII.  Likewise with ligatures that turn into multiple
-characters when their letter-case changes---gone.
+We have removed several packages that we consider unnecessary for the
+past of Emacs.  This includes EditorConfig support, @samp{which-key},
+PEG, and Window-Tool-Bar.
 
 @item
-Enchant is no longer supported by @code{ispell-buffer} and similar
-spell-checking commands.  As Enchant will gradually disappear while
-you move back in time, its support will become unnecessary anyway.
-
-@item
-Tramp lost its support for Google Drive repositories.  Cloud storage
-is on its way to extinction as you move back in time, thus making this
-feature redundant.
-
-@item
-Several commands, deemed to be unnecessary complications, have been
-removed.  Examples include @code{replace-buffer-contents} and
-@code{apropos-local-variable}.
+The @code{etags-regen-mode} was deleted.  Regeneration of @file{TAGS}
+tables manually is all Emacs users will need in the past.
 
 @item
 To keep up with decreasing computer memory capacity and disk space, many
-other functions and files have been eliminated in Emacs 25.2.
+other functions and files have been eliminated in Emacs 29.4.
 @end itemize

@@ -1,6 +1,6 @@
 ;;; esh-io.el --- I/O management  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -34,7 +34,7 @@
 ;;;_* Redirect to a Buffer or Process
 ;;
 ;; Buffers and processes can be named with '#<buffer buffer-name>' and
-;; '#<process process-name>', respectively. As a shorthand,
+;; '#<process process-name>', respectively.  As a shorthand,
 ;; '#<buffer-name>' without the explicit "buffer" arg is equivalent to
 ;; '#<buffer buffer-name>'.
 ;;
@@ -68,13 +68,13 @@
 
 ;;; Code:
 
-(provide 'esh-io)
-
 (require 'esh-arg)
 (require 'esh-util)
 
 (eval-when-compile
   (require 'cl-lib))
+
+(declare-function eshell-interactive-print "esh-mode" (string))
 
 (defgroup eshell-io nil
   "Eshell's I/O management code provides a scheme for treating many
@@ -96,7 +96,7 @@ though they were files."
 Currently this is standard input, output and error.  But even all of
 these Emacs does not currently support with asynchronous processes
 \(which is what eshell uses so that you can continue doing work in
-other buffers) ."
+other buffers)."
   :type 'integer
   :group 'eshell-io)
 
@@ -112,52 +112,95 @@ other buffers) ."
 
 (defcustom eshell-print-queue-size 5
   "The size of the print queue, for doing buffered printing.
-This is basically a speed enhancement, to avoid blocking the Lisp code
-from executing while Emacs is redisplaying."
+This variable is obsolete.  You should use `eshell-buffered-print-size'
+instead."
   :type 'integer
   :group 'eshell-io)
+(make-obsolete-variable 'eshell-print-queue-size
+                        'eshell-buffered-print-size "30.1")
+
+(defcustom eshell-buffered-print-size 2048
+  "The size of the print queue in characters, for doing buffered printing.
+Larger values for this option will generally result in faster execution
+by reducing the overhead associated with each print operation, but will
+increase the time it takes to see any progress in the output; smaller
+values will do the reverse."
+  :type 'integer
+  :group 'eshell-io
+  :version "30.1")
+
+(defcustom eshell-buffered-print-redisplay-throttle 0.025
+  "The minimum time in seconds between redisplays when using buffered printing.
+If nil, don't redisplay while printing."
+  :type '(choice number
+                 (const :tag "Don't redisplay" nil))
+  :group 'eshell-io
+  :version "30.1")
 
 (defcustom eshell-virtual-targets
-  '(("/dev/eshell" eshell-interactive-print nil)
+  '(;; The literal string "/dev/null" is intentional here.  It just
+    ;; provides compatibility so that users can redirect to
+    ;; "/dev/null" no matter the actual value of `null-device'.
+    ("/dev/null" (lambda (_mode) (throw 'eshell-null-device t)) t)
+    ("/dev/eshell" eshell-interactive-print nil)
     ("/dev/kill" (lambda (mode)
-		   (if (eq mode 'overwrite)
-		       (kill-new ""))
-		   'eshell-kill-append) t)
+                   (when (eq mode 'overwrite)
+                     (kill-new ""))
+                   #'eshell-kill-append)
+     t)
     ("/dev/clip" (lambda (mode)
-		   (if (eq mode 'overwrite)
-		       (let ((select-enable-clipboard t))
-			 (kill-new "")))
-		   'eshell-clipboard-append) t))
+                   (when (eq mode 'overwrite)
+                     (let ((select-enable-clipboard t))
+                       (kill-new "")))
+                   #'eshell-clipboard-append)
+     t))
   "Map virtual devices name to Emacs Lisp functions.
-If the user specifies any of the filenames above as a redirection
-target, the function in the second element will be called.
+Each member is of the following form:
 
-If the third element is non-nil, the redirection mode is passed as an
-argument (which is the symbol `overwrite', `append' or `insert'), and
-the function is expected to return another function -- which is the
-output function.  Otherwise, the second element itself is the output
-function.
+  (FILENAME OUTPUT-FUNCTION [PASS-MODE])
 
-The output function is then called repeatedly with single strings,
-which represents successive pieces of the output of the command, until nil
-is passed, meaning EOF.
+When the user specifies FILENAME as a redirection target, Eshell will
+repeatedly call the OUTPUT-FUNCTION with the redirected output as
+strings.  OUTPUT-FUNCTION can also be an `eshell-generic-target'
+instance.  In this case, Eshell will repeatedly call the function in the
+`output-function' slot with the string output; once the redirection has
+completed, Eshell will then call the function in the `close-function'
+slot, passing the exit status of the redirected command.
 
-NOTE: /dev/null is handled specially as a virtual target, and should
-not be added to this variable."
+If PASS-MODE is non-nil, Eshell will pass the redirection mode as an
+argument (which is the symbol `overwrite', `append' or `insert') to
+OUTPUT-FUNCTION, which should return the real output function (either an
+ordinary function or `eshell-generic-target' as described above)."
+  :version "30.1"
   :type '(repeat
 	  (list (string :tag "Target")
 		function
 		(choice (const :tag "Func returns output-func" t)
 			(const :tag "Func is output-func" nil))))
+  :risky t
   :group 'eshell-io)
 
-(put 'eshell-virtual-targets 'risky-local-variable t)
+(define-error 'eshell-pipe-broken "Pipe broken")
+
+(defvar eshell-ensure-newline-p nil
+  "If non-nil, ensure that a newline is emitted after a Lisp form.
+This can be changed by Lisp forms that are evaluated from the
+Eshell command line.  This behavior only applies to line-oriented
+output targets (see `eshell-target-line-oriented-p'.")
 
 ;;; Internal Variables:
 
+(defconst eshell-redirection-operators-alist
+  '(("<"   . input)                     ; FIXME: Not supported yet.
+    (">"   . overwrite)
+    (">>"  . append)
+    (">>>" . insert))
+  "An association list of redirection operators to symbols
+describing the mode, e.g. for using with `eshell-get-target'.")
+
 (defvar eshell-current-handles nil)
 
-(defvar eshell-last-command-status 0
+(defvar-local eshell-last-command-status 0
   "The exit code from the last command.  0 if successful.")
 
 (defvar eshell-last-command-result nil
@@ -171,56 +214,108 @@ not be added to this variable."
 
 ;;; Functions:
 
-(defun eshell-io-initialize ()
+(defun eshell-io-initialize ()      ;Called from `eshell-mode' via intern-soft!
   "Initialize the I/O subsystem code."
   (add-hook 'eshell-parse-argument-hook
-	    'eshell-parse-redirection nil t)
+            #'eshell-parse-redirection nil t)
   (make-local-variable 'eshell-current-redirections)
   (add-hook 'eshell-pre-rewrite-command-hook
-	    'eshell-strip-redirections nil t)
+            #'eshell-strip-redirections nil t)
   (add-function :filter-return (local 'eshell-post-rewrite-command-function)
                 #'eshell--apply-redirections))
 
 (defun eshell-parse-redirection ()
-  "Parse an output redirection, such as `2>'."
-  (if (and (not eshell-current-quoted)
-	   (looking-at "\\([0-9]\\)?\\(<\\|>+\\)&?\\([0-9]\\)?\\s-*"))
+  "Parse an output redirection, such as `2>' or `>&'."
+  (unless (or eshell-current-quoted
+              eshell-current-argument-plain)
+    (cond
+     ;; Copying a handle (e.g. `2>&1').
+     ((looking-at (rx (? (group digit))
+                      (group (or "<" ">"))
+                      "&" (group digit)
+                      (* (syntax whitespace))))
+      (let ((source (string-to-number (or (match-string 1) "1")))
+            (mode (cdr (assoc (match-string 2)
+                              eshell-redirection-operators-alist)))
+            (target (string-to-number (match-string 3))))
+        (when (eq mode 'input)
+          (error "Eshell does not support input redirection"))
+        (goto-char (match-end 0))
+        (eshell-finish-arg (list 'eshell-copy-output-handle
+                                 source target))))
+     ;; Shorthand for redirecting both stdout and stderr (e.g. `&>').
+     ((looking-at (rx (or (seq (group (** 1 3 ">")) "&")
+                          (seq "&" (group-n 1 (** 1 3 ">"))))
+                      (* (syntax whitespace))))
       (if eshell-current-argument
-	  (eshell-finish-arg)
-	(let ((sh (match-string 1))
-	      (oper (match-string 2))
-;	      (th (match-string 3))
-	      )
-	  (if (string= oper "<")
-	      (error "Eshell does not support input redirection"))
-	  (eshell-finish-arg
-	   (prog1
-	       (list 'eshell-set-output-handle
-		     (or (and sh (string-to-number sh)) 1)
-		     (list 'quote
-			   (aref [overwrite append insert]
-				 (1- (length oper)))))
-	     (goto-char (match-end 0))))))))
+          (eshell-finish-arg)
+        (goto-char (match-end 0))
+        (eshell-finish-arg
+         (let ((mode (cdr (assoc (match-string 1)
+                                 eshell-redirection-operators-alist))))
+           (list 'eshell-set-all-output-handles
+                 (list 'quote mode))))))
+     ;; Shorthand for piping both stdout and stderr (i.e. `|&').
+     ((looking-at (rx "|&" (* (syntax whitespace))))
+      (if eshell-current-argument
+          (eshell-finish-arg)
+        (goto-char (match-end 0))
+        (eshell-finish-arg
+         '(eshell-copy-output-handle eshell-error-handle
+                                     eshell-output-handle)
+         '(eshell-operator "|"))))
+     ;; Regular redirecting (e.g. `2>').
+     ((looking-at (rx (? (group digit))
+                      (group (or "<" (** 1 3 ">")))
+                      (* (syntax whitespace))))
+      (if eshell-current-argument
+          (eshell-finish-arg)
+        (let ((source (if (match-string 1)
+                          (string-to-number (match-string 1))
+                        eshell-output-handle))
+              (mode (cdr (assoc (match-string 2)
+                                eshell-redirection-operators-alist))))
+          (when (eq mode 'input)
+            (error "Eshell does not support input redirection"))
+          (goto-char (match-end 0))
+          (eshell-finish-arg
+           ;; Note: the target will be set later by
+           ;; `eshell-strip-redirections'.
+           (list 'eshell-set-output-handle
+                 source (list 'quote mode)))))))))
 
 (defun eshell-strip-redirections (terms)
   "Rewrite any output redirections in TERMS."
   (setq eshell-current-redirections (list t))
   (let ((tl terms)
-	(tt (cdr terms)))
+        (tt (cdr terms)))
     (while tt
-      (if (not (and (consp (car tt))
-		    (eq (caar tt) 'eshell-set-output-handle)))
-	  (setq tt (cdr tt)
-		tl (cdr tl))
-	(unless (cdr tt)
-	  (error "Missing redirection target"))
-	(nconc eshell-current-redirections
-	       (list (list 'ignore
-			   (append (car tt) (list (cadr tt))))))
-	(setcdr tl (cddr tt))
-	(setq tt (cddr tt))))
+      (cond
+       ;; Strip `eshell-copy-output-handle'.
+       ((and (consp (car tt))
+             (eq (caar tt) 'eshell-copy-output-handle))
+        (nconc eshell-current-redirections
+               (list (car tt)))
+        (setcdr tl (cddr tt))
+        (setq tt (cdr tt)))
+       ;; Strip `eshell-set-output-handle' or
+       ;; `eshell-set-all-output-handles' and the term immediately
+       ;; after (the redirection target).
+       ((and (consp (car tt))
+             (memq (caar tt) '(eshell-set-output-handle
+                               eshell-set-all-output-handles)))
+        (unless (cdr tt)
+          (error "Missing redirection target"))
+        (nconc eshell-current-redirections
+               (list (list 'ignore
+                           (append (car tt) (list (cadr tt))))))
+        (setcdr tl (cddr tt))
+        (setq tt (cddr tt)))
+       (t
+        (setq tt (cdr tt)
+              tl (cdr tl)))))
     (setq eshell-current-redirections
-	  (cdr eshell-current-redirections))))
+          (cdr eshell-current-redirections))))
 
 (defun eshell--apply-redirections (cmd)
   "Apply any redirection which were specified for COMMAND."
@@ -233,89 +328,130 @@ not be added to this variable."
 (defun eshell-create-handles
   (stdout output-mode &optional stderr error-mode)
   "Create a new set of file handles for a command.
-The default location for standard output and standard error will go to
-STDOUT and STDERR, respectively.
-OUTPUT-MODE and ERROR-MODE are either `overwrite', `append' or `insert';
-a nil value of mode defaults to `insert'."
-  (let ((handles (make-vector eshell-number-of-handles nil))
-	(output-target (eshell-get-target stdout output-mode))
-        (error-target (eshell-get-target stderr error-mode)))
-    (aset handles eshell-output-handle (cons output-target 1))
-    (aset handles eshell-error-handle
-          (cons (if stderr error-target output-target) 1))
+The default target for standard output and standard error will
+go to STDOUT and STDERR, respectively.  OUTPUT-MODE and
+ERROR-MODE are either `overwrite', `append' or `insert'; a nil
+value of mode defaults to `insert'.
+
+The result is a vector of file handles.  Each handle is of the form:
+
+  ((TARGETS . REF-COUNT) DEFAULT)
+
+TARGETS is a list of destinations for output.  REF-COUNT is the
+number of references to this handle (initially 1); see
+`eshell-protect-handles' and `eshell-close-handles'.  DEFAULT is
+non-nil if handle has its initial default value (always t after
+calling this function)."
+  (let* ((handles (make-vector eshell-number-of-handles nil))
+         (output-target
+          (let ((target (eshell-get-target stdout output-mode)))
+            (cons (when target (list target)) 1)))
+         (error-target
+          (if stderr
+              (let ((target (eshell-get-target stderr error-mode)))
+                (cons (when target (list target)) 1))
+            (cl-incf (cdr output-target))
+            output-target)))
+    (aset handles eshell-output-handle (list output-target t))
+    (aset handles eshell-error-handle (list error-target t))
     handles))
+
+(defun eshell-duplicate-handles (handles &optional steal-p)
+  "Create a duplicate of the file handles in HANDLES.
+This uses the targets of each handle in HANDLES, incrementing its
+reference count by one (unless STEAL-P is non-nil).  These
+targets are shared between the original set of handles and the
+new one, so the targets are only closed when the reference count
+drops to 0 (see `eshell-close-handles').
+
+This function also sets the DEFAULT field for each handle to
+t (see `eshell-create-handles').  Unlike the targets, this value
+is not shared with the original handles."
+  (let ((dup-handles (make-vector eshell-number-of-handles nil)))
+    (dotimes (idx eshell-number-of-handles)
+      (when-let ((handle (aref handles idx)))
+        (unless steal-p
+          (cl-incf (cdar handle)))
+        (aset dup-handles idx (list (car handle) t))))
+    dup-handles))
 
 (defun eshell-protect-handles (handles)
   "Protect the handles in HANDLES from a being closed."
-  (let ((idx 0))
-    (while (< idx eshell-number-of-handles)
-      (if (aref handles idx)
-	  (setcdr (aref handles idx)
-		  (1+ (cdr (aref handles idx)))))
-      (setq idx (1+ idx))))
+  (dotimes (idx eshell-number-of-handles)
+    (when-let ((handle (aref handles idx)))
+      (cl-incf (cdar handle))))
   handles)
 
-(defun eshell-close-target (target status)
-  "Close an output TARGET, passing STATUS as the result.
-STATUS should be non-nil on successful termination of the output."
-  (cond
-   ((symbolp target) nil)
+(defun eshell-close-handles (&optional exit-code result handles)
+  "Close all of the current HANDLES, taking refcounts into account.
+If HANDLES is nil, use `eshell-current-handles'.
 
-   ;; If we were redirecting to a file, save the file and close the
-   ;; buffer.
-   ((markerp target)
-    (let ((buf (marker-buffer target)))
-      (when buf                         ; somebody's already killed it!
-	(save-current-buffer
-	  (set-buffer buf)
-	  (when eshell-output-file-buffer
-	    (save-buffer)
-	    (when (eq eshell-output-file-buffer t)
-	      (or status (set-buffer-modified-p nil))
-	      (kill-buffer buf)))))))
+EXIT-CODE is the process exit code (zero, if the command
+completed successfully).  If nil, then use the exit code already
+set in `eshell-last-command-status'.
 
-   ;; If we're redirecting to a process (via a pipe, or process
-   ;; redirection), send it EOF so that it knows we're finished.
-   ((eshell-processp target)
-    (if (eq (process-status target) 'run)
-	(process-send-eof target)))
+RESULT is the quoted value of the last command.  If nil, then use
+the value already set in `eshell-last-command-result'."
+  (when exit-code
+    (setq eshell-last-command-status exit-code))
+  (when result
+    (cl-assert (eq (car result) 'quote))
+    (setq eshell-last-command-result (cadr result)))
+  (let ((handles (or handles eshell-current-handles))
+        (succeeded (= eshell-last-command-status 0)))
+    (dotimes (idx eshell-number-of-handles)
+      (eshell-close-handle (aref handles idx) succeeded))))
 
-   ;; A plain function redirection needs no additional arguments
-   ;; passed.
-   ((functionp target)
-    (funcall target status))
+(defun eshell-close-handle (handle status)
+  "Close a single HANDLE, taking refcounts into account.
+This will pass STATUS to each target for the handle, which should
+be a non-nil value on successful termination."
+  (when handle
+    (cl-assert (> (cdar handle) 0)
+               "Attempted to close a handle with 0 references")
+    (when (and (> (cdar handle) 0)
+               (= (cl-decf (cdar handle)) 0))
+      (dolist (target (caar handle))
+        (eshell-close-target target status))
+      (setcar (car handle) nil))))
 
-   ;; But a more complicated function redirection (which can only
-   ;; happen with aliases at the moment) has arguments that need to be
-   ;; passed along with it.
-   ((consp target)
-    (apply (car target) status (cdr target)))))
+(defun eshell-set-output-handle (index mode &optional target handles)
+  "Set handle INDEX for the current HANDLES to point to TARGET using MODE.
+If HANDLES is nil, use `eshell-current-handles'.
 
-(defun eshell-close-handles (exit-code &optional result handles)
-  "Close all of the current handles, taking refcounts into account.
-EXIT-CODE is the process exit code; mainly, it is zero, if the command
-completed successfully.  RESULT is the quoted value of the last
-command.  If nil, then the meta variables for keeping track of the
-last execution result should not be changed."
-  (let ((idx 0))
-    (cl-assert (or (not result) (eq (car result) 'quote)))
-    (setq eshell-last-command-status exit-code
-	  eshell-last-command-result (cadr result))
-    (while (< idx eshell-number-of-handles)
-      (let ((handles (or handles eshell-current-handles)))
-	(when (aref handles idx)
-	  (setcdr (aref handles idx)
-		  (1- (cdr (aref handles idx))))
-	  (when (= (cdr (aref handles idx)) 0)
-	    (let ((target (car (aref handles idx))))
-	      (if (not (listp target))
-		  (eshell-close-target target (= exit-code 0))
-		(while target
-		  (eshell-close-target (car target) (= exit-code 0))
-		  (setq target (cdr target)))))
-	    (setcar (aref handles idx) nil))))
-      (setq idx (1+ idx)))
-    nil))
+If the handle is currently set to its default value (see
+`eshell-create-handles'), this will overwrite the targets with
+the new target.  Otherwise, it will append the new target to the
+current list of targets."
+  (when target
+    (let* ((handles (or handles eshell-current-handles))
+           (handle (or (aref handles index)
+                       (aset handles index (list (cons nil 1) nil))))
+           (defaultp (cadr handle)))
+      (when defaultp
+        (cl-decf (cdar handle))
+        (setcar handle (cons nil 1)))
+      (let ((current (caar handle))
+            (where (eshell-get-target target mode)))
+        (when (and where (not (member where current)))
+          (setcar (car handle) (append current (list where)))))
+      (setcar (cdr handle) nil))))
+
+(defun eshell-copy-output-handle (index index-to-copy &optional handles)
+  "Copy the handle INDEX-TO-COPY to INDEX for the current HANDLES.
+If HANDLES is nil, use `eshell-current-handles'."
+  (let* ((handles (or handles eshell-current-handles))
+         (handle-to-copy (car (aref handles index-to-copy))))
+    (when handle-to-copy
+      (cl-incf (cdr handle-to-copy)))
+    (eshell-close-handle (aref handles index) nil)
+    (setcar (aref handles index) handle-to-copy)))
+
+(defun eshell-set-all-output-handles (mode &optional target handles)
+  "Set output and error HANDLES to point to TARGET using MODE.
+If HANDLES is nil, use `eshell-current-handles'."
+  (eshell-set-output-handle eshell-output-handle mode target handles)
+  (eshell-copy-output-handle eshell-error-handle eshell-output-handle handles))
 
 (defun eshell-kill-append (string)
   "Call `kill-append' with STRING, if it is indeed a string."
@@ -328,187 +464,335 @@ last execution result should not be changed."
       (let ((select-enable-clipboard t))
 	(kill-append string nil))))
 
-(defun eshell-get-target (target &optional mode)
-  "Convert TARGET, which is a raw argument, into a valid output target.
-MODE is either `overwrite', `append' or `insert'; if it is omitted or nil,
-it defaults to `insert'."
-  (setq mode (or mode 'insert))
-  (cond
-   ((stringp target)
-    (let ((redir (assoc target eshell-virtual-targets)))
-      (if redir
-	  (if (nth 2 redir)
-	      (funcall (nth 1 redir) mode)
-	    (nth 1 redir))
-	(let* ((exists (get-file-buffer target))
-	       (buf (find-file-noselect target t)))
-	  (with-current-buffer buf
-	    (if buffer-file-read-only
-		(error "Cannot write to read-only file `%s'" target))
-	    (setq buffer-read-only nil)
-	    (set (make-local-variable 'eshell-output-file-buffer)
-		 (if (eq exists buf) 0 t))
-	    (cond ((eq mode 'overwrite)
-		   (erase-buffer))
-		  ((eq mode 'append)
-		   (goto-char (point-max))))
-	    (point-marker))))))
+(defun eshell-interactive-output-p (&optional index handles)
+  "Return non-nil if the specified handle is bound for interactive display.
+HANDLES is the set of handles to check; if nil, use
+`eshell-current-handles'.
 
+INDEX is the handle index to check.  If nil, check
+`eshell-output-handle'.  If `all', check both
+`eshell-output-handle' and `eshell-error-handle'."
+  (let ((handles (or handles eshell-current-handles))
+        (index (or index eshell-output-handle)))
+    (if (eq index 'all)
+        (and (equal (caar (aref handles eshell-output-handle)) '(t))
+             (equal (caar (aref handles eshell-error-handle)) '(t)))
+      (equal (caar (aref handles index)) '(t)))))
 
-   ((bufferp target)
-    (with-current-buffer target
-      (cond ((eq mode 'overwrite)
-             (erase-buffer))
-            ((eq mode 'append)
-             (goto-char (point-max))))
-      (point-marker)))
-
-   ((functionp target) nil)
-
-   ((symbolp target)
-    (if (eq mode 'overwrite)
-	(set target nil))
-    target)
-
-   ((or (eshell-processp target)
-	(markerp target))
-    target)
-
-   (t
-    (error "Invalid redirection target: %s"
-	   (eshell-stringify target)))))
-
-(defvar grep-null-device)
-
-(defun eshell-set-output-handle (index mode &optional target)
-  "Set handle INDEX, using MODE, to point to TARGET."
-  (when target
-    (if (and (stringp target)
-	     (or (cond
-		  ((boundp 'null-device)
-		   (string= target null-device))
-		  ((boundp 'grep-null-device)
-		   (string= target grep-null-device))
-		  (t nil))
-		 (string= target "/dev/null")))
-	(aset eshell-current-handles index nil)
-      (let ((where (eshell-get-target target mode))
-	    (current (car (aref eshell-current-handles index))))
-	(if (and (listp current)
-		 (not (member where current)))
-	    (setq current (append current (list where)))
-	  (setq current (list where)))
-	(if (not (aref eshell-current-handles index))
-	    (aset eshell-current-handles index (cons nil 1)))
-	(setcar (aref eshell-current-handles index) current)))))
-
-(defun eshell-interactive-output-p ()
-  "Return non-nil if current handles are bound for interactive display."
-  (and (eq (car (aref eshell-current-handles
-		      eshell-output-handle)) t)
-       (eq (car (aref eshell-current-handles
-		      eshell-error-handle)) t)))
+(defvar eshell--buffered-print-queue nil)
+(defvar eshell--buffered-print-current-size nil)
+(defvar eshell--buffered-print-next-redisplay nil)
 
 (defvar eshell-print-queue nil)
+(make-obsolete-variable 'eshell-print-queue
+                        'eshell--buffered-print-queue "30.1")
 (defvar eshell-print-queue-count -1)
+(make-obsolete-variable 'eshell-print-queue-count
+                        'eshell--buffered-print-current-size "30.1")
 
 (defsubst eshell-print (object)
   "Output OBJECT to the standard output handle."
   (eshell-output-object object eshell-output-handle))
 
-(defun eshell-flush (&optional reset-p)
-  "Flush out any lines that have been queued for printing.
-Must be called before printing begins with -1 as its argument, and
-after all printing is over with no argument."
-  (ignore
-   (if reset-p
-       (setq eshell-print-queue nil
-	     eshell-print-queue-count reset-p)
-     (if eshell-print-queue
-	 (eshell-print eshell-print-queue))
-     (eshell-flush 0))))
-
 (defun eshell-init-print-buffer ()
   "Initialize the buffered printing queue."
-  (eshell-flush -1))
+  (declare (obsolete #'eshell-with-buffered-print "30.1"))
+  (setq eshell--buffered-print-queue nil
+        eshell--buffered-print-current-size 0))
+
+(defun eshell-flush (&optional redisplay-now)
+  "Flush out any text that has been queued for printing.
+When printing interactively, this will call `redisplay' every
+`eshell-buffered-print-redisplay-throttle' seconds so that the user can
+see the progress.  If REDISPLAY-NOW is non-nil, call `redisplay' for
+interactive output even if the throttle would otherwise prevent it."
+  (ignore
+   (when eshell--buffered-print-queue
+     (eshell-print (apply #'concat eshell--buffered-print-queue))
+     ;; When printing interactively (see `eshell-with-buffered-print'),
+     ;; periodically redisplay so the user can see some progress.
+     (when (and eshell--buffered-print-next-redisplay
+                (or redisplay-now
+                    (time-less-p eshell--buffered-print-next-redisplay
+                                 (current-time))))
+       (redisplay)
+       (setq eshell--buffered-print-next-redisplay
+             (time-add eshell--buffered-print-next-redisplay
+                       eshell-buffered-print-redisplay-throttle)))
+     (setq eshell--buffered-print-queue nil
+           eshell--buffered-print-current-size 0))))
 
 (defun eshell-buffered-print (&rest strings)
-  "A buffered print -- *for strings only*."
-  (if (< eshell-print-queue-count 0)
-      (progn
-	(eshell-print (apply 'concat strings))
-	(setq eshell-print-queue-count 0))
-    (if (= eshell-print-queue-count eshell-print-queue-size)
-	(eshell-flush))
-    (setq eshell-print-queue
-	  (concat eshell-print-queue (apply 'concat strings))
-	  eshell-print-queue-count (1+ eshell-print-queue-count))))
+  "A buffered print -- *for strings only*.
+When the buffer exceeds `eshell-buffered-print-size' in characters, this
+will flush it using `eshell-flush' (which see)."
+  (setq eshell--buffered-print-queue
+        (nconc eshell--buffered-print-queue strings))
+  (cl-incf eshell--buffered-print-current-size
+           (apply #'+ (mapcar #'length strings)))
+  (when (> eshell--buffered-print-current-size eshell-buffered-print-size)
+    (eshell-flush)))
+
+(defmacro eshell-with-buffered-print (&rest body)
+  "Initialize buffered printing for Eshell, and then evaluate BODY.
+Within BODY, call `eshell-buffered-print' to perform output."
+  (declare (indent 0))
+  `(let ((eshell--buffered-print-queue nil)
+         (eshell--buffered-print-current-size 0)
+         (eshell--buffered-print-next-redisplay
+          (when (and eshell-buffered-print-redisplay-throttle
+                     (eshell-interactive-output-p))
+            (time-add (current-time)
+                      eshell-buffered-print-redisplay-throttle))))
+     (unwind-protect
+         ,@body
+       (eshell-flush))))
 
 (defsubst eshell-error (object)
   "Output OBJECT to the standard error handle."
   (eshell-output-object object eshell-error-handle))
-
-(defsubst eshell-errorn (object)
-  "Output OBJECT followed by a newline to the standard error handle."
-  (eshell-error object)
-  (eshell-error "\n"))
 
 (defsubst eshell-printn (object)
   "Output OBJECT followed by a newline to the standard output handle."
   (eshell-print object)
   (eshell-print "\n"))
 
-(autoload 'eshell-output-filter "esh-mode")
+(defsubst eshell-errorn (object)
+  "Output OBJECT followed by a newline to the standard error handle."
+  (eshell-error object)
+  (eshell-error "\n"))
 
-(defun eshell-output-object-to-target (object target)
-  "Insert OBJECT into TARGET.
-Returns what was actually sent, or nil if nothing was sent."
-  (cond
-   ((functionp target)
-    (funcall target object))
+(defun eshell--output-maybe-n (object handle)
+  "Output OBJECT to HANDLE.
+For any line-oriented output targets on HANDLE, ensure the output
+ends in a newline."
+  (eshell-output-object object handle)
+  (when (and eshell-ensure-newline-p
+             (not (and (stringp object)
+                       (string-suffix-p object "\n"))))
+    (eshell-maybe-output-newline handle)))
 
-   ((symbolp target)
-    (if (eq target t)                   ; means "print to display"
-	(eshell-output-filter nil (eshell-stringify object))
-      (if (not (symbol-value target))
-	  (set target object)
-	(setq object (eshell-stringify object))
-	(if (not (stringp (symbol-value target)))
-	    (set target (eshell-stringify
-			 (symbol-value target))))
-	(set target (concat (symbol-value target) object)))))
+(defsubst eshell-print-maybe-n (object)
+  "Output OBJECT to the standard output handle.
+For any line-oriented output targets, ensure the output ends in a
+newline."
+  (eshell--output-maybe-n object eshell-output-handle))
 
-   ((markerp target)
-    (if (buffer-live-p (marker-buffer target))
-	(with-current-buffer (marker-buffer target)
-	  (let ((moving (= (point) target)))
-	    (save-excursion
-	      (goto-char target)
-	      (unless (stringp object)
-		(setq object (eshell-stringify object)))
-	      (insert-and-inherit object)
-	      (set-marker target (point-marker)))
-	    (if moving
-		(goto-char target))))))
+(defsubst eshell-error-maybe-n (object)
+  "Output OBJECT to the standard error handle.
+For any line-oriented output targets, ensure the output ends in a
+newline."
+  (eshell--output-maybe-n object eshell-error-handle))
 
-   ((eshell-processp target)
-    (when (eq (process-status target) 'run)
-      (unless (stringp object)
-	(setq object (eshell-stringify object)))
-      (process-send-string target object)))
+(cl-defstruct (eshell-generic-target (:constructor nil))
+  "An Eshell target.
+This is mainly useful for creating virtual targets (see
+`eshell-virtual-targets').")
 
-   ((consp target)
-    (apply (car target) object (cdr target))))
+(cl-defstruct (eshell-function-target
+               (:include eshell-generic-target)
+               (:constructor nil)
+               (:constructor eshell-function-target-create
+                             (output-function &optional close-function)))
+  "An Eshell target that calls an OUTPUT-FUNCTION."
+  output-function close-function)
+
+(cl-defgeneric eshell-get-target (raw-target &optional _mode)
+  "Convert RAW-TARGET, which is a raw argument, into a valid output target.
+MODE is either `overwrite', `append' or `insert'; if it is omitted or nil,
+it defaults to `insert'."
+  (error "Invalid redirection target: %s" (eshell-stringify raw-target)))
+
+(cl-defmethod eshell-get-target ((raw-target string) &optional mode)
+  "Convert a string RAW-TARGET into a valid output target using MODE.
+If TARGET is a virtual target (see `eshell-virtual-targets'),
+return an `eshell-generic-target' instance; otherwise, return a
+marker for a file named TARGET."
+  (setq mode (or mode 'insert))
+  (if-let ((redir (assoc raw-target eshell-virtual-targets)))
+      (let (target)
+        (catch 'eshell-null-device
+          (setq target (if (nth 2 redir)
+                           (funcall (nth 1 redir) mode)
+                         (nth 1 redir)))
+          (unless (eshell-generic-target-p target)
+            (setq target (eshell-function-target-create target))))
+        target)
+    (let ((exists (get-file-buffer raw-target))
+          (buf (find-file-noselect raw-target t)))
+      (with-current-buffer buf
+        (when buffer-file-read-only
+          (error "Cannot write to read-only file `%s'" raw-target))
+          (setq buffer-read-only nil)
+          (setq-local eshell-output-file-buffer
+                      (if (eq exists buf) 0 t))
+          (cond ((eq mode 'overwrite)
+                 (erase-buffer))
+                ((eq mode 'append)
+                 (goto-char (point-max))))
+          (point-marker)))))
+
+(cl-defmethod eshell-get-target ((raw-target buffer) &optional mode)
+  "Convert a buffer RAW-TARGET into a valid output target using MODE.
+This returns a marker for that buffer."
+  (with-current-buffer raw-target
+    (cond ((eq mode 'overwrite)
+           (erase-buffer))
+          ((eq mode 'append)
+           (goto-char (point-max))))
+    (point-marker)))
+
+(cl-defmethod eshell-get-target ((raw-target symbol) &optional mode)
+  "Convert a symbol RAW-TARGET into a valid output target using MODE.
+This returns RAW-TARGET, with its value initialized to nil if MODE is
+`overwrite'."
+  (when (eq mode 'overwrite)
+    (set raw-target nil))
+  raw-target)
+
+(cl-defmethod eshell-get-target ((raw-target process) &optional _mode)
+  "Convert a process RAW-TARGET into a valid output target.
+This just returns RAW-TARGET."
+  raw-target)
+
+(cl-defmethod eshell-get-target ((raw-target marker) &optional _mode)
+  "Convert a marker RAW-TARGET into a valid output target.
+This just returns RAW-TARGET."
+  raw-target)
+
+(cl-defgeneric eshell-close-target (target status)
+  "Close an output TARGET, passing STATUS as the result.
+STATUS should be non-nil on successful termination of the output.")
+
+(cl-defmethod eshell-close-target ((_target symbol) _status)
+  "Close a symbol TARGET."
+  nil)
+
+(cl-defmethod eshell-close-target ((target marker) status)
+  "Close a marker TARGET.
+If TARGET was created from a file name, save and kill the buffer.
+If status is nil, prompt before killing."
+  (when (buffer-live-p (marker-buffer target))
+    (with-current-buffer (marker-buffer target)
+      (when eshell-output-file-buffer
+        (save-buffer)
+        (when (eq eshell-output-file-buffer t)
+          (or status (set-buffer-modified-p nil))
+          (kill-buffer))))))
+
+(cl-defmethod eshell-close-target ((target process) _status)
+  "Close a process TARGET."
+  ;; According to POSIX.1-2017, section 11.1.9, when communicating via
+  ;; terminal, sending EOF causes all bytes waiting to be read to be
+  ;; sent to the process immediately.  Thus, if there are any bytes
+  ;; waiting, we need to send EOF twice: once to flush the buffer, and
+  ;; a second time to cause the next read() to return a size of 0,
+  ;; indicating end-of-file to the reading process.  However, some
+  ;; platforms (e.g. Solaris) actually require sending a *third* EOF.
+  ;; Since sending extra EOFs to a running process is a no-op, we'll
+  ;; just send the maximum we'd ever need.  See bug#56025 for further
+  ;; details.
+  (catch 'done
+    (dotimes (_ (if (process-tty-name target 'stdin) 3 1))
+      (unless (process-live-p target)
+        (throw 'done nil))
+      (process-send-eof target))))
+
+(cl-defmethod eshell-close-target ((target eshell-function-target) status)
+  "Close an Eshell function TARGET."
+  (when-let ((close-function (eshell-function-target-close-function target)))
+    (funcall close-function status)))
+
+(cl-defgeneric eshell-output-object-to-target (object target)
+  "Output OBJECT to TARGET.
+Returns what was actually sent, or nil if nothing was sent.")
+
+(cl-defmethod eshell-output-object-to-target (object (_target (eql t)))
+  "Output OBJECT to the display."
+  (setq object (eshell-stringify object))
+  (eshell-interactive-print object))
+
+(cl-defmethod eshell-output-object-to-target (object (target symbol))
+  "Output OBJECT to the value of the symbol TARGET."
+  (if (not (and (boundp target) (symbol-value target)))
+      (set target object)
+    (setq object (eshell-stringify object))
+    (if (not (stringp (symbol-value target)))
+        (set target (eshell-stringify
+                     (symbol-value target))))
+    (set target (concat (symbol-value target) object)))
   object)
 
-(defun eshell-output-object (object &optional handle-index handles)
-  "Insert OBJECT, using HANDLE-INDEX specifically)."
-  (let ((target (car (aref (or handles eshell-current-handles)
-			   (or handle-index eshell-output-handle)))))
-    (if (and target (not (listp target)))
-	(eshell-output-object-to-target object target)
-      (while target
-	(eshell-output-object-to-target object (car target))
-	(setq target (cdr target))))))
+(cl-defmethod eshell-output-object-to-target (object (target marker))
+  "Output OBJECT to the marker TARGET."
+  (when (buffer-live-p (marker-buffer target))
+    (with-current-buffer (marker-buffer target)
+      (let ((moving (= (point) target)))
+        (save-excursion
+          (goto-char target)
+          (unless (stringp object)
+            (setq object (eshell-stringify object)))
+          (insert-and-inherit object)
+          (set-marker target (point-marker)))
+        (when moving
+          (goto-char target)))))
+  object)
 
+(cl-defmethod eshell-output-object-to-target (object (target process))
+  "Output OBJECT to the process TARGET."
+  (unless (stringp object)
+    (setq object (eshell-stringify object)))
+  (condition-case err
+      (process-send-string target object)
+    (error
+     ;; If `process-send-string' raises an error and the process has
+     ;; finished, treat it as a broken pipe.  Otherwise, just re-raise
+     ;; the signal.  NOTE: When running Emacs in batch mode
+     ;; (e.g. during regression tests), Emacs can abort due to SIGPIPE
+     ;; here.  Maybe `process-send-string' should handle SIGPIPE even
+     ;; in batch mode (bug#66186).
+     (if (process-live-p target)
+         (signal (car err) (cdr err))
+       (signal 'eshell-pipe-broken (list target)))))
+  object)
+
+(cl-defmethod eshell-output-object-to-target (object
+                                              (target eshell-function-target))
+  "Output OBJECT to the Eshell function TARGET."
+  (funcall (eshell-function-target-output-function target) object))
+
+(cl-defgeneric eshell-target-line-oriented-p (_target)
+  "Return non-nil if the specified TARGET is line-oriented.
+Line-oriented targets are those that expect a newline after
+command output when `eshell-ensure-newline-p' is non-nil."
+  nil)
+
+(cl-defmethod eshell-target-line-oriented-p ((_target (eql t)))
+  "Return non-nil to indicate that the display is line-oriented."
+  t)
+
+(defun eshell-output-object (object &optional handle-index handles)
+  "Insert OBJECT, using HANDLE-INDEX specifically.
+If HANDLE-INDEX is nil, output to `eshell-output-handle'.
+HANDLES is the set of file handles to use; if nil, use
+`eshell-current-handles'."
+  (let ((targets (caar (aref (or handles eshell-current-handles)
+                             (or handle-index eshell-output-handle)))))
+    (dolist (target targets)
+      (eshell-output-object-to-target object target))))
+
+(defun eshell-maybe-output-newline (&optional handle-index handles)
+  "Maybe insert a newline, using HANDLE-INDEX specifically.
+This inserts a newline for all line-oriented output targets.
+
+If HANDLE-INDEX is nil, output to `eshell-output-handle'.
+HANDLES is the set of file handles to use; if nil, use
+`eshell-current-handles'."
+  (let ((targets (caar (aref (or handles eshell-current-handles)
+                             (or handle-index eshell-output-handle)))))
+    (dolist (target targets)
+      (when (eshell-target-line-oriented-p target)
+        (eshell-output-object-to-target "\n" target)))))
+
+(provide 'esh-io)
 ;;; esh-io.el ends here

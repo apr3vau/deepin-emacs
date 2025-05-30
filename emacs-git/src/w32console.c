@@ -1,5 +1,5 @@
 /* Terminal hooks for GNU Emacs on the Microsoft Windows API.
-   Copyright (C) 1992, 1999, 2001-2017 Free Software Foundation, Inc.
+   Copyright (C) 1992, 1999, 2001-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -30,6 +30,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "coding.h"
 #include "termchar.h"	/* for FRAME_TTY */
+#include "dispextern.h"	/* for tty_defined_color */
 #include "menu.h"	/* for tty_menu_show */
 #include "w32term.h"
 #include "w32common.h"	/* for os_subtype */
@@ -140,23 +141,36 @@ w32con_clear_frame (struct frame *f)
 }
 
 
-static struct glyph glyph_base[256];
+static struct glyph glyph_base[80];
+static struct glyph *glyphs = glyph_base;
+static size_t glyphs_len = ARRAYELTS (glyph_base);
 static BOOL  ceol_initialized = FALSE;
 
 /* Clear from Cursor to end (what's "standout marker"?).  */
 static void
 w32con_clear_end_of_line (struct frame *f, int end)
 {
+  /* Time to reallocate our "empty row"?  With today's large screens,
+     it is not unthinkable to see TTY frames well in excess of
+     80-character width.  */
+  if (end - cursor_coords.X > glyphs_len)
+    {
+      if (glyphs == glyph_base)
+	glyphs = NULL;
+      glyphs = xrealloc (glyphs, FRAME_COLS (f) * sizeof (struct glyph));
+      glyphs_len = FRAME_COLS (f);
+      ceol_initialized = FALSE;
+    }
   if (!ceol_initialized)
     {
       int i;
-      for (i = 0; i < 256; i++)
+      for (i = 0; i < glyphs_len; i++)
         {
-	  memcpy (&glyph_base[i], &space_glyph, sizeof (struct glyph));
+	  memcpy (&glyphs[i], &space_glyph, sizeof (struct glyph));
         }
       ceol_initialized = TRUE;
     }
-  w32con_write_glyphs (f, glyph_base, end - cursor_coords.X);	/* fencepost ?	*/
+  w32con_write_glyphs (f, glyphs, end - cursor_coords.X);
 }
 
 /* Insert n lines at vpos. if n is negative delete -n lines.  */
@@ -489,11 +503,18 @@ w32con_set_terminal_modes (struct terminal *t)
 
   SetConsoleActiveScreenBuffer (cur_screen);
 
-  SetConsoleMode (keyboard_handle, ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT);
+  /* If Quick Edit is enabled for the console, it will get in the way
+     of receiving mouse events, so we disable it.  But leave the
+     Insert Mode as it was set by the user.  */
+  DWORD new_console_mode
+    = ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT | ENABLE_EXTENDED_FLAGS;
+  if ((prev_console_mode & ENABLE_INSERT_MODE) != 0)
+    new_console_mode |= ENABLE_INSERT_MODE;
+  SetConsoleMode (keyboard_handle, new_console_mode);
 
   /* Initialize input mode: interrupt_input off, no flow control, allow
      8 bit character input, standard quit char.  */
-  Fset_input_mode (Qnil, Qnil, make_number (2), Qnil);
+  Fset_input_mode (Qnil, Qnil, make_fixnum (2), Qnil);
 }
 
 /* hmmm... perhaps these let us bracket screen changes so that we can flush
@@ -638,6 +659,24 @@ w32_face_attributes (struct frame *f, int face_id)
   return char_attr;
 }
 
+/* The IME window is needed to receive the session notifications
+   required to reset the low level keyboard hook state.  */
+
+static BOOL CALLBACK
+find_ime_window (HWND hwnd, LPARAM arg)
+{
+  char window_class[32];
+
+  GetClassName (hwnd, window_class, sizeof (window_class));
+  if (strcmp (window_class, "IME") == 0)
+    {
+      *(HWND *) arg = hwnd;
+      return FALSE;
+    }
+  /* keep looking */
+  return TRUE;
+}
+
 void
 initialize_w32_display (struct terminal *term, int *width, int *height)
 {
@@ -660,6 +699,7 @@ initialize_w32_display (struct terminal *term, int *width, int *height)
   term->update_begin_hook	= w32con_update_begin;
   term->update_end_hook		= w32con_update_end;
 
+  term->defined_color_hook = &tty_defined_color; /* xfaces.c */
   term->read_socket_hook = w32_console_read_socket;
   term->mouse_position_hook = w32_console_mouse_position;
   term->menu_show_hook = tty_menu_show;
@@ -683,6 +723,10 @@ initialize_w32_display (struct terminal *term, int *width, int *height)
   /* Remember original console settings.  */
   keyboard_handle = GetStdHandle (STD_INPUT_HANDLE);
   GetConsoleMode (keyboard_handle, &prev_console_mode);
+  /* Make sure ENABLE_EXTENDED_FLAGS is set in console settings,
+     otherwise restoring the original setting of ENABLE_MOUSE_INPUT
+     will not work.  */
+  prev_console_mode |= ENABLE_EXTENDED_FLAGS;
 
   prev_screen = GetStdHandle (STD_OUTPUT_HANDLE);
 
@@ -694,10 +738,10 @@ initialize_w32_display (struct terminal *term, int *width, int *height)
 
   if (cur_screen == INVALID_HANDLE_VALUE)
     {
-      printf ("CreateConsoleScreenBuffer failed in ResetTerm\n");
+      printf ("CreateConsoleScreenBuffer failed in initialize_w32_display\n");
       printf ("LastError = 0x%lx\n", GetLastError ());
       fflush (stdout);
-      exit (0);
+      exit (1);
     }
 #else
   cur_screen = prev_screen;
@@ -738,7 +782,13 @@ initialize_w32_display (struct terminal *term, int *width, int *height)
       }
   }
 
-  GetConsoleScreenBufferInfo (cur_screen, &info);
+  if (!GetConsoleScreenBufferInfo (cur_screen, &info))
+    {
+      printf ("GetConsoleScreenBufferInfo failed in initialize_w32_display\n");
+      printf ("LastError = 0x%lx\n", GetLastError ());
+      fflush (stdout);
+      exit (1);
+    }
 
   char_attr_normal = info.wAttributes;
 
@@ -772,16 +822,28 @@ initialize_w32_display (struct terminal *term, int *width, int *height)
       *width = 1 + info.srWindow.Right - info.srWindow.Left;
     }
 
-  if (os_subtype == OS_NT)
+  /* Force reinitialization of the "empty row" buffer, in case they
+     dumped from a running session.  */
+  if (glyphs != glyph_base)
+    {
+      glyphs = NULL;
+      glyphs_len = 0;
+      ceol_initialized = FALSE;
+    }
+
+  if (os_subtype == OS_SUBTYPE_NT)
     w32_console_unicode_input = 1;
   else
     w32_console_unicode_input = 0;
 
-  /* Setup w32_display_info structure for this frame. */
+  /* Setup w32_display_info structure for this frame.  */
   w32_initialize_display_info (build_string ("Console"));
 
+  HWND hwnd = NULL;
+  EnumThreadWindows (GetCurrentThreadId (), find_ime_window, (LPARAM) &hwnd);
+
   /* Set up the keyboard hook.  */
-  setup_w32_kbdhook ();
+  setup_w32_kbdhook (hwnd);
 }
 
 
@@ -791,9 +853,9 @@ DEFUN ("set-screen-color", Fset_screen_color, Sset_screen_color, 2, 2, 0,
 Arguments should be indices between 0 and 15, see w32console.el.  */)
   (Lisp_Object foreground, Lisp_Object background)
 {
-  char_attr_normal = XFASTINT (foreground) + (XFASTINT (background) << 4);
+  char_attr_normal = XFIXNAT (foreground) + (XFIXNAT (background) << 4);
 
-  Frecenter (Qnil);
+  Frecenter (Qnil, Qt);
   return Qt;
 }
 
@@ -805,8 +867,8 @@ See w32console.el and `tty-defined-color-alist' for mapping of indices
 to colors.  */)
   (void)
 {
-  return Fcons (make_number (char_attr_normal & 0x000f),
-		Fcons (make_number ((char_attr_normal >> 4) & 0x000f), Qnil));
+  return Fcons (make_fixnum (char_attr_normal & 0x000f),
+		Fcons (make_fixnum ((char_attr_normal >> 4) & 0x000f), Qnil));
 }
 
 DEFUN ("set-cursor-size", Fset_cursor_size, Sset_cursor_size, 1, 1, 0,
@@ -814,7 +876,7 @@ DEFUN ("set-cursor-size", Fset_cursor_size, Sset_cursor_size, 1, 1, 0,
   (Lisp_Object size)
 {
   CONSOLE_CURSOR_INFO cci;
-  cci.dwSize = XFASTINT (size);
+  cci.dwSize = XFIXNAT (size);
   cci.bVisible = TRUE;
   (void) SetConsoleCursorInfo (cur_screen, &cci);
 

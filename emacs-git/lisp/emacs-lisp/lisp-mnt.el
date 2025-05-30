@@ -1,9 +1,9 @@
-;;; lisp-mnt.el --- utility functions for Emacs Lisp maintainers
+;;; lisp-mnt.el --- utility functions for Emacs Lisp maintainers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1994, 1997, 2000-2017 Free Software Foundation,
+;; Copyright (C) 1992, 1994, 1997, 2000-2025 Free Software Foundation,
 ;; Inc.
 
-;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
+;; Author: Eric S. Raymond <esr@thyrsus.com>
 ;; Maintainer: emacs-devel@gnu.org
 ;; Created: 14 Jul 1992
 ;; Keywords: docs
@@ -52,7 +52,7 @@
 ;;
 ;;    * Copyright line, which looks more or less like this:
 ;;
-;;       ;; Copyright (C) 1999, 2000, 2001 Free Software Foundation, Inc.
+;;       ;; Copyright (C) 1999-2001 Free Software Foundation, Inc.
 ;;
 ;;    * A blank line
 ;;
@@ -68,11 +68,11 @@
 ;; ;;	Noah Friedman <friedman@ai.mit.edu>
 ;; ;;	Joe Wells <jbw@maverick.uswest.com>
 ;; ;;	Dave Brennan <brennan@hal.com>
-;; ;;	Eric Raymond <esr@snark.thyrsus.com>
+;; ;;	Eric S. Raymond <esr@thyrsus.com>
 ;;
 ;;    * Maintainer line --- should be a single name/address as in the Author
-;; line, or an address only.  If there is no maintainer
-;; line, the person(s) in the Author field are presumed to be it.
+;; line, or an address only.  If there is no maintainer line, the person(s) in
+;; the Author field are presumed to be it.
 ;;    The idea behind these two fields is to be able to write a Lisp function
 ;; that does "send mail to the author" without having to mine the name out by
 ;; hand.  Please be careful about surrounding the network address with <> if
@@ -109,11 +109,6 @@
 ;;    * Footer line --- marks end-of-file so it can be distinguished from
 ;; an expanded formfeed or the results of truncation.
 
-;;; Change Log:
-
-;; Tue Jul 14 23:44:17 1992	ESR
-;;	* Created.
-
 ;;; Code:
 
 ;;; Variables:
@@ -137,34 +132,28 @@ in your Lisp package:
 
 The @(#) construct is used by unix what(1) and
 then $identifier: doc string $ is used by GNU ident(1)"
-  :type 'regexp
-  :group 'lisp-mnt)
+  :type 'regexp)
 
 (defcustom lm-copyright-prefix "^\\(;+[ \t]\\)+Copyright (C) "
   "Prefix that is ignored before the dates in a copyright.
 Leading comment characters and whitespace should be in regexp group 1."
-  :type 'regexp
-  :group 'lisp-mnt)
+  :type 'regexp)
 
 (defcustom lm-comment-column 16
   "Column used for placing formatted output."
-  :type 'integer
-  :group 'lisp-mnt)
+  :type 'integer)
 
 (defcustom lm-any-header ".*"
   "Regexp which matches start of any section."
-  :type 'regexp
-  :group 'lisp-mnt)
+  :type 'regexp)
 
 (defcustom lm-commentary-header "Commentary\\|Documentation"
   "Regexp which matches start of documentation section."
-  :type 'regexp
-  :group 'lisp-mnt)
+  :type 'regexp)
 
 (defcustom lm-history-header "Change ?Log\\|History"
   "Regexp which matches the start of code log section."
-  :type 'regexp
-  :group 'lisp-mnt)
+  :type 'regexp)
 
 ;;; Functions:
 
@@ -198,7 +187,6 @@ If the given section does not exist, return nil."
       (goto-char (point-min))
       (if (re-search-forward (lm-get-header-re header 'section) nil t)
           (line-beginning-position (if after 2))))))
-(defalias 'lm-section-mark 'lm-section-start)
 
 (defun lm-section-end (header)
   "Return the buffer location of the end of a given section.
@@ -214,6 +202,7 @@ a section."
     (when start
       (save-excursion
         (goto-char start)
+        (looking-at outline-regexp)
         (let ((level (lisp-outline-level))
               (case-fold-search t)
               next-section-found)
@@ -224,6 +213,7 @@ a section."
                              nil t))
                       (> (save-excursion
                            (beginning-of-line)
+                           (looking-at outline-regexp)
                            (lisp-outline-level))
                          level)))
 	  (min (if next-section-found
@@ -236,26 +226,23 @@ a section."
 		      (while (forward-comment 1))
 		      (point))))))))
 
-(defsubst lm-code-start ()
+(defun lm-code-start ()
   "Return the buffer location of the `Code' start marker."
   (lm-section-start "Code"))
-(defalias 'lm-code-mark 'lm-code-start)
 
-(defsubst lm-commentary-start ()
+(defun lm-commentary-start ()
   "Return the buffer location of the `Commentary' start marker."
   (lm-section-start lm-commentary-header))
-(defalias 'lm-commentary-mark 'lm-commentary-start)
 
-(defsubst lm-commentary-end ()
+(defun lm-commentary-end ()
   "Return the buffer location of the `Commentary' section end."
   (lm-section-end lm-commentary-header))
 
-(defsubst lm-history-start ()
+(defun lm-history-start ()
   "Return the buffer location of the `History' start marker."
   (lm-section-start lm-history-header))
-(defalias 'lm-history-mark 'lm-history-start)
 
-(defsubst lm-copyright-mark ()
+(defun lm-copyright-mark ()
   "Return the buffer location of the `Copyright' line."
   (save-excursion
     (let ((case-fold-search t))
@@ -267,7 +254,7 @@ a section."
   "Return the contents of the header named HEADER."
   (goto-char (point-min))
   (let ((case-fold-search t))
-    (when (and (re-search-forward (lm-get-header-re header) (lm-code-mark) t)
+    (when (and (re-search-forward (lm-get-header-re header) (lm-code-start) t)
 	       ;;   RCS ident likes format "$identifier: data$"
 	       (looking-at
 		(if (save-excursion
@@ -366,18 +353,13 @@ Return argument is of the form (\"HOLDER\" \"YEAR1\" ... \"YEARN\")"
 	    summary)))))
 
 (defun lm-crack-address (x)
-  "Split up an email address X into full name and real email address.
-The value is a cons of the form (FULLNAME . ADDRESS)."
-  (cond ((string-match "\\(.+\\) [(<]\\(\\S-+@\\S-+\\)[>)]" x)
-	 (cons (match-string 1 x)
-	       (match-string 2 x)))
-	((string-match "\\(\\S-+@\\S-+\\) [(<]\\(.*\\)[>)]" x)
-	 (cons (match-string 2 x)
-	       (match-string 1 x)))
-	((string-match "\\S-+@\\S-+" x)
-	 (cons nil x))
-	(t
-	 (cons x nil))))
+  "Split up email address(es) X into full name and real email address.
+The value is a list of elements of the form (FULLNAME . ADDRESS)."
+  (require 'mail-parse)
+  (declare-function mail-header-parse-addresses-lax "mail-parse" (string))
+  (mapcar (lambda (elem)
+            (cons (cdr elem) (car elem)))
+          (mail-header-parse-addresses-lax x)))
 
 (defun lm-authors (&optional file)
   "Return the author list of file FILE, or current buffer if FILE is nil.
@@ -385,16 +367,24 @@ Each element of the list is a cons; the car is the full name,
 the cdr is an email address."
   (lm-with-file file
     (let ((authorlist (lm-header-multiline "author")))
-      (mapcar 'lm-crack-address authorlist))))
+      (mapcan #'lm-crack-address authorlist))))
+
+(defun lm-maintainers (&optional file)
+  "Return the maintainer list of file FILE, or current buffer if FILE is nil.
+If the maintainers are unspecified, then return the authors.
+Each element of the list is a cons; the car is the full name,
+the cdr is an email address."
+  (lm-with-file file
+    (mapcan #'lm-crack-address
+            (or (lm-header-multiline "maintainer")
+                (lm-header-multiline "author")))))
 
 (defun lm-maintainer (&optional file)
   "Return the maintainer of file FILE, or current buffer if FILE is nil.
+If the maintainer is unspecified, then return the author.
 The return value has the form (NAME . ADDRESS)."
-  (lm-with-file file
-    (let ((maint (lm-header "maintainer")))
-      (if maint
-	  (lm-crack-address maint)
-	(car (lm-authors))))))
+  (declare (obsolete lm-maintainers "28.1"))
+  (car (lm-maintainers file)))
 
 (defun lm-creation-date (&optional file)
   "Return the created date given in file FILE, or current buffer if FILE is nil."
@@ -408,7 +398,7 @@ ISO-DATE non-nil means return the date in ISO 8601 format."
     (when (progn (goto-char (point-min))
 		 (re-search-forward
 		  "\\$[I]d: [^ ]+ [^ ]+ \\([^/]+\\)/\\([^/]+\\)/\\([^ ]+\\) "
-		  (lm-code-mark) t))
+                  (lm-code-start) t))
       (let ((dd (match-string 3))
 	    (mm (match-string 2))
 	    (yyyy (match-string 1)))
@@ -426,7 +416,7 @@ ISO-DATE non-nil means return the date in ISO 8601 format."
 This can be found in an RCS or SCCS header."
   (lm-with-file file
     (or (lm-header "version")
-	(let ((header-max (lm-code-mark)))
+        (let ((header-max (lm-code-start)))
 	  (goto-char (point-min))
 	  (cond
 	   ;; Look for an RCS header
@@ -445,6 +435,38 @@ This can be found in an RCS or SCCS header."
 	     header-max t)
 	    (match-string-no-properties 1)))))))
 
+(defun lm--prepare-package-dependencies (deps)
+  "Turn DEPS into an acceptable list of dependencies.
+
+Any parts missing a version string get a default version string
+of \"0\" (meaning any version) and an appropriate level of lists
+is wrapped around any parts requiring it."
+  (cond
+   ((not (listp deps))
+    (error "Invalid requirement specifier: %S" deps))
+   (t (mapcar (lambda (dep)
+                (cond
+                 ((symbolp dep) `(,dep "0"))
+                 ((stringp dep)
+                  (error "Invalid requirement specifier: %S" dep))
+                 ((and (listp dep) (null (cdr dep)))
+                  (list (car dep) "0"))
+                 (t dep)))
+              deps))))
+
+(declare-function package-read-from-string "package" (str))
+
+(defun lm-package-requires (&optional file)
+  "Return dependencies listed in file FILE, or current buffer if FILE is nil.
+The return value is a list of elements of the form (PACKAGE VERSION)
+where PACKAGE is the package name (a symbol) and VERSION is the
+package version (a string)."
+  (require 'package)
+  (lm-with-file file
+    (and-let* ((require-lines (lm-header-multiline "package-requires")))
+      (lm--prepare-package-dependencies
+       (package-read-from-string (mapconcat #'identity require-lines " "))))))
+
 (defun lm-keywords (&optional file)
   "Return the keywords given in file FILE, or current buffer if FILE is nil.
 The return is a `downcase'-ed string, or nil if no keywords
@@ -453,13 +475,13 @@ each line."
   (lm-with-file file
     (let ((keywords (lm-header-multiline "keywords")))
       (and keywords
-	   (mapconcat 'downcase keywords " ")))))
+	   (mapconcat #'downcase keywords " ")))))
 
 (defun lm-keywords-list (&optional file)
   "Return list of keywords given in file FILE."
   (let ((keywords (lm-keywords file)))
     (if keywords
-	(if (string-match-p "," keywords)
+	(if (string-search "," keywords)
 	    (split-string keywords ",[ \t\n]*" t "[ ]+")
 	  (split-string keywords "[ \t\n]+" t "[ ]+")))))
 
@@ -491,15 +513,27 @@ absent, return nil."
   (lm-with-file file
     (let ((start (lm-commentary-start)))
       (when start
-        (buffer-substring-no-properties start (lm-commentary-end))))))
+        (replace-regexp-in-string       ; Get rid of...
+         "[[:blank:]]*$" ""             ; trailing white-space
+         (replace-regexp-in-string
+          (format "%s\\|%s\\|%s"
+                  ;; commentary header
+                  (concat "^;;;[[:blank:]]*\\("
+                          lm-commentary-header
+                          "\\):[[:blank:]\n]*")
+                  "^;;[[:blank:]]?"     ; double semicolon prefix
+                  "[[:blank:]\n]*\\'")  ; trailing new-lines
+          "" (buffer-substring-no-properties
+              start (lm-commentary-end))))))))
 
-(defun lm-homepage (&optional file)
-  "Return the homepage in file FILE, or current buffer if FILE is nil."
+(defun lm-website (&optional file)
+  "Return the website in file FILE, or current buffer if FILE is nil."
   (let ((page (lm-with-file file
-		(lm-header "\\(?:x-\\)?\\(?:homepage\\|url\\)"))))
-    (if (and page (string-match "^<.+>$" page))
-	(substring page 1 -1)
+                (lm-header (rx (? "x-") (or "url" "homepage"))))))
+    (if (and page (string-match (rx bol "<" (+ nonl) ">" eol) page))
+        (substring page 1 -1)
       page)))
+(defalias 'lm-homepage #'lm-website) ; for backwards-compatibility
 
 ;;; Verification and synopses
 
@@ -507,7 +541,7 @@ absent, return nil."
   "Insert, at column COL, list of STRINGS."
   (if (> (current-column) col) (insert "\n"))
   (move-to-column col t)
-  (apply 'insert strings))
+  (apply #'insert strings))
 
 (defun lm-verify (&optional file showok verbose non-fsf-ok)
   "Check that the current buffer (or FILE if given) is in proper format.
@@ -518,6 +552,7 @@ says display \"OK\" in temp buffer for files that have no problems.
 Optional argument VERBOSE specifies verbosity level.
 Optional argument NON-FSF-OK if non-nil means a non-FSF
 copyright notice is allowed."
+  ;; FIXME: Make obsolete in favor of checkdoc?
   (interactive (list nil nil t))
   (let* ((ret (and verbose "Ok"))
 	 name)
@@ -543,7 +578,7 @@ copyright notice is allowed."
 		"Can't find package name")
 	       ((not (lm-authors))
 		"`Author:' tag missing")
-	       ((not (lm-maintainer))
+	       ((not (lm-maintainers))
 		"`Maintainer:' tag missing")
 	       ((not (lm-summary))
 		"Can't find the one-line summary description")
@@ -551,19 +586,18 @@ copyright notice is allowed."
 		"`Keywords:' tag missing")
 	       ((not (lm-keywords-finder-p))
 		"`Keywords:' has no valid finder keywords (see `finder-known-keywords')")
-	       ((not (lm-commentary-mark))
+               ((not (lm-commentary-start))
 		"Can't find a `Commentary' section marker")
-	       ((not (lm-history-mark))
+               ((not (lm-history-start))
 		"Can't find a `History' section marker")
-	       ((not (lm-code-mark))
+               ((not (lm-code-start))
 		"Can't find a `Code' section marker")
 	       ((progn
 		  (goto-char (point-max))
 		  (not
 		   (re-search-backward
-		    (concat "^;;;[ \t]+" name "[ \t]+ends here[ \t]*$"
-			    "\\|^;;;[ \t]+ End of file[ \t]+" name)
-		    nil t)))
+                    (rx bol ";;; " (regexp name) " ends here")
+                    nil t)))
 		"Can't find the footer line")
 	       ((not (and (lm-copyright-mark) (lm-crack-copyright)))
 		"Can't find a valid copyright notice")
@@ -611,7 +645,7 @@ Prompts for bug subject TOPIC.  Leaves you in a mail buffer."
   (interactive "sBug Subject: ")
   (require 'emacsbug)
   (let ((package (lm-get-package-name))
-	(addr (lm-maintainer))
+	(addr (car (lm-maintainers)))
 	(version (lm-version)))
     (compose-mail (if addr
 		      (concat (car addr) " <" (cdr addr) ">")
@@ -624,6 +658,11 @@ Prompts for bug subject TOPIC.  Leaves you in a mail buffer."
     (newline 2)
     (message "%s"
      (substitute-command-keys "Type \\[mail-send] to send bug report."))))
+
+(define-obsolete-function-alias 'lm-section-mark #'lm-section-start "30.1")
+(define-obsolete-function-alias 'lm-code-mark #'lm-code-start "30.1")
+(define-obsolete-function-alias 'lm-commentary-mark #'lm-commentary-start "30.1")
+(define-obsolete-function-alias 'lm-history-mark #'lm-history-start "30.1")
 
 (provide 'lisp-mnt)
 

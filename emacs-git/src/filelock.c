@@ -1,6 +1,6 @@
 /* Lock files for editing.
 
-Copyright (C) 1985-1987, 1993-1994, 1996, 1998-2017 Free Software
+Copyright (C) 1985-1987, 1993-1994, 1996, 1998-2025 Free Software
 Foundation, Inc.
 
 Author: Richard King
@@ -36,13 +36,9 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
-
-#ifdef __FreeBSD__
-#include <sys/sysctl.h>
-#endif /* __FreeBSD__ */
-
 #include <errno.h>
 
+#include <boot-time.h>
 #include <c-ctype.h>
 
 #include "lisp.h"
@@ -51,24 +47,14 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #ifdef WINDOWSNT
 #include <share.h>
 #include <sys/socket.h>	/* for fcntl */
-#include "w32.h"	/* for dostounix_filename */
+#include "w32common.h"
 #endif
 
 #ifndef MSDOS
 
-#ifdef HAVE_UTMP_H
-#include <utmp.h>
-#endif
-
-/* A file whose last-modified time is just after the most recent boot.
-   Define this to be NULL to disable checking for this file.  */
-#ifndef BOOT_TIME_FILE
-#define BOOT_TIME_FILE "/var/run/random-seed"
-#endif
-
-#if !defined WTMP_FILE && !defined WINDOWSNT
-#define WTMP_FILE "/var/log/wtmp"
-#endif
+#ifdef HAVE_ANDROID
+#include "android.h" /* For `android_is_special_directory'.  */
+#endif /* HAVE_ANDROID */
 
 /* Normally use a symbolic link to represent a lock.
    The strategy: to lock a file FN, create a symlink .#FN in FN's
@@ -87,7 +73,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
    theoretically be updated by daemons running separately -- but this
    whole idea is unimplemented; in practice, at least in our
    environment, it seems such stale locks arise fairly infrequently, and
-   Emacs' standard methods of dealing with clashes suffice.
+   Emacs's standard methods of dealing with clashes suffice.
 
    We use symlinks instead of normal files because (1) they can be
    stored more efficiently on the filesystem, since the kernel knows
@@ -122,160 +108,22 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
      hard nor symbolic links.  */
 
 
-/* Return the time of the last system boot.  */
-
-static time_t boot_time;
-static bool boot_time_initialized;
-
-#ifdef BOOT_TIME
-static void get_boot_time_1 (const char *, bool);
-#endif
+/* Return the time of the last system boot, or 0 if that information
+   is unavailable.  */
 
 static time_t
-get_boot_time (void)
+get_boot_sec (void)
 {
-#if defined (BOOT_TIME)
-  int counter;
-#endif
+  /* get_boot_time maintains static state.  Don't touch that state
+     if we are going to dump, since it might not survive dumping.  */
+  if (will_dump_p ())
+    return 0;
 
-  if (boot_time_initialized)
-    return boot_time;
-  boot_time_initialized = 1;
-
-#if defined (CTL_KERN) && defined (KERN_BOOTTIME)
-  {
-    int mib[2];
-    size_t size;
-    struct timeval boottime_val;
-
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_BOOTTIME;
-    size = sizeof (boottime_val);
-
-    if (sysctl (mib, 2, &boottime_val, &size, NULL, 0) >= 0)
-      {
-	boot_time = boottime_val.tv_sec;
-	return boot_time;
-      }
-  }
-#endif /* defined (CTL_KERN) && defined (KERN_BOOTTIME) */
-
-  if (BOOT_TIME_FILE)
-    {
-      struct stat st;
-      if (stat (BOOT_TIME_FILE, &st) == 0)
-	{
-	  boot_time = st.st_mtime;
-	  return boot_time;
-	}
-    }
-
-#if defined (BOOT_TIME)
-#ifndef CANNOT_DUMP
-  /* The utmp routines maintain static state.
-     Don't touch that state unless we are initialized,
-     since it might not survive dumping.  */
-  if (! initialized)
-    return boot_time;
-#endif /* not CANNOT_DUMP */
-
-  /* Try to get boot time from utmp before wtmp,
-     since utmp is typically much smaller than wtmp.
-     Passing a null pointer causes get_boot_time_1
-     to inspect the default file, namely utmp.  */
-  get_boot_time_1 (0, 0);
-  if (boot_time)
-    return boot_time;
-
-  /* Try to get boot time from the current wtmp file.  */
-  get_boot_time_1 (WTMP_FILE, 1);
-
-  /* If we did not find a boot time in wtmp, look at wtmp, and so on.  */
-  for (counter = 0; counter < 20 && ! boot_time; counter++)
-    {
-      Lisp_Object filename = Qnil;
-      bool delete_flag = false;
-      char cmd_string[sizeof WTMP_FILE ".19.gz"];
-      AUTO_STRING_WITH_LEN (tempname, cmd_string,
-			    sprintf (cmd_string, "%s.%d", WTMP_FILE, counter));
-      if (! NILP (Ffile_exists_p (tempname)))
-	filename = tempname;
-      else
-	{
-	  tempname = make_formatted_string (cmd_string, "%s.%d.gz",
-					    WTMP_FILE, counter);
-	  if (! NILP (Ffile_exists_p (tempname)))
-	    {
-	      /* The utmp functions on older systems accept only file
-		 names up to 8 bytes long.  Choose a 2 byte prefix, so
-		 the 6-byte suffix does not make the name too long.  */
-	      filename = Fmake_temp_file_internal (build_string ("wt"), Qnil,
-						   empty_unibyte_string, Qnil);
-	      CALLN (Fcall_process, build_string ("gzip"), Qnil,
-		     list2 (QCfile, filename), Qnil,
-		     build_string ("-cd"), tempname);
-	      delete_flag = true;
-	    }
-	}
-
-      if (! NILP (filename))
-	{
-	  get_boot_time_1 (SSDATA (filename), 1);
-	  if (delete_flag)
-	    unlink (SSDATA (filename));
-	}
-    }
-
-  return boot_time;
-#else
-  return 0;
-#endif
+  struct timespec boot_time;
+  boot_time.tv_sec = 0;
+  get_boot_time (&boot_time);
+  return boot_time.tv_sec;
 }
-
-#ifdef BOOT_TIME
-/* Try to get the boot time from wtmp file FILENAME.
-   This succeeds if that file contains a reboot record.
-
-   If FILENAME is zero, use the same file as before;
-   if no FILENAME has ever been specified, this is the utmp file.
-   Use the newest reboot record if NEWEST,
-   the first reboot record otherwise.
-   Ignore all reboot records on or before BOOT_TIME.
-   Success is indicated by setting BOOT_TIME to a larger value.  */
-
-void
-get_boot_time_1 (const char *filename, bool newest)
-{
-  struct utmp ut, *utp;
-
-  if (filename)
-    utmpname (filename);
-
-  setutent ();
-
-  while (1)
-    {
-      /* Find the next reboot record.  */
-      ut.ut_type = BOOT_TIME;
-      utp = getutid (&ut);
-      if (! utp)
-	break;
-      /* Compare reboot times and use the newest one.  */
-      if (utp->ut_time > boot_time)
-	{
-	  boot_time = utp->ut_time;
-	  if (! newest)
-	    break;
-	}
-      /* Advance on element in the file
-	 so that getutid won't repeat the same one.  */
-      utp = getutent ();
-      if (! utp)
-	break;
-    }
-  endutent ();
-}
-#endif /* BOOT_TIME */
 
 /* An arbitrary limit on lock contents length.  8 K should be plenty
    big enough in practice.  */
@@ -297,25 +145,6 @@ typedef struct
   char user[MAX_LFINFO + 1 + sizeof " (pid )" - sizeof "."];
 } lock_info_type;
 
-/* Write the name of the lock file for FNAME into LOCKNAME.  Length
-   will be that of FNAME plus two more for the leading ".#", plus one
-   for the null.  */
-#define MAKE_LOCK_NAME(lockname, fname) \
-  (lockname = SAFE_ALLOCA (SBYTES (fname) + 2 + 1), \
-   fill_in_lock_file_name (lockname, fname))
-
-static void
-fill_in_lock_file_name (char *lockfile, Lisp_Object fn)
-{
-  char *last_slash = memrchr (SSDATA (fn), '/', SBYTES (fn));
-  char *base = last_slash + 1;
-  ptrdiff_t dirlen = base - SSDATA (fn);
-  memcpy (lockfile, SSDATA (fn), dirlen);
-  lockfile[dirlen] = '.';
-  lockfile[dirlen + 1] = '#';
-  strcpy (lockfile + dirlen + 2, base);
-}
-
 /* For some reason Linux kernels return EPERM on file systems that do
    not support hard or symbolic links.  This symbol documents the quirk.
    There is no way to tell whether a symlink call fails due to
@@ -336,11 +165,12 @@ rename_lock_file (char const *old, char const *new, bool force)
     {
       struct stat st;
 
-      int r = renameat_noreplace (AT_FDCWD, old, AT_FDCWD, new);
+      int r = emacs_renameat_noreplace (AT_FDCWD, old,
+					AT_FDCWD, new);
       if (! (r < 0 && errno == ENOSYS))
 	return r;
       if (link (old, new) == 0)
-	return unlink (old) == 0 || errno == ENOENT ? 0 : -1;
+	return emacs_unlink (old) == 0 || errno == ENOENT ? 0 : -1;
       if (errno != ENOSYS && errno != LINKS_MIGHT_NOT_WORK)
 	return -1;
 
@@ -350,7 +180,8 @@ rename_lock_file (char const *old, char const *new, bool force)
 	 potential race condition since some other process may create
 	 NEW immediately after the existence check, but it's the best
 	 we can portably do here.  */
-      if (lstat (new, &st) == 0 || errno == EOVERFLOW)
+      if (emacs_fstatat (AT_FDCWD, new, &st, AT_SYMLINK_NOFOLLOW) == 0
+	  || errno == EOVERFLOW)
 	{
 	  errno = EEXIST;
 	  return -1;
@@ -359,7 +190,7 @@ rename_lock_file (char const *old, char const *new, bool force)
 	return -1;
     }
 
-  return rename (old, new);
+  return emacs_rename (old, new);
 #endif
 }
 
@@ -377,13 +208,13 @@ create_lock_file (char *lfname, char *lock_info_str, bool force)
      pretending that 'symlink' does not work.  */
   int err = ENOSYS;
 #else
-  int err = symlink (lock_info_str, lfname) == 0 ? 0 : errno;
+  int err = emacs_symlink (lock_info_str, lfname) == 0 ? 0 : errno;
 #endif
 
   if (err == EEXIST && force)
     {
-      unlink (lfname);
-      err = symlink (lock_info_str, lfname) == 0 ? 0 : errno;
+      emacs_unlink (lfname);
+      err = emacs_symlink (lock_info_str, lfname) == 0 ? 0 : errno;
     }
 
   if (err == ENOSYS || err == LINKS_MIGHT_NOT_WORK || err == ENAMETOOLONG)
@@ -405,9 +236,15 @@ create_lock_file (char *lfname, char *lock_info_str, bool force)
 	  ptrdiff_t lock_info_len;
 	  lock_info_len = strlen (lock_info_str);
 	  err = 0;
+
+	  /* Make the lock file readable to others, so that others' sessions
+	     can read it.  Even though nobody should write to the lock file,
+	     keep it user-writable to work around problems on nonstandard file
+	     systems that prohibit unlinking readonly files (Bug#37884).  */
 	  if (emacs_write (fd, lock_info_str, lock_info_len) != lock_info_len
-	      || fchmod (fd, S_IRUSR | S_IRGRP | S_IROTH) != 0)
+	      || fchmod (fd, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) != 0)
 	    err = errno;
+
 	  /* There is no need to call fsync here, as the contents of
 	     the lock file need not survive system crashes.  */
 	  if (emacs_close (fd) != 0)
@@ -415,7 +252,7 @@ create_lock_file (char *lfname, char *lock_info_str, bool force)
 	  if (!err && rename_lock_file (nonce, lfname, force) != 0)
 	    err = errno;
 	  if (err)
-	    unlink (nonce);
+	    emacs_unlink (nonce);
 	}
 
       SAFE_FREE ();
@@ -429,33 +266,33 @@ create_lock_file (char *lfname, char *lock_info_str, bool force)
    Return 0 if successful, an error number on failure.  */
 
 static int
-lock_file_1 (char *lfname, bool force)
+lock_file_1 (Lisp_Object lfname, bool force)
 {
-  /* Call this first because it can GC.  */
-  printmax_t boot = get_boot_time ();
-
+  intmax_t boot = get_boot_sec ();
   Lisp_Object luser_name = Fuser_login_name (Qnil);
-  char const *user_name = STRINGP (luser_name) ? SSDATA (luser_name) : "";
   Lisp_Object lhost_name = Fsystem_name ();
+
+  /* Protect against the extremely unlikely case of the host name
+     containing an @ character.  */
+  if (!NILP (lhost_name) && strchr (SSDATA (lhost_name), '@'))
+    lhost_name = CALLN (Ffuncall, Qstring_replace,
+			build_string ("@"), build_string ("-"),
+			lhost_name);
+
+  char const *user_name = STRINGP (luser_name) ? SSDATA (luser_name) : "";
   char const *host_name = STRINGP (lhost_name) ? SSDATA (lhost_name) : "";
   char lock_info_str[MAX_LFINFO + 1];
-  printmax_t pid = getpid ();
+  intmax_t pid = getpid ();
 
-  if (boot)
-    {
-      if (sizeof lock_info_str
-          <= snprintf (lock_info_str, sizeof lock_info_str,
-                       "%s@%s.%"pMd":%"pMd,
-                       user_name, host_name, pid, boot))
-        return ENAMETOOLONG;
-    }
-  else if (sizeof lock_info_str
-           <= snprintf (lock_info_str, sizeof lock_info_str,
-                        "%s@%s.%"pMd,
-                        user_name, host_name, pid))
+  char const *lock_info_fmt = (boot
+			       ? "%s@%s.%"PRIdMAX":%"PRIdMAX
+			       : "%s@%s.%"PRIdMAX);
+  int len = snprintf (lock_info_str, sizeof lock_info_str,
+		      lock_info_fmt, user_name, host_name, pid, boot);
+  if (! (0 <= len && len < sizeof lock_info_str))
     return ENAMETOOLONG;
 
-  return create_lock_file (lfname, lock_info_str, force);
+  return create_lock_file (SSDATA (lfname), lock_info_str, force);
 }
 
 /* Return true if times A and B are no more than one second apart.  */
@@ -506,15 +343,45 @@ read_lock_data (char *lfname, char lfinfo[MAX_LFINFO + 1])
   return nbytes;
 }
 
+/* Whether the string S starts with a decimal integer, optionally
+   negative.  */
+static bool
+integer_prefixed (char const *s)
+{
+  /* Doing it this way avoids a conditional branch on most platforms.  */
+  return c_isdigit (s[s[0] == '-']);
+}
+
+/* Whether the integer P could identify an individual process.  On most
+   platforms this simply checks for positive pid_t, but on some
+   MS-Windows ports our headers #define it to to some other test.  */
+#ifndef VALID_PROCESS_ID
+# define VALID_PROCESS_ID(p) (0 < (p) && (p) <= TYPE_MAXIMUM (pid_t))
+#endif
+
+/* True if errno values are negative.  Although the C standard
+   requires them to be positive, they are negative in Haiku.  */
+enum { NEGATIVE_ERRNO = EDOM < 0 };
+
+/* Nonzero values that are not errno values.  */
+enum
+  {
+    /* Another process on this machine owns it.  */
+    ANOTHER_OWNS_IT = NEGATIVE_ERRNO ? 1 : -1,
+
+    /* This Emacs process owns it.  */
+    I_OWN_IT = 2 * ANOTHER_OWNS_IT
+  };
+
 /* Return 0 if nobody owns the lock file LFNAME or the lock is obsolete,
-   1 if another process owns it (and set OWNER (if non-null) to info),
-   2 if the current process owns it,
-   or -1 if something is wrong with the locking mechanism.  */
+   ANOTHER_OWNS_IT if another process owns it
+     (and set OWNER (if non-null) to info),
+   I_OWN_IT if the current process owns it,
+   or an errno value if something is wrong with the locking mechanism.  */
 
 static int
-current_lock_owner (lock_info_type *owner, char *lfname)
+current_lock_owner (lock_info_type *owner, Lisp_Object lfname)
 {
-  int ret;
   lock_info_type local_owner;
   ptrdiff_t lfinfolen;
   intmax_t pid, boot_time;
@@ -526,25 +393,25 @@ current_lock_owner (lock_info_type *owner, char *lfname)
     owner = &local_owner;
 
   /* If nonexistent lock file, all is well; otherwise, got strange error. */
-  lfinfolen = read_lock_data (lfname, owner->user);
+  lfinfolen = read_lock_data (SSDATA (lfname), owner->user);
   if (lfinfolen < 0)
-    return errno == ENOENT ? 0 : -1;
+    return errno == ENOENT || errno == ENOTDIR ? 0 : errno;
   if (MAX_LFINFO < lfinfolen)
-    return -1;
+    return ENAMETOOLONG;
   owner->user[lfinfolen] = 0;
 
-  /* Parse USER@HOST.PID:BOOT_TIME.  If can't parse, return -1.  */
+  /* Parse USER@HOST.PID:BOOT_TIME.  If can't parse, return EINVAL.  */
   /* The USER is everything before the last @.  */
   owner->at = at = memrchr (owner->user, '@', lfinfolen);
   if (!at)
-    return -1;
+    return EINVAL;
   owner->dot = dot = strrchr (at, '.');
   if (!dot)
-    return -1;
+    return EINVAL;
 
   /* The PID is everything from the last '.' to the ':' or equivalent.  */
-  if (! c_isdigit (dot[1]))
-    return -1;
+  if (! integer_prefixed (dot + 1))
+    return EINVAL;
   errno = 0;
   pid = strtoimax (dot + 1, &owner->colon, 10);
   if (errno == ERANGE)
@@ -565,76 +432,112 @@ current_lock_owner (lock_info_type *owner, char *lfname)
 	 mistakenly transliterate ':' to U+F022 in symlink contents.
 	 See <https://bugzilla.redhat.com/show_bug.cgi?id=1384153>.  */
       if (! (boot[0] == '\200' && boot[1] == '\242'))
-	return -1;
+	return EINVAL;
       boot += 2;
       FALLTHROUGH;
     case ':':
-      if (! c_isdigit (boot[0]))
-	return -1;
+      if (! integer_prefixed (boot))
+	return EINVAL;
       boot_time = strtoimax (boot, &lfinfo_end, 10);
       break;
 
     default:
-      return -1;
+      return EINVAL;
     }
   if (lfinfo_end != owner->user + lfinfolen)
-    return -1;
+    return EINVAL;
 
-  /* On current host?  */
   Lisp_Object system_name = Fsystem_name ();
+  /* If `system-name' returns nil, that means we're in a
+     --no-build-details Emacs, and the name part of the link (e.g.,
+     .#test.txt -> larsi@.118961:1646577954) is an empty string.  */
+  if (NILP (system_name))
+    system_name = build_string ("");
+  /* Protect against the extremely unlikely case of the host name
+     containing an @ character.  */
+  else if (strchr (SSDATA (system_name), '@'))
+    system_name = CALLN (Ffuncall, intern ("string-replace"),
+			 build_string ("@"), build_string ("-"),
+			 system_name);
+  /* On current host?  */
   if (STRINGP (system_name)
       && dot - (at + 1) == SBYTES (system_name)
       && memcmp (at + 1, SSDATA (system_name), SBYTES (system_name)) == 0)
     {
       if (pid == getpid ())
-        ret = 2; /* We own it.  */
-      else if (0 < pid && pid <= TYPE_MAXIMUM (pid_t)
+        return I_OWN_IT;
+      else if (VALID_PROCESS_ID (pid)
                && (kill (pid, 0) >= 0 || errno == EPERM)
 	       && (boot_time == 0
 		   || (boot_time <= TYPE_MAXIMUM (time_t)
-		       && within_one_second (boot_time, get_boot_time ()))))
-        ret = 1; /* An existing process on this machine owns it.  */
+		       && within_one_second (boot_time, get_boot_sec ()))))
+        return ANOTHER_OWNS_IT;
       /* The owner process is dead or has a strange pid, so try to
          zap the lockfile.  */
       else
-        return unlink (lfname);
+        return emacs_unlink (SSDATA (lfname)) < 0 ? errno : 0;
     }
   else
     { /* If we wanted to support the check for stale locks on remote machines,
          here's where we'd do it.  */
-      ret = 1;
+      return ANOTHER_OWNS_IT;
     }
-
-  return ret;
 }
 
 
 /* Lock the lock named LFNAME if possible.
    Return 0 in that case.
-   Return positive if some other process owns the lock, and info about
+   Return ANOTHER_OWNS_IT if some other process owns the lock, and info about
      that process in CLASHER.
-   Return -1 if cannot lock for any other reason.  */
+   Return errno value if cannot lock for any other reason.  */
 
 static int
-lock_if_free (lock_info_type *clasher, char *lfname)
+lock_if_free (lock_info_type *clasher, Lisp_Object lfname)
 {
   int err;
   while ((err = lock_file_1 (lfname, 0)) == EEXIST)
     {
-      switch (current_lock_owner (clasher, lfname))
-	{
-	case 2:
-	  return 0;   /* We ourselves locked it.  */
-	case 1:
-	  return 1;   /* Someone else has it.  */
-	case -1:
-	  return -1;  /* current_lock_owner returned strange error.  */
-	}
+      err = current_lock_owner (clasher, lfname);
 
-      /* We deleted a stale lock; try again to lock the file.  */
+      /* Return if we locked it, or another process owns it, or it is
+	 a strange error.  */
+      if (err != 0)
+	return err == I_OWN_IT ? 0 : err;
+
+      /* We deleted a stale lock or some other process deleted the lock;
+	 try again to lock the file.  */
     }
 
-  return err ? -1 : 0;
+  return err;
+}
+
+/* Return the encoded name of the lock file for FN, or nil if none.  */
+
+static Lisp_Object
+make_lock_file_name (Lisp_Object fn)
+{
+  Lisp_Object lock_file_name;
+#if defined HAVE_ANDROID && !defined ANDROID_STUBIFY
+  char *name;
+#endif
+
+  fn = Fexpand_file_name (fn, Qnil);
+
+#if defined HAVE_ANDROID && !defined ANDROID_STUBIFY
+  /* Files in /assets and /contents can't have lock files on Android
+     as these directories are fabrications of android.c, and backed by
+     read only data.  */
+
+  name = SSDATA (fn);
+
+  if (android_is_special_directory (name, "/assets")
+      || android_is_special_directory (name, "/content"))
+  return Qnil;
+#endif /* defined HAVE_ANDROID && !defined ANDROID_STUBIFY */
+
+  lock_file_name = call1 (Qmake_lock_file_name, fn);
+
+  return !NILP (lock_file_name) ? ENCODE_FILE (lock_file_name) : Qnil;
 }
 
 /* lock_file locks file FN,
@@ -655,53 +558,41 @@ lock_if_free (lock_info_type *clasher, char *lfname)
    This function can signal an error, or return t meaning
    take away the lock, or return nil meaning ignore the lock.  */
 
-void
+static Lisp_Object
 lock_file (Lisp_Object fn)
 {
-  Lisp_Object orig_fn, encoded_fn;
-  char *lfname;
   lock_info_type lock_info;
-  USE_SAFE_ALLOCA;
 
   /* Don't do locking while dumping Emacs.
      Uncompressing wtmp files uses call-process, which does not work
      in an uninitialized Emacs.  */
-  if (! NILP (Vpurify_flag))
-    return;
+  if (will_dump_p ())
+    return Qnil;
 
-  orig_fn = fn;
-  fn = Fexpand_file_name (fn, Qnil);
-#ifdef WINDOWSNT
-  /* Ensure we have only '/' separators, to avoid problems with
-     looking (inside fill_in_lock_file_name) for backslashes in file
-     names encoded by some DBCS codepage.  */
-  dostounix_filename (SSDATA (fn));
-#endif
-  encoded_fn = ENCODE_FILE (fn);
+  Lisp_Object lfname = Qnil;
+  if (create_lockfiles)
+    {
+      /* Create the name of the lock-file for file fn */
+      lfname = make_lock_file_name (fn);
+      if (NILP (lfname))
+	return Qnil;
+    }
 
   /* See if this file is visited and has changed on disk since it was
      visited.  */
-  {
-    register Lisp_Object subject_buf;
-
-    subject_buf = get_truename_buffer (orig_fn);
-
-    if (!NILP (subject_buf)
-	&& NILP (Fverify_visited_file_modtime (subject_buf))
-	&& !NILP (Ffile_exists_p (fn)))
-      call1 (intern ("userlock--ask-user-about-supersession-threat"), fn);
-
-  }
+  Lisp_Object subject_buf = Fget_truename_buffer (fn);
+  if (!NILP (subject_buf)
+      && NILP (Fverify_visited_file_modtime (subject_buf))
+      && !NILP (Ffile_exists_p (fn))
+      && !(!NILP (lfname) && current_lock_owner (NULL, lfname) == I_OWN_IT))
+    call1 (intern ("userlock--ask-user-about-supersession-threat"), fn);
 
   /* Don't do locking if the user has opted out.  */
-  if (create_lockfiles)
+  if (!NILP (lfname))
     {
-
-      /* Create the name of the lock-file for file fn */
-      MAKE_LOCK_NAME (lfname, encoded_fn);
-
-      /* Try to lock the lock.  */
-      if (0 < lock_if_free (&lock_info, lfname))
+      /* Try to lock the lock.  FIXME: This ignores errors when
+	 lock_if_free returns an errno value.  */
+      if (lock_if_free (&lock_info, lfname) == ANOTHER_OWNS_IT)
 	{
 	  /* Someone else has the lock.  Consider breaking it.  */
 	  Lisp_Object attack;
@@ -718,36 +609,32 @@ lock_file (Lisp_Object fn)
 	  if (!NILP (attack))
 	    lock_file_1 (lfname, 1);
 	}
-      SAFE_FREE ();
     }
+  return Qnil;
 }
 
-void
+static Lisp_Object
 unlock_file (Lisp_Object fn)
 {
-  char *lfname;
-  USE_SAFE_ALLOCA;
+  Lisp_Object lfname = make_lock_file_name (fn);
+  if (NILP (lfname))
+    return Qnil;
 
-  fn = Fexpand_file_name (fn, Qnil);
-  fn = ENCODE_FILE (fn);
+  int err = current_lock_owner (0, lfname);
+  if (! (err == 0 || err == ANOTHER_OWNS_IT
+	 || (err == I_OWN_IT
+	     && (emacs_unlink (SSDATA (lfname)) == 0
+		 || (err = errno) == ENOENT))))
+    report_file_errno ("Unlocking file", fn, err);
 
-  MAKE_LOCK_NAME (lfname, fn);
-
-  if (current_lock_owner (0, lfname) == 2)
-    unlink (lfname);
-
-  SAFE_FREE ();
+  return Qnil;
 }
 
-#else  /* MSDOS */
-void
-lock_file (Lisp_Object fn)
+static Lisp_Object
+unlock_file_handle_error (Lisp_Object err)
 {
-}
-
-void
-unlock_file (Lisp_Object fn)
-{
+  call1 (intern ("userlock--handle-unlock-error"), err);
+  return Qnil;
 }
 
 #endif	/* MSDOS */
@@ -763,10 +650,58 @@ unlock_all_files (void)
       b = XBUFFER (buf);
       if (STRINGP (BVAR (b, file_truename))
 	  && BUF_SAVE_MODIFF (b) < BUF_MODIFF (b))
-	unlock_file (BVAR (b, file_truename));
+	Funlock_file (BVAR (b, file_truename));
     }
 }
 
+DEFUN ("lock-file", Flock_file, Slock_file, 1, 1, 0,
+       doc: /* Check whether FILE was modified since it was visited, and lock it.
+If user option `create-lockfiles' is nil, this does not create
+a lock file for FILE, but it still checks whether FILE was modified
+outside of the current Emacs session, and if so, asks the user
+whether to modify FILE.  */)
+  (Lisp_Object file)
+{
+#ifndef MSDOS
+  CHECK_STRING (file);
+
+  /* If the file name has special constructs in it,
+     call the corresponding file name handler.  */
+  Lisp_Object handler;
+  handler = Ffind_file_name_handler (file, Qlock_file);
+  if (!NILP (handler))
+    return call2 (handler, Qlock_file, file);
+
+  lock_file (file);
+#endif	/* MSDOS */
+  return Qnil;
+}
+
+DEFUN ("unlock-file", Funlock_file, Sunlock_file, 1, 1, 0,
+       doc: /* Unlock FILE.  */)
+  (Lisp_Object file)
+{
+#ifndef MSDOS
+  CHECK_STRING (file);
+
+  /* If the file name has special constructs in it,
+     call the corresponding file name handler.  */
+  Lisp_Object handler;
+  handler = Ffind_file_name_handler (file, Qunlock_file);
+  if (!NILP (handler))
+    {
+      call2 (handler, Qunlock_file, file);
+      return Qnil;
+    }
+
+  internal_condition_case_1 (unlock_file,
+			     file,
+			     list1 (Qfile_error),
+			     unlock_file_handle_error);
+#endif	/* MSDOS */
+  return Qnil;
+}
+
 DEFUN ("lock-buffer", Flock_buffer, Slock_buffer,
        0, 1, 0,
        doc: /* Lock FILE, if current buffer is modified.
@@ -782,7 +717,7 @@ If the option `create-lockfiles' is nil, this does nothing.  */)
     CHECK_STRING (file);
   if (SAVE_MODIFF < MODIFF
       && !NILP (file))
-    lock_file (file);
+    Flock_file (file);
   return Qnil;
 }
 
@@ -790,12 +725,15 @@ DEFUN ("unlock-buffer", Funlock_buffer, Sunlock_buffer,
        0, 0, 0,
        doc: /* Unlock the file visited in the current buffer.
 If the buffer is not modified, this does nothing because the file
-should not be locked in that case.  */)
+should not be locked in that case.  It also does nothing if the
+current buffer is not visiting a file, or is not locked.  Handles file
+system errors by calling `display-warning' and continuing as if the
+error did not occur.  */)
   (void)
 {
   if (SAVE_MODIFF < MODIFF
       && STRINGP (BVAR (current_buffer, file_truename)))
-    unlock_file (BVAR (current_buffer, file_truename));
+    Funlock_file (BVAR (current_buffer, file_truename));
   return Qnil;
 }
 
@@ -806,7 +744,7 @@ unlock_buffer (struct buffer *buffer)
 {
   if (BUF_SAVE_MODIFF (buffer) < BUF_MODIFF (buffer)
       && STRINGP (BVAR (buffer, file_truename)))
-    unlock_file (BVAR (buffer, file_truename));
+    Funlock_file (BVAR (buffer, file_truename));
 }
 
 DEFUN ("file-locked-p", Ffile_locked_p, Sfile_locked_p, 1, 1, 0,
@@ -819,24 +757,33 @@ t if it is locked by you, else a string saying which user has locked it.  */)
   return Qnil;
 #else
   Lisp_Object ret;
-  char *lfname;
   int owner;
   lock_info_type locker;
-  USE_SAFE_ALLOCA;
 
-  filename = Fexpand_file_name (filename, Qnil);
+  /* If the file name has special constructs in it,
+     call the corresponding file name handler.  */
+  Lisp_Object handler;
+  handler = Ffind_file_name_handler (filename, Qfile_locked_p);
+  if (!NILP (handler))
+    {
+      return call2 (handler, Qfile_locked_p, filename);
+    }
 
-  MAKE_LOCK_NAME (lfname, filename);
+  Lisp_Object lfname = make_lock_file_name (filename);
+  if (NILP (lfname))
+    return Qnil;
 
   owner = current_lock_owner (&locker, lfname);
-  if (owner <= 0)
-    ret = Qnil;
-  else if (owner == 2)
-    ret = Qt;
-  else
-    ret = make_string (locker.user, locker.at - locker.user);
+  switch (owner)
+    {
+    case I_OWN_IT: ret = Qt; break;
+    case ANOTHER_OWNS_IT:
+      ret = make_string (locker.user, locker.at - locker.user);
+      break;
+    case  0: ret = Qnil; break;
+    default: report_file_errno ("Testing file lock", filename, owner);
+    }
 
-  SAFE_FREE ();
   return ret;
 #endif
 }
@@ -849,10 +796,21 @@ syms_of_filelock (void)
   Vtemporary_file_directory = Qnil;
 
   DEFVAR_BOOL ("create-lockfiles", create_lockfiles,
-	       doc: /* Non-nil means use lockfiles to avoid editing collisions.  */);
-  create_lockfiles = 1;
+	       doc: /* Non-nil means use lockfiles to avoid editing collisions.
+The name of the (per-buffer) lockfile is constructed by prepending
+".#" to the name of the file being locked.  See also `lock-buffer' and
+Info node `(emacs)Interlocking'.  */);
+  create_lockfiles = true;
 
-  defsubr (&Sunlock_buffer);
+  DEFSYM (Qlock_file, "lock-file");
+  DEFSYM (Qunlock_file, "unlock-file");
+  DEFSYM (Qfile_locked_p, "file-locked-p");
+  DEFSYM (Qmake_lock_file_name, "make-lock-file-name");
+  DEFSYM (Qstring_replace, "string-replace");
+
+  defsubr (&Slock_file);
+  defsubr (&Sunlock_file);
   defsubr (&Slock_buffer);
+  defsubr (&Sunlock_buffer);
   defsubr (&Sfile_locked_p);
 }

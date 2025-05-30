@@ -1,6 +1,6 @@
-;;; ucs-normalize --- tests for international/ucs-normalize.el -*- lexical-binding: t -*-
+;;; ucs-normalize-tests.el --- tests for international/ucs-normalize.el -*- lexical-binding: t -*-
 
-;; Copyright (C) 2002-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -59,7 +59,7 @@ And NORM is one of the symbols `NFC', `NFD', `NFKC', `NFKD' for brevity."
                       (NFD . ucs-normalize-NFD-region)
                       (NFKC . ucs-normalize-NFKC-region)
                       (NFKD . ucs-normalize-NFKD-region))))
-    `(with-current-buffer ucs-normalize-tests--norm-buf
+    `(progn
        (erase-buffer)
        (insert ,str)
        (,(cdr (assq norm norm-alist)) (point-min) (point-max))
@@ -74,7 +74,7 @@ And NORM is one of the symbols `NFC', `NFD', `NFKC', `NFKD' for brevity."
                       (NFD . ucs-normalize-NFD-region)
                       (NFKC . ucs-normalize-NFKC-region)
                       (NFKD . ucs-normalize-NFKD-region))))
-    `(with-current-buffer ucs-normalize-tests--norm-buf
+    `(progn
        (erase-buffer)
        (insert ,char)
        (,(cdr (assq norm norm-alist)) (point-min) (point-max))
@@ -90,44 +90,47 @@ The following invariants must be true for all conformant implementations..."
     ;; See `ucs-normalize-tests--rule2-holds-p'.
     (aset ucs-normalize-tests--chars-part1
           (aref source 0) 1))
-  (and
-   ;; c2 ==  toNFC(c1) ==  toNFC(c2) ==  toNFC(c3)
-   (ucs-normalize-tests--normalization-equal-p NFC source nfc)
-   (ucs-normalize-tests--normalization-equal-p NFC nfc nfc)
-   (ucs-normalize-tests--normalization-equal-p NFC nfd nfc)
-   ;; c4 ==  toNFC(c4) ==  toNFC(c5)
-   (ucs-normalize-tests--normalization-equal-p NFC nfkc nfkc)
-   (ucs-normalize-tests--normalization-equal-p NFC nfkd nfkc)
+  (with-current-buffer ucs-normalize-tests--norm-buf
+    (and
+     ;; c2 ==  toNFC(c1) ==  toNFC(c2) ==  toNFC(c3)
+     (ucs-normalize-tests--normalization-equal-p NFC source nfc)
+     (ucs-normalize-tests--normalization-equal-p NFC nfc nfc)
+     (ucs-normalize-tests--normalization-equal-p NFC nfd nfc)
+     ;; c4 ==  toNFC(c4) ==  toNFC(c5)
+     (ucs-normalize-tests--normalization-equal-p NFC nfkc nfkc)
+     (ucs-normalize-tests--normalization-equal-p NFC nfkd nfkc)
 
-   ;; c3 ==  toNFD(c1) ==  toNFD(c2) ==  toNFD(c3)
-   (ucs-normalize-tests--normalization-equal-p NFD source nfd)
-   (ucs-normalize-tests--normalization-equal-p NFD nfc nfd)
-   (ucs-normalize-tests--normalization-equal-p NFD nfd nfd)
-   ;; c5 ==  toNFD(c4) ==  toNFD(c5)
-   (ucs-normalize-tests--normalization-equal-p NFD nfkc nfkd)
-   (ucs-normalize-tests--normalization-equal-p NFD nfkd nfkd)
+     ;; c3 ==  toNFD(c1) ==  toNFD(c2) ==  toNFD(c3)
+     (ucs-normalize-tests--normalization-equal-p NFD source nfd)
+     (ucs-normalize-tests--normalization-equal-p NFD nfc nfd)
+     (ucs-normalize-tests--normalization-equal-p NFD nfd nfd)
+     ;; c5 ==  toNFD(c4) ==  toNFD(c5)
+     (ucs-normalize-tests--normalization-equal-p NFD nfkc nfkd)
+     (ucs-normalize-tests--normalization-equal-p NFD nfkd nfkd)
 
-   ;; c4 == toNFKC(c1) == toNFKC(c2) == toNFKC(c3) == toNFKC(c4) == toNFKC(c5)
-   (ucs-normalize-tests--normalization-equal-p NFKC source nfkc)
-   (ucs-normalize-tests--normalization-equal-p NFKC nfc nfkc)
-   (ucs-normalize-tests--normalization-equal-p NFKC nfd nfkc)
-   (ucs-normalize-tests--normalization-equal-p NFKC nfkc nfkc)
-   (ucs-normalize-tests--normalization-equal-p NFKC nfkd nfkc)
+     ;; c4 == toNFKC(c1) == toNFKC(c2) == toNFKC(c3) == toNFKC(c4) == toNFKC(c5)
+     (ucs-normalize-tests--normalization-equal-p NFKC source nfkc)
+     (ucs-normalize-tests--normalization-equal-p NFKC nfc nfkc)
+     (ucs-normalize-tests--normalization-equal-p NFKC nfd nfkc)
+     (ucs-normalize-tests--normalization-equal-p NFKC nfkc nfkc)
+     (ucs-normalize-tests--normalization-equal-p NFKC nfkd nfkc)
 
-   ;; c5 == toNFKD(c1) == toNFKD(c2) == toNFKD(c3) == toNFKD(c4) == toNFKD(c5)
-   (ucs-normalize-tests--normalization-equal-p NFKD source nfkd)
-   (ucs-normalize-tests--normalization-equal-p NFKD nfc nfkd)
-   (ucs-normalize-tests--normalization-equal-p NFKD nfd nfkd)
-   (ucs-normalize-tests--normalization-equal-p NFKD nfkc nfkd)
-   (ucs-normalize-tests--normalization-equal-p NFKD nfkd nfkd)))
+     ;; c5 == toNFKD(c1) == toNFKD(c2) == toNFKD(c3) == toNFKD(c4) == toNFKD(c5)
+     (ucs-normalize-tests--normalization-equal-p NFKD source nfkd)
+     (ucs-normalize-tests--normalization-equal-p NFKD nfc nfkd)
+     (ucs-normalize-tests--normalization-equal-p NFKD nfd nfkd)
+     (ucs-normalize-tests--normalization-equal-p NFKD nfkc nfkd)
+     (ucs-normalize-tests--normalization-equal-p NFKD nfkd nfkd))))
 
 (defsubst ucs-normalize-tests--rule2-holds-p (X)
  "Check 2nd conformance rule.
-For every code point X assigned in this version of Unicode that is not specifically
-listed in Part 1, the following invariants must be true for all conformant
-implementations:
+For every code point X assigned in this version of Unicode that
+is not specifically listed in Part 1, the following invariants
+must be true for all conformant implementations:
 
-  X == toNFC(X) == toNFD(X) == toNFKC(X) == toNFKD(X)"
+  X == toNFC(X) == toNFD(X) == toNFKC(X) == toNFKD(X)
+
+Must be called with `ucs-normalize-tests--norm-buf' as current buffer."
  (and (ucs-normalize-tests--normalization-chareq-p NFC X X)
       (ucs-normalize-tests--normalization-chareq-p NFD X X)
       (ucs-normalize-tests--normalization-chareq-p NFKC X X)
@@ -181,26 +184,7 @@ implementations:
   (should-not (ucs-normalize-tests--rule1-failing-for-partX 0)))
 
 (defconst ucs-normalize-tests--failing-lines-part1
-  (list 15131 15132 15133 15134 15135 15136 15137 15138
-        15139
-        16149 16150 16151 16152 16153 16154 16155 16156
-        16157 16158 16159 16160 16161 16162 16163 16164
-        16165 16166 16167 16168 16169 16170 16171 16172
-        16173 16174 16175 16176 16177 16178 16179 16180
-        16181 16182 16183 16184 16185 16186 16187 16188
-        16189 16190 16191 16192 16193 16194 16195 16196
-        16197 16198 16199 16200 16201 16202 16203 16204
-        16205 16206 16207 16208 16209 16210 16211 16212
-        16213 16214 16215 16216 16217 16218 16219 16220
-        16221 16222 16223 16224 16225 16226 16227 16228
-        16229 16230 16231 16232 16233 16234 16235 16236
-        16237 16238 16239 16240 16241 16242 16243 16244
-        16245 16246 16247 16248 16249 16250 16251 16252
-        16253 16254 16255 16256 16257 16258 16259 16260
-        16261 16262 16263 16264 16265 16266 16267 16268
-        16269 16270 16271 16272 16273 16274 16275 16276
-        16277 16278 16279 16280 16281 16282 16283 16284
-        16285 16286 16287 16288 16289))
+  (list ))
 
 ;; Keep a record of failures, for consulting afterwards (the ert
 ;; backtrace only shows a truncated version of these lists).
@@ -213,31 +197,36 @@ implementations:
 
 (defun ucs-normalize-tests--part1-rule2 (chars-part1)
   (let ((reporter (make-progress-reporter "UCS Normalize Test Part1, rule 2"
-                                          0 (max-char)))
-        (failed-chars nil))
-    (map-char-table
-     (lambda (char-range listed-in-part)
-       (unless (eq listed-in-part 1)
-         (if (characterp char-range)
-             (progn (unless (ucs-normalize-tests--rule2-holds-p char-range)
-                      (push char-range failed-chars))
-                    (progress-reporter-update reporter char-range))
-           (cl-loop for char from (car char-range) to (cdr char-range)
-                    unless (ucs-normalize-tests--rule2-holds-p char)
-                    do (push char failed-chars)
-                    do (progress-reporter-update reporter char)))))
-     chars-part1)
+                                          0 (max-char t)))
+        (failed-chars nil)
+        (unicode-max (max-char t)))
+    (with-current-buffer ucs-normalize-tests--norm-buf
+      (map-char-table
+       (lambda (char-range listed-in-part)
+         (unless (eq listed-in-part 1)
+           (if (characterp char-range)
+               (progn (unless (ucs-normalize-tests--rule2-holds-p char-range)
+                        (push char-range failed-chars))
+                      (progress-reporter-update reporter char-range))
+             (cl-loop for char from (car char-range) to (min (cdr char-range)
+                                                             unicode-max)
+                      unless (ucs-normalize-tests--rule2-holds-p char)
+                      do (push char failed-chars)
+                      do (progress-reporter-update reporter char)))))
+       chars-part1))
     (progress-reporter-done reporter)
     failed-chars))
 
 (ert-deftest ucs-normalize-part1 ()
   :tags '(:expensive-test)
+  (skip-when (or (getenv "EMACS_HYDRA_CI")
+                 (getenv "EMACS_EMBA_CI"))) ; SLOW ~ 1800s
   ;; This takes a long time, so make sure we're compiled.
   (dolist (fun '(ucs-normalize-tests--part1-rule2
                  ucs-normalize-tests--rule1-failing-for-partX
                  ucs-normalize-tests--rule1-holds-p
                  ucs-normalize-tests--rule2-holds-p))
-    (or (byte-code-function-p (symbol-function fun))
+    (or (compiled-function-p (symbol-function fun))
         (byte-compile fun)))
   (let ((ucs-normalize-tests--chars-part1 (make-char-table 'ucs-normalize-tests t)))
     (setq ucs-normalize-tests--part1-rule1-failed-lines
@@ -258,21 +247,20 @@ implementations:
     ucs-normalize-tests--failing-lines-part1)))
 
 (defconst ucs-normalize-tests--failing-lines-part2
-  (list 17656 17658 18006 18007 18008 18009 18010 18011
-        18012 18340 18342 18344 18346 18348 18350 18352
-        18354 18356 18358 18360 18362 18364 18366 18368
-        18370 18372 18374 18376 18378 18380 18382 18384
-        18386 18388 18390 18392 18394 18396 18398 18400
-        18402 18404 18406 18408 18410 18412 18414 18416
-        18418 18420 18422 18424 18426 18428 18430 18432
-        18434 18436 18438 18440 18442 18444 18446 18448
-        18450 18518 18520 18522 18524 18526 18528 18530
-        18532 18534 18536 18538 18540 18542 18544 18546
-        18548 18550 18552 18554 18556 18558 18560 18562
-        18564 18566 18568 18570 18572 18574 18576 18578
-        18580 18582 18584 18586 18588 18590 18592 18594
-        18596 18598 18600 18602 18604 18606 18608 18610
-        18612 18614 18616 18618 18620))
+  (list 17789 17790 17801 17802 17807 17808 17811 17812
+        17815 17816 17821 17822 17829 17830 17907 17908
+        18023 18024 18049 18050 18055 18056 18459 18460
+        18605 18606 18617 18618 18621 18622 18625 18626
+        18627 18628 18631 18632 18633 18634 18663 18664
+        18669 18670 18673 18674 18679 18680 18685 18686
+        18691 18692 18695 18697 18699 18701 18703 18704
+        18705 18707 18709 18711 18713 18715 18717 18719
+        18721 18723 18725 18727 18729 18731 18733 18735
+        18737 18739 18740 18741 18742 18743 18889 18891
+        18893 18895 18897 18899 18901 18903 18905 18907
+        18909 18911 18913 18914 18915 18916 18917 18919
+        18921 18923 18925 18927 18929 18931 18933 18935
+        18937 18939 18941 18943 18945 18947 18948))
 
 (ert-deftest ucs-normalize-part2 ()
   :tags '(:expensive-test)
@@ -299,7 +287,7 @@ implementations:
   (list " var var))
   (dolist (linos (seq-partition newval 8))
     (insert (mapconcat #'number-to-string linos " ") "\n"))
-  (insert ")\)"))
+  (insert "))"))
 
 (defun ucs-normalize-check-failing-lines ()
   (interactive)
@@ -332,5 +320,16 @@ implementations:
             (princ (buffer-string) standard-output)
           (display-buffer (current-buffer)))
       (message "No changes to failing lines needed"))))
+
+(ert-deftest ucs-normalize-save-match-data ()
+  "Verify that match data isn't clobbered (bug#41445)"
+  (string-match (rx (+ digit)) "a47b")
+  (should (equal (match-data t) '(1 3)))
+  (should (equal
+           (decode-coding-string
+            (encode-coding-string "Käsesoßenrührlöffel" 'utf-8-hfs)
+            'utf-8-hfs)
+           "Käsesoßenrührlöffel"))
+  (should (equal (match-data t) '(1 3))))
 
 ;;; ucs-normalize-tests.el ends here

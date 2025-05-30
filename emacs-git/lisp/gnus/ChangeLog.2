@@ -1759,7 +1759,7 @@
 
 	* pgg-gpg.el, pgg-pgp.el, pgg-pgp5.el, pgg.el: Reapply changes
 	from 2003-04-03 to fix security problem.
-	See http://www.debian.org/security/2003/dsa-339.
+	See https://www.debian.org/security/2003/dsa-339.
 
 2003-07-23  Teodor Zlatanov  <tzz@lifelogs.com>
 
@@ -3378,7 +3378,7 @@
 
 	* gnus-async.el (gnus-asynchronous): Move defcustom of
 	gnus-asynchronous away from defgroup of gnus-asynchronous.
-	This seems to fix an intermittant error in which loading gnus-async
+	This seems to fix an intermittent error in which loading gnus-async
 	fails to define gnus-asynchronous (the variable).
 
 	* gnus-sum.el: Concur with Steve Young, 5th argument to 'load' is
@@ -6215,7 +6215,7 @@
 	* pop3.el (pop3-retr): Wait 500 msecs.
 	(pop3-read-response): Ditto.
 
-	* gnus-msg.el (gnus-setup-message): Get the evaliation order
+	* gnus-msg.el (gnus-setup-message): Get the evaluation order
 	right.
 	(gnus-inews-make-draft): New function.
 	(gnus-setup-message): Use it.
@@ -6549,12 +6549,12 @@
 	* nnmail.el (nnmail-split-it): Add tracing to
 	`:' split rule.
 
-2002-08-13  Hrvoje Niksic  <hniksic@xemacs.org>
+2002-08-13  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* mm-decode.el (mm-mailcap-command): Remove the quotes around '%s'
 	and "%s" so we don't overquote them.
 
-2002-08-13  Hrvoje Niksic  <hniksic@xemacs.org>
+2002-08-13  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* (mm-display-external): Display the actual command that has been
 	executed in the echo area.
@@ -7096,7 +7096,7 @@
 	* nnimap.el (nnimap-callback-callback-function):
 	(nnimap-callback-buffer): Remove, these cannot be global but must
 	be embedded into the callback.
-	(nnimap-make-callback): New.  Embedd article number, callback and
+	(nnimap-make-callback): New.  Embed article number, callback and
 	buffer in function.
 	(nnimap-callback, nnimap-request-article-part): Update.
 
@@ -8031,7 +8031,7 @@
 	(message-xpost-fup2-header, message-xpost-insert-note)
 	(message-xpost-fup2, message-reduce-to-to-cc): New functions
 	adopted from message-utils.el.  Add functions to the keymap, mode
-	describtion and menu.
+	description and menu.
 	(message-change-subject, message-xpost-fup2): Signal error if
 	current header is empty.
 	(message-xpost-insert-note): Change insert position.
@@ -8612,7 +8612,7 @@
 2002-06-11  Simon Josefsson  <jas@extundo.com>
 
 	* gnus-int.el (gnus-request-move-article): Agent expire article if
-	successfuly moved.
+	successfully moved.
 
 2002-06-11  Niklas Morberg  <niklas.morberg@axis.com>
 
@@ -8654,7 +8654,7 @@
 	(gnus-summary-news-other-window, gnus-summary-post-news):
 	Bind gnus-article-copy to nil, thereby inhibiting the `header' posting
 	style match to use data from last viewed article.
-	Suggested by Hrvoje Niksic.
+	Suggested by Hrvoje Nikšić.
 
 2002-06-04  Katsumi Yamaoka  <yamaoka@jpl.org>
 
@@ -8859,7 +8859,7 @@
 	signencrypt.
 	* mml-sec.el (mml-secure-message-encrypt-pgpmime): Ditto.
 	* mml.el (mml-generate-mime-1): Change logic so a part which is
-	both signed & encryped is processed in one operation (rather than
+	both signed & encrypted is processed in one operation (rather than
 	two separate ops: sign, then encrypt).
 	* mml2015.el (mml2015-gpg-extract-signature-details): Give some
 	indication if a message is signed by an expired key.
@@ -9073,7 +9073,7 @@
 
 2002-04-13  Josh Huber  <huber@alum.wpi.edu>
 
-	* mml-sec.el (mml-secure-message): Change to support arbritrary
+	* mml-sec.el (mml-secure-message): Change to support arbitrary
 	modes.
 	* mml-sec.el (mml-secure-message-encrypt-(smime|pgp|pgpmime)):
 	changed to support "signencrypt" mode.
@@ -9474,7 +9474,7 @@
 2002-03-01  Paul Jarc  <prj@po.cwru.edu>
 
 	* message.el (message-get-reply-headers): Downcase email addresses
-	for comaparisons for duplicate removal.
+	for comparisons for duplicate removal.
 
 2002-03-01  ShengHuo ZHU  <zsh@cs.rochester.edu>
 
@@ -9684,7 +9684,7 @@
 
 2002-02-17  ShengHuo ZHU  <zsh@cs.rochester.edu>
 
-	Some ideas is inspired by code from Hrvoje Niksic
+	Some ideas is inspired by code from Hrvoje Nikšić
 	<hniksic@arsdigita.com>
 
 	* gnus-art.el (gnus-article-wash-function): Set the default to
@@ -10070,7 +10070,7 @@
 	* gnus-group.el (gnus-group-delete-group): Nix the entry in
 	gnus-cache-active-hashtb.
 
-	* gnus-agent.el (gnus-agent-mark-unread-afer-downloaded): New variable.
+	* gnus-agent.el (gnus-agent-mark-unread-after-downloaded): New variable.
 	(gnus-agent-summary-fetch-group): Use it.
 
 	* gnus-msg.el (gnus-debug-files): New variable.
@@ -15154,7 +15154,7 @@
 	* mm-decode.el (mm-handle-set-external-undisplayer):
 	Don't generate compiler warnings.
 
-2001-06-04  Hrvoje Niksic  <hniksic@arsdigita.com>
+2001-06-04  Hrvoje Nikšić  <hniksic@arsdigita.com>
 
 	* mm-decode.el (mm-pipe-part): Bind coding-system-for-write to
 	binary so that we don't transmit ISO 2022 garbage to the process.
@@ -15339,7 +15339,7 @@
 
 	* mm-uu.el (mm-uu-configure-list): Fix customize type.
 
-2001-04-24  Hrvoje Niksic  <hniksic@arsdigita.com>
+2001-04-24  Hrvoje Nikšić  <hniksic@arsdigita.com>
 
 	* mm-view.el (mm-display-inline-fontify): Allow XEmacs to fully
 	fontify HANDLE.
@@ -18098,14 +18098,14 @@
 2000-11-05  Simon Josefsson  <sj@extundo.com>
 
 	* mml-smime.el (mml-smime-verify): Work in original multipart
-	buffert.
+	buffer.
 
 	* mm-decode.el (mm-handle-multipart-original-buffer): New macro.
 	(mm-handle-multipart-ctl-parameter): Ditto.
 	(mm-alist-to-plist): New function.
 	(mm-dissect-buffer): Store CTL parameters and copy original buffer
 	for multiparts.
-	(mm-destroy-parts): Destroy multipart buffert.
+	(mm-destroy-parts): Destroy multipart buffer.
 	(mm-remove-part): Ditto.
 
 	* mml-smime.el (mml-smime-sign): Not used.
@@ -18253,7 +18253,7 @@
 	(gnus-set-global-variables): Globalize them.
 	(gnus-summary-exit): Kill them.
 
-2000-11-02  Hrvoje Niksic  <hniksic@arsdigita.com>
+2000-11-02  Hrvoje Nikšić  <hniksic@arsdigita.com>
 
 	* rfc2047.el (rfc2047-encoded-word-regexp): Allow empty encoded
 	word.
@@ -18538,7 +18538,8 @@
 
 See ChangeLog.1 for earlier changes.
 
-  Copyright (C) 2000-2002, 2004-2017 Free Software Foundation, Inc.
+  Copyright (C) 2000-2002, 2004-2025 Free Software Foundation,
+  Inc.
 
   This file is part of GNU Emacs.
 

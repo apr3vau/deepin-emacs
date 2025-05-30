@@ -1,24 +1,42 @@
 /* Provide a more complete sys/types.h.
 
-   Copyright (C) 2011-2017 Free Software Foundation, Inc.
+   Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3, or (at your option)
-   any later version.
+   This file is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Lesser General Public License as
+   published by the Free Software Foundation; either version 2.1 of the
+   License, or (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
+   This file is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU Lesser General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
-   along with this program; if not, see <https://www.gnu.org/licenses/>.  */
+   You should have received a copy of the GNU Lesser General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #if __GNUC__ >= 3
 @PRAGMA_SYSTEM_HEADER@
 #endif
 @PRAGMA_COLUMNS@
+
+/* This file uses #include_next of a system file that defines time_t.
+   For the 'year2038' module to work right, <config.h> needs to have been
+   included before.  */
+#if !_GL_CONFIG_H_INCLUDED
+ #error "Please include config.h first."
+#endif
+
+#if defined _WIN32 && !defined __CYGWIN__ \
+    && (defined __need_off_t || defined __need___off64_t \
+        || defined __need_ssize_t || defined __need_time_t)
+
+/* Special invocation convention inside mingw header files.  */
+
+#@INCLUDE_NEXT@ @NEXT_SYS_TYPES_H@
+
+#else
+/* Normal invocation convention.  */
 
 #ifndef _@GUARD_PREFIX@_SYS_TYPES_H
 
@@ -40,6 +58,15 @@
 # endif
 /* Indicator, for gnulib internal purposes.  */
 # define _GL_WINDOWS_64_BIT_OFF_T 1
+#endif
+
+/* Define the off64_t type.  */
+#if !@HAVE_OFF64_T@
+# if !GNULIB_defined_off64_t
+/* Define off64_t to int64_t always.  */
+typedef long long off64_t;
+#  define GNULIB_defined_off64_t 1
+# endif
 #endif
 
 /* Override dev_t and ino_t if distinguishable inodes support is requested
@@ -86,10 +113,10 @@ typedef unsigned long long int rpl_ino_t;
 
 /* MSVC 9 defines size_t in <stddef.h>, not in <sys/types.h>.  */
 /* But avoid namespace pollution on glibc systems.  */
-#if ((defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__) \
-    && ! defined __GLIBC__
+#if (defined _WIN32 && ! defined __CYGWIN__) && ! defined __GLIBC__
 # include <stddef.h>
 #endif
 
 #endif /* _@GUARD_PREFIX@_SYS_TYPES_H */
 #endif /* _@GUARD_PREFIX@_SYS_TYPES_H */
+#endif /* __need_XXX */

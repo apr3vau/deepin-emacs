@@ -1,6 +1,6 @@
 /* MS-DOS specific C utilities.          -*- coding: cp850 -*-
 
-Copyright (C) 1993-1997, 1999-2017 Free Software Foundation, Inc.
+Copyright (C) 1993-1997, 1999-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -223,8 +223,8 @@ them.  This happens with wheeled mice on Windows 9X, for example.  */)
 {
   int n;
 
-  CHECK_NUMBER (nbuttons);
-  n = XINT (nbuttons);
+  CHECK_FIXNUM (nbuttons);
+  n = XFIXNUM (nbuttons);
   if (n < 2 || n > 3)
     xsignal2 (Qargs_out_of_range,
 	      build_string ("only 2 or 3 mouse buttons are supported"),
@@ -322,8 +322,8 @@ mouse_get_pos (struct frame **f, int insist, Lisp_Object *bar_window,
   *bar_window = Qnil;
   mouse_get_xy (&ix, &iy);
   *time = event_timestamp ();
-  *x = make_number (mouse_last_x = ix);
-  *y = make_number (mouse_last_y = iy);
+  *x = make_fixnum (mouse_last_x = ix);
+  *y = make_fixnum (mouse_last_y = iy);
 }
 
 static void
@@ -419,6 +419,9 @@ static unsigned short outside_cursor;
 
 /* The only display since MS-DOS does not support multiple ones.  */
 struct tty_display_info the_only_display_info;
+
+/* The only tty_output, since MS-DOS supports only 1 display.  */
+struct tty_output the_only_tty_output;
 
 /* Support for DOS/V (allows Japanese characters to be displayed on
    standard, non-Japanese, ATs).  Only supported for DJGPP v2 and later.  */
@@ -539,8 +542,8 @@ dos_set_window_size (int *rows, int *cols)
 				   (video_name, "screen-dimensions-%dx%d",
 				    *rows, *cols), Qnil));
 
-  if (INTEGERP (video_mode)
-      && (video_mode_value = XINT (video_mode)) > 0)
+  if (FIXNUMP (video_mode)
+      && (video_mode_value = XFIXNUM (video_mode)) > 0)
     {
       regs.x.ax = video_mode_value;
       int86 (0x10, &regs, &regs);
@@ -596,7 +599,7 @@ dos_set_window_size (int *rows, int *cols)
   *rows = ScreenRows ();
   *cols = ScreenCols ();
 
-  /* Update Emacs' notion of screen dimensions.  */
+  /* Update Emacs's notion of screen dimensions.  */
   screen_size_X = *cols;
   screen_size_Y = *rows;
   screen_size = *cols * *rows;
@@ -742,21 +745,21 @@ IT_set_cursor_type (struct frame *f, Lisp_Object cursor_type)
       Lisp_Object bar_parms = XCDR (cursor_type);
       int width;
 
-      if (INTEGERP (bar_parms))
+      if (FIXNUMP (bar_parms))
 	{
 	  /* Feature: negative WIDTH means cursor at the top
 	     of the character cell, zero means invisible cursor.  */
-	  width = XINT (bar_parms);
+	  width = XFIXNUM (bar_parms);
 	  msdos_set_cursor_shape (f, width >= 0 ? DEFAULT_CURSOR_START : 0,
 				  width);
 	}
       else if (CONSP (bar_parms)
-	       && INTEGERP (XCAR (bar_parms))
-	       && INTEGERP (XCDR (bar_parms)))
+	       && FIXNUMP (XCAR (bar_parms))
+	       && FIXNUMP (XCDR (bar_parms)))
 	{
-	  int start_line = XINT (XCDR (bar_parms));
+	  int start_line = XFIXNUM (XCDR (bar_parms));
 
-	  width = XINT (XCAR (bar_parms));
+	  width = XFIXNUM (XCAR (bar_parms));
 	  msdos_set_cursor_shape (f, start_line, width);
 	}
     }
@@ -976,10 +979,14 @@ tty_draw_row_with_mouse_face (struct window *w, struct glyph_row *row,
   if (hl == DRAW_MOUSE_FACE)
     {
       int vpos = row->y + WINDOW_TOP_EDGE_Y (w);
-      int kstart = start_hpos + WINDOW_LEFT_EDGE_X (w);
+      int kstart = (start_hpos + WINDOW_LEFT_EDGE_X (w)
+		    + row->used[LEFT_MARGIN_AREA]);
       int nglyphs = end_hpos - start_hpos;
       int offset = ScreenPrimary + 2*(vpos*screen_size_X + kstart) + 1;
       int start_offset = offset;
+
+      if (end_hpos >= row->used[TEXT_AREA])
+	nglyphs = row->used[TEXT_AREA] - start_hpos;
 
       if (tty->termscript)
 	fprintf (tty->termscript, "\n<MH+ %d-%d:%d>",
@@ -1018,6 +1025,9 @@ tty_draw_row_with_mouse_face (struct window *w, struct glyph_row *row,
 	 temporarily move cursor coordinates to the beginning of
 	 the highlight region.  */
       new_pos_X = start_hpos + WINDOW_LEFT_EDGE_X (w);
+      /* The coordinates supplied by the caller are relative to the
+	 text area, not the window itself.  */
+      new_pos_X += row->used[LEFT_MARGIN_AREA];
       new_pos_Y = row->y + WINDOW_TOP_EDGE_Y (w);
 
       if (tty->termscript)
@@ -1321,7 +1331,7 @@ IT_frame_up_to_date (struct frame *f)
       if (EQ (BVAR (b,cursor_type), Qt))
 	new_cursor = frame_desired_cursor;
       else if (NILP (BVAR (b, cursor_type))) /* nil means no cursor */
-	new_cursor = Fcons (Qbar, make_number (0));
+	new_cursor = Fcons (Qbar, make_fixnum (0));
       else
 	new_cursor = BVAR (b, cursor_type);
     }
@@ -1564,7 +1574,7 @@ void
 IT_set_frame_parameters (struct frame *f, Lisp_Object alist)
 {
   Lisp_Object tail;
-  int i, j, length = XINT (Flength (alist));
+  int i, j, length = XFIXNUM (Flength (alist));
   Lisp_Object *parms
     = (Lisp_Object *) alloca (length * word_size);
   Lisp_Object *values
@@ -1791,7 +1801,6 @@ internal_terminal_init (void)
 	}
 
       Vinitial_window_system = Qpc;
-      Vwindow_system_version = make_number (27); /* RE Emacs version */
       tty->terminal->type = output_msdos_raw;
 
       /* If Emacs was dumped on DOS/V machine, forget the stale VRAM
@@ -1871,6 +1880,7 @@ initialize_msdos_display (struct terminal *term)
   term->redeem_scroll_bar_hook = 0;
   term->judge_scroll_bars_hook = 0;
   term->read_socket_hook = &tty_read_avail_input; /* from keyboard.c */
+  term->defined_color_hook = &tty_defined_color; /* from xfaces.c */
 }
 
 int
@@ -2423,11 +2433,11 @@ dos_rawgetc (void)
       sc = regs.h.ah;
 
       total_doskeys += 2;
-      ASET (recent_doskeys, recent_doskeys_index, make_number (c));
+      ASET (recent_doskeys, recent_doskeys_index, make_fixnum (c));
       recent_doskeys_index++;
       if (recent_doskeys_index == NUM_RECENT_DOSKEYS)
 	recent_doskeys_index = 0;
-      ASET (recent_doskeys, recent_doskeys_index, make_number (sc));
+      ASET (recent_doskeys, recent_doskeys_index, make_fixnum (sc));
       recent_doskeys_index++;
       if (recent_doskeys_index == NUM_RECENT_DOSKEYS)
 	recent_doskeys_index = 0;
@@ -2609,7 +2619,7 @@ dos_rawgetc (void)
       if (code == 0)
 	continue;
 
-      if (!hlinfo->mouse_face_hidden && INTEGERP (Vmouse_highlight))
+      if (!hlinfo->mouse_face_hidden && FIXNUMP (Vmouse_highlight))
 	{
 	  clear_mouse_face (hlinfo);
 	  hlinfo->mouse_face_hidden = 1;
@@ -2652,7 +2662,7 @@ dos_rawgetc (void)
 	      static Lisp_Object last_mouse_window;
 
 	      mouse_window = window_from_coordinates
-		(SELECTED_FRAME (), mouse_last_x, mouse_last_y, 0, 0);
+		(SELECTED_FRAME (), mouse_last_x, mouse_last_y, 0, 0, 0, 0);
 	      /* A window will be selected only when it is not
 		 selected now, and the last mouse movement event was
 		 not in it.  A minibuffer window will be selected iff
@@ -2718,10 +2728,11 @@ dos_rawgetc (void)
 		event.code = button_num;
 		event.modifiers = dos_get_modifiers (0)
 		  | (press ? down_modifier : up_modifier);
-		event.x = make_number (x);
-		event.y = make_number (y);
+		event.x = make_fixnum (x);
+		event.y = make_fixnum (y);
 		event.frame_or_window = selected_frame;
-		event.arg = Qnil;
+		event.arg = tty_handle_tab_bar_click (SELECTED_FRAME (),
+						      x, y, press, &event);
 		event.timestamp = event_timestamp ();
 		kbd_buffer_store_event (&event);
 	      }
@@ -2800,14 +2811,10 @@ IT_menu_make_room (XMenu *menu)
   else if (menu->allocated == menu->count)
     {
       int count = menu->allocated = menu->allocated + 10;
-      menu->text
-	= (char **) xrealloc (menu->text, count * sizeof (char *));
-      menu->submenu
-	= (XMenu **) xrealloc (menu->submenu, count * sizeof (XMenu *));
-      menu->panenumber
-	= (int *) xrealloc (menu->panenumber, count * sizeof (int));
-      menu->help_text
-	= (const char **) xrealloc (menu->help_text, count * sizeof (char *));
+      menu->text = xrealloc (menu->text, count * sizeof (char *));
+      menu->submenu = xrealloc (menu->submenu, count * sizeof (XMenu *));
+      menu->panenumber = xrealloc (menu->panenumber, count * sizeof (int));
+      menu->help_text = xrealloc (menu->help_text, count * sizeof (char *));
     }
 }
 
@@ -2858,7 +2865,7 @@ IT_menu_calc_size (XMenu *menu, int *width, int *height)
   do							   \
     {							   \
       (GLYPH).type = CHAR_GLYPH;			   \
-      SET_CHAR_GLYPH ((GLYPH), CODE, FACE_ID, PADDING_P);  \
+      SET_CHAR_GLYPH (GLYPH, CODE, FACE_ID, PADDING_P);	   \
       (GLYPH).charpos = -1;				   \
     }							   \
   while (0)
@@ -2902,7 +2909,7 @@ IT_menu_display (XMenu *menu, int y, int x, int pn, int *faces, int disp_help)
       p++;
       for (j = 0, q = menu->text[i]; *q; j++)
 	{
-	  unsigned c = STRING_CHAR_ADVANCE (q);
+	  unsigned c = string_char_advance (&q);
 
 	  if (c > 26)
 	    {
@@ -3063,15 +3070,15 @@ XMenuActivate (Display *foo, XMenu *menu, int *pane, int *selidx,
   state = alloca (menu->panecount * sizeof (struct IT_menu_state));
   screensize = screen_size * 2;
   faces[0]
-    = lookup_derived_face (sf, intern ("msdos-menu-passive-face"),
+    = lookup_derived_face (NULL, sf, Qmsdos_menu_passive_face,
 			   DEFAULT_FACE_ID, 1);
   faces[1]
-    = lookup_derived_face (sf, intern ("msdos-menu-active-face"),
+    = lookup_derived_face (NULL, sf, Qmsdos_menu_active_face,
 			   DEFAULT_FACE_ID, 1);
-  selectface = intern ("msdos-menu-select-face");
-  faces[2] = lookup_derived_face (sf, selectface,
+  selectface = Qmsdos_menu_select_face;
+  faces[2] = lookup_derived_face (NULL, sf, selectface,
 				  faces[0], 1);
-  faces[3] = lookup_derived_face (sf, selectface,
+  faces[3] = lookup_derived_face (NULL, sf, selectface,
 				  faces[1], 1);
 
   /* Make sure the menu title is always displayed with
@@ -3733,7 +3740,7 @@ run_msdos_command (char **argv, const char *working_dir,
   *pl = '\0';
 
   cmd = Ffile_name_nondirectory (build_string (lowcase_argv0));
-  msshell = !NILP (Fmember (cmd, Fsymbol_value (intern ("msdos-shells"))))
+  msshell = !NILP (Fmember (cmd, Fsymbol_value (Qmsdos_shells)))
     && !strcmp ("-c", argv[1]);
   if (msshell)
     {
@@ -3912,6 +3919,50 @@ readlinkat (int fd, char const *name, char *buffer, size_t buffer_size)
   return readlink (name, buffer, buffer_size);
 }
 
+
+int
+openat (int fd, const char * path, int oflag, int mode)
+{
+  /* Rely on a hack: an open directory is modeled as file descriptor 0,
+     as in fstatat.  FIXME: Add proper support for openat.  */
+  char fullname[MAXPATHLEN];
+
+  if (fd != AT_FDCWD)
+    {
+      if (strlen (dir_pathname) + strlen (path) + 1 >= MAXPATHLEN)
+	{
+	  errno = ENAMETOOLONG;
+	  return -1;
+	}
+      sprintf (fullname, "%s/%s", dir_pathname, path);
+      path = fullname;
+    }
+
+  return open (path, oflag, mode);
+}
+
+int
+fchmodat (int fd, const char *path, mode_t mode, int flags)
+{
+  /* Rely on a hack: an open directory is modeled as file descriptor 0,
+     as in fstatat.  FIXME: Add proper support for openat.  */
+  char fullname[MAXPATHLEN];
+
+  if (fd != AT_FDCWD)
+    {
+      if (strlen (dir_pathname) + strlen (path) + 1 >= MAXPATHLEN)
+	{
+	  errno = ENAMETOOLONG;
+	  return -1;
+	}
+
+      sprintf (fullname, "%s/%s", dir_pathname, path);
+      path = fullname;
+    }
+
+  return chmod (path, mode);
+}
+
 char *
 careadlinkat (int fd, char const *filename,
               char *buffer, size_t buffer_size,
@@ -3939,10 +3990,69 @@ careadlinkat (int fd, char const *filename,
   return buffer;
 }
 
+int
+futimens (int fd, const struct timespec times[2])
+{
+  struct tm *tm;
+  struct ftime ft;
+  time_t t;
+
+  block_input ();
+  if (times[1].tv_sec == UTIME_NOW)
+    t = time (NULL);
+  else
+    t = times[1].tv_sec;
+
+  tm = localtime (&t);
+  ft.ft_tsec = min (29, tm->tm_sec / 2);
+  ft.ft_min = tm->tm_min;
+  ft.ft_hour = tm->tm_hour;
+  ft.ft_day = tm->tm_mday;
+  ft.ft_month = tm->tm_mon + 1;
+  ft.ft_year = max (0, tm->tm_year - 80);
+  unblock_input ();
+
+  return setftime (fd, &ft);
+}
+
+int
+utimensat (int dirfd, const char *pathname,
+	   const struct timespec times[2], int flags)
+{
+  int fd, ret;
+  char fullname[MAXPATHLEN];
+
+  /* Rely on a hack: dirfd in its current usage in Emacs is always
+     AT_FDCWD.  */
+
+  if (dirfd != AT_FDCWD)
+    {
+      if (strlen (dir_pathname) + strlen (pathname) + 1 >= MAXPATHLEN)
+	{
+	  errno = ENAMETOOLONG;
+	  return -1;
+	}
+      sprintf (fullname, "%s/%s", dir_pathname, pathname);
+      pathname = fullname;
+    }
+
+  fd = open (pathname, O_WRONLY);
+
+  if (fd < 0)
+    return -1;
+
+  ret = futimens (fd, times);
+  close (fd);
+
+  return ret;
+}
+
 /* Emulate faccessat(2).  */
 int
 faccessat (int dirfd, const char * path, int mode, int flags)
 {
+  char fullname[MAXPATHLEN];
+
   /* We silently ignore FLAGS.  */
   flags = flags;
 
@@ -4194,7 +4304,7 @@ msdos_fatal_signal (int sig)
 void
 syms_of_msdos (void)
 {
-  recent_doskeys = Fmake_vector (make_number (NUM_RECENT_DOSKEYS), Qnil);
+  recent_doskeys = Fmake_vector (make_fixnum (NUM_RECENT_DOSKEYS), Qnil);
   staticpro (&recent_doskeys);
 
 #ifndef HAVE_X_WINDOWS
@@ -4205,7 +4315,7 @@ syms_of_msdos (void)
   DEFVAR_LISP ("dos-unsupported-char-glyph", Vdos_unsupported_char_glyph,
 	       doc: /* Glyph to display instead of chars not supported by current codepage.
 This variable is used only by MS-DOS terminals.  */);
-  Vdos_unsupported_char_glyph = make_number ('\177');
+  Vdos_unsupported_char_glyph = make_fixnum ('\177');
 
 #endif
 
@@ -4214,6 +4324,11 @@ This variable is used only by MS-DOS terminals.  */);
   defsubr (&Smsdos_downcase_filename);
   defsubr (&Smsdos_remember_default_colors);
   defsubr (&Smsdos_set_mouse_buttons);
+
+  DEFSYM (Qmsdos_menu_passive_face, "msdos-menu-passive-face");
+  DEFSYM (Qmsdos_menu_active_face, "msdos-menu-active-face");
+  DEFSYM (Qmsdos_menu_select_face, "msdos-menu-select-face");
+  DEFSYM (Qmsdos_shells, "msdos-shells");
 }
 
 #endif /* MSDOS */

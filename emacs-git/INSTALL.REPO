@@ -1,9 +1,27 @@
 	     Building and Installing Emacs from the Repository
 
-Simply run 'make'.  This should work if your files are freshly checked
-out from the repository, and if you have the proper tools installed.
-If it doesn't work, or if you have special build requirements, the
-following information may be helpful.
+The Emacs repository is hosted on Savannah.  The following Git command
+will clone the repository to the 'emacs' subdirectory of the current
+directory on your local machine:
+
+    git clone https://git.savannah.gnu.org/git/emacs.git
+
+To build the repository code, simply run 'make' in the 'emacs'
+directory.  This should work if your files are freshly checked out
+from the repository, and if you have the proper tools installed; the
+default configuration options will be used.  Other configuration
+options can be specified by setting a 'configure' variable, for
+example:
+
+  $ make configure="--prefix=/opt/emacs CFLAGS='-O0 -g3'"
+
+(We recommend the above CFLAGS if you want to build Emacs that will
+be easy to debug.  In addition, including --enable-checking=all in
+the value of 'configure' above will turn on many run-time checks
+that will identify problematic code sooner rather than later.)
+
+If the above doesn't work, or if you have special build requirements,
+the following information may be helpful.
 
 Building Emacs from the source-code repository requires some tools
 that are not needed when building from a release.  You will need:
@@ -12,8 +30,9 @@ autoconf  - at least the version specified near the start of
   configure.ac (in the AC_PREREQ command).
 git - at least Git 1.7.1.  If your repository was created by an older
   Git version, you may need to reclone it.
-makeinfo  - not strictly necessary, but highly recommended, so that
-  you can build the manuals.  GNU Texinfo 4.13 or later should work.
+makeinfo  - required to build the manuals (whose Info files are not
+  in the repository).  Installing GNU Texinfo 4.13 or later should
+  work.
 
 To use the autotools, run the following shell command to generate the
 'configure' script and some related files, and to set up your git
@@ -32,8 +51,8 @@ can invoke './configure -C'.  After configuring, build Emacs as follows:
 
   $ make
 
-If you want to install Emacs, type 'make install' instead of 'make' in
-the last command.
+You can also type 'make check' to test and 'make install' to install
+Emacs.
 
 Occasionally the file 'lisp/loaddefs.el' (and similar automatically
 generated files, such as 'esh-groups.el', and '*-loaddefs.el' in some
@@ -51,14 +70,23 @@ To update loaddefs.el (and similar files), do:
 
 If either of the above partial procedures fails, try 'make bootstrap'.
 If CPU time is not an issue, 'make bootstrap' is a more thorough way
-to rebuild, avoiding spurious problems.
+to rebuild, avoiding spurious problems.  'make bootstrap' rebuilds
+Emacs with the same configuration options as the previous build; it
+can also be used to rebuild Emacs with other configuration options by
+setting a 'configure' variable, for example:
+
+  $ make bootstrap configure="CFLAGS='-O0 -g3'"
+
+To rebuild Emacs with the default configuration options, you can use:
+
+  $ make bootstrap configure=default
 
 Occasionally, there are changes that 'make bootstrap' won't be able to
 handle.  The most thorough cleaning can be achieved by 'git clean -fdx'
 which will leave you with only files from the git repository.  Here
 are some faster methods for a couple of particular error cases:
 
-    /usr/bin/m4:aclocal.m4:9: cannot open `m4/count-leading-zeros.m4': No such file or directory
+    /usr/bin/m4:aclocal.m4:9: cannot open `m4/stdbit_h.m4': No such file or directory
 
 This can be fixed with 'rm aclocal.m4'.
 
@@ -74,9 +102,12 @@ problem is known about and is just waiting for someone to fix it.
 This is especially true for Lisp compilation errors, which are almost
 never platform-specific.
 
+If you need to debug Emacs, the instructions in 'etc/DEBUG' will help.
+You can display that file in Emacs with 'C-h C-d', or just read it with
+any program that can display text files, such as Less.
 
 
-Copyright (C) 2002-2017 Free Software Foundation, Inc.
+Copyright (C) 2002-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 

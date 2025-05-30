@@ -1,28 +1,32 @@
 /* fsusage.h -- declarations for file system space usage info
 
-   Copyright (C) 1991-1992, 1997, 2003-2006, 2009-2017 Free Software
+   Copyright (C) 1991-1992, 1997, 2003-2006, 2009-2025 Free Software
    Foundation, Inc.
 
-   This program is free software: you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 3 of the License, or
-   (at your option) any later version.
+   This file is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Lesser General Public License as
+   published by the Free Software Foundation, either version 3 of the
+   License, or (at your option) any later version.
 
-   This program is distributed in the hope that it will be useful,
+   This file is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
+   GNU Lesser General Public License for more details.
 
-   You should have received a copy of the GNU General Public License
+   You should have received a copy of the GNU Lesser General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
 
 /* Space usage statistics for a file system.  Blocks are 512-byte. */
 
 #if !defined FSUSAGE_H_
-# define FSUSAGE_H_
+#define FSUSAGE_H_
 
-# include <stdint.h>
-# include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 struct fs_usage
 {
@@ -36,5 +40,10 @@ struct fs_usage
 };
 
 int get_fs_usage (char const *file, char const *disk, struct fs_usage *fsp);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

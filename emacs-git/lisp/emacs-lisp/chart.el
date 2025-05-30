@@ -1,10 +1,9 @@
 ;;; chart.el --- Draw charts (bar charts, etc)  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1996, 1998-1999, 2001, 2004-2005, 2007-2017 Free
-;; Software Foundation, Inc.
+;; Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
-;; Author: Eric M. Ludlam  <zappo@gnu.org>
-;; Version: 0.2
+;; Author: Eric M. Ludlam <zappo@gnu.org>
+;; Old-Version: 0.2
 ;; Keywords: OO, chart, graph
 
 ;; This file is part of GNU Emacs.
@@ -36,7 +35,7 @@
 ;; anything encapsulated in a nice eieio object.
 ;;
 ;;   Current example apps for chart can be accessed via these commands:
-;; `chart-file-count'     - count files w/ matching extensions
+;; `chart-file-count'     - count files with matching extensions
 ;; `chart-space-usage'    - display space used by files/directories
 ;; `chart-emacs-storage'  - Emacs storage units used/free (garbage-collect)
 ;; `chart-emacs-lists'    - length of Emacs lists
@@ -64,12 +63,10 @@
 (eval-when-compile (require 'cl-generic))
 
 ;;; Code:
-(define-obsolete-variable-alias 'chart-map 'chart-mode-map "24.1")
-(defvar chart-mode-map (make-sparse-keymap) "Keymap used in chart mode.")
+(defvar-keymap chart-mode-map :doc "Keymap used in chart mode.")
 
-(defvar chart-local-object nil
+(defvar-local chart-local-object nil
   "Local variable containing the locally displayed chart object.")
-(make-variable-buffer-local 'chart-local-object)
 
 (defvar chart-face-color-list '("red" "green" "blue"
 				"cyan" "yellow" "purple")
@@ -77,8 +74,7 @@
 Colors will be the background color.")
 
 (defvar chart-face-pixmap-list
-  (if (and (fboundp 'display-graphic-p)
-	   (display-graphic-p))
+  (if (display-graphic-p)
       '("dimple1" "scales" "dot" "cross_weave" "boxes" "dimple3"))
   "If pixmaps are allowed, display these background pixmaps.
 Useful if new Emacs is used on B&W display.")
@@ -90,39 +86,43 @@ Useful if new Emacs is used on B&W display.")
 
 (declare-function x-display-color-cells "xfns.c" (&optional terminal))
 
-(defvar chart-face-list
-  (if (display-color-p)
-      (let ((cl chart-face-color-list)
-            (pl chart-face-pixmap-list)
-            (faces ())
-            nf)
-        (while cl
-          (setq nf (make-face
-                    (intern (concat "chart-" (car cl) "-" (car pl)))))
-          (set-face-background nf (if (condition-case nil
-                                          (> (x-display-color-cells) 4)
-                                        (error t))
-                                      (car cl)
-                                    "white"))
-          (set-face-foreground nf "black")
-          (if (and chart-face-use-pixmaps
-                   pl
-                   (fboundp 'set-face-background-pixmap))
-              (condition-case nil
-                  (set-face-background-pixmap nf (car pl))
-                (error (message "Cannot set background pixmap %s" (car pl)))))
-          (push nf faces)
-          (setq cl (cdr cl)
-                pl (cdr pl)))
-        faces))
+(defvar chart-face-list #'chart--face-list
   "Faces used to colorize charts.
+This should either be a list of faces, or a function that returns
+a list of faces.
+
 List is limited currently, which is ok since you really can't display
 too much in text characters anyways.")
+
+(defun chart--face-list ()
+  (and
+   (display-color-p)
+   (let ((cl chart-face-color-list)
+         (pl chart-face-pixmap-list)
+         (faces ())
+         nf)
+     (while cl
+       (setq nf (make-face
+                 (intern (concat "chart-" (car cl) "-" (car pl)))))
+       (set-face-background nf (if (condition-case nil
+                                       (> (x-display-color-cells) 4)
+                                     (error t))
+                                   (car cl)
+                                 "white"))
+       (set-face-foreground nf "black")
+       (if (and chart-face-use-pixmaps pl)
+           (condition-case nil
+               (set-face-stipple nf (car pl))
+             (error (message "Cannot set background pixmap %s" (car pl)))))
+       (push nf faces)
+       (setq cl (cdr cl)
+             pl (cdr pl)))
+     faces)))
 
 (define-derived-mode chart-mode special-mode "Chart"
   "Define a mode in Emacs for displaying a chart."
   (buffer-disable-undo)
-  (set (make-local-variable 'font-lock-global-modes) nil)
+  (setq-local font-lock-global-modes nil)
   (font-lock-mode -1)                   ;Isn't it off already?  --Stef
   )
 
@@ -190,7 +190,7 @@ Make sure the width/height is correct."
    )
   "Class used to display an axis which represents different named items.")
 
-(defclass chart-sequece ()
+(defclass chart-sequence ()
   ((data :initarg :data
 	 :initform nil)
    (name :initarg :name
@@ -200,7 +200,7 @@ Make sure the width/height is correct."
 
 (defclass chart-bar (chart)
   ((direction :initarg :direction
-	      :initform vertical))
+	      :initform 'vertical))
   "Subclass for bar charts (vertical or horizontal).")
 
 (cl-defmethod chart-draw ((c chart) &optional buff)
@@ -335,7 +335,8 @@ Automatically compensates for direction."
 (cl-defmethod chart-axis-draw ((a chart-axis-names) &optional dir margin zone _start _end)
   "Draw axis information based upon A range to be spread along the edge.
 Optional argument DIR is the direction of the chart.
-Optional arguments MARGIN, ZONE, START and END specify boundaries of the drawing."
+Optional arguments MARGIN, ZONE, START and END specify boundaries
+of the drawing."
   (cl-call-next-method)
   ;; We prefer about 5 spaces between each value
   (let* ((i 0)
@@ -376,7 +377,10 @@ Optional arguments MARGIN, ZONE, START and END specify boundaries of the drawing
   (let* ((data (oref c sequences))
 	 (dir (oref c direction))
 	 (odir (if (eq dir 'vertical) 'horizontal 'vertical))
-	)
+         (faces
+          (if (functionp chart-face-list)
+              (funcall chart-face-list)
+            chart-face-list)))
     (while data
       (if (stringp (car (oref (car data) data)))
 	  ;; skip string lists...
@@ -392,10 +396,9 @@ Optional arguments MARGIN, ZONE, START and END specify boundaries of the drawing
 		  (zp (if (eq dir 'vertical)
 			  (chart-translate-ypos c 0)
 			(chart-translate-xpos c 0)))
-		  (fc (if chart-face-list
-			  (nth (% i (length chart-face-list)) chart-face-list)
-			'default))
-		  )
+		  (fc (if faces
+			  (nth (% i (length faces)) faces)
+			'default)))
 	      (if (< dp zp)
 		  (progn
 		    (chart-draw-line dir (car rng) dp zp)
@@ -514,18 +517,18 @@ cons cells of the form (NAME . NUM).  See `sort' for more details."
     (if (eobp) (newline num))
     (if (< x 0) (setq x 0))
     (if (< y 0) (setq y 0))
-    ;; Now, a quicky column moveto/forceto method.
+    ;; Now, a quickie column moveto/forceto method.
     (or (= (move-to-column x) x)
 	(let ((p (point)))
 	  (indent-to x)
-	  (remove-text-properties p (point) '(face))))))
+          (remove-text-properties p (point) '(face nil))))))
 
 (defun chart-zap-chars (n)
   "Zap up to N chars without deleting EOLs."
   (if (not (eobp))
-      (if (< n (- (point-at-eol) (point)))
+      (if (< n (- (line-end-position) (point)))
 	  (delete-char n)
-	(delete-region (point) (point-at-eol)))))
+        (delete-region (point) (line-end-position)))))
 
 (defun chart-display-label (label dir zone start end &optional face)
   "Display LABEL in direction DIR in column/row ZONE between START and END.
@@ -571,13 +574,16 @@ R1 and R2 are dotted pairs.  Colorize it with FACE."
 
 (defun chart-bar-quickie (dir title namelst nametitle numlst numtitle
 			      &optional max sort-pred)
-  "Wash over the complex EIEIO stuff and create a nice bar chart.
-Create it going in direction DIR [`horizontal' `vertical'] with TITLE
-using a name sequence NAMELST labeled NAMETITLE with values NUMLST
-labeled NUMTITLE.
-Optional arguments:
-Set the chart's max element display to MAX, and sort lists with
-SORT-PRED if desired."
+  "Create a bar chart named TITLE in direction DIR [`horizontal' `vertical'].
+NAMELST is the list of bar names and NAMETITLE is the name the of axis
+containing them.
+NUMLST is the list of values and NUMTITLE is the name of the value
+axis.
+Optional argument MAX limits the chart's max element display to MAX by
+passing it as second argument to `chart-trim', otherwise the chart's
+display is unlimited.
+Optional argument SORT-PRED is a predicate function passed as second
+argument to `chart-sort' to sort the lists if desired."
   (let ((nc (make-instance 'chart-bar
 			   :title title
 			   :key-label "8-m"  ; This is a text key pic
@@ -585,12 +591,12 @@ SORT-PRED if desired."
 			   ))
 	(iv (eq dir 'vertical)))
     (chart-add-sequence nc
-			(make-instance 'chart-sequece
+			(make-instance 'chart-sequence
 				       :data namelst
 				       :name nametitle)
 			(if iv 'x-axis 'y-axis))
     (chart-add-sequence nc
-			(make-instance 'chart-sequece
+			(make-instance 'chart-sequence
 				       :data numlst
 				       :name numtitle)
 			(if iv 'y-axis 'x-axis))
@@ -607,6 +613,8 @@ SORT-PRED if desired."
   (chart-bar-quickie 'vertical "Test Bar Chart"
 		     '( "U1" "ME2" "C3" "B4" "QT" "EZ") "Items"
 		     '( 5 -10 23 20 30 -3) "Values")
+  (if (not (called-interactively-p 'any))
+      (kill-buffer "*Test Bar Chart*"))
   )
 
 ;;; Sample utility function
@@ -636,27 +644,68 @@ SORT-PRED if desired."
 		       (lambda (a b) (> (cdr a) (cdr b))))
     ))
 
+;; This assumes 4KB blocks
+(defun chart--file-size (size)
+  (* (/ (+ size 4095) 4096) 4096))
+
+(defun chart--directory-size (dir)
+  "Compute total size of files in directory DIR and its subdirectories.
+DIR is assumed to be a directory, verified by the caller."
+  (let ((size 0))
+    (dolist (file (directory-files-recursively dir "." t))
+      (let ((fsize (nth 7 (file-attributes file))))
+        (if (> fsize 0)
+            (setq size
+                  (+ size (chart--file-size fsize))))))
+    size))
+
 (defun chart-space-usage (d)
   "Display a top usage chart for directory D."
   (interactive "DDirectory: ")
   (message "Collecting statistics...")
   (let ((nmlst nil)
 	(cntlst nil)
-	(b (get-buffer-create " *du-tmp*")))
-    (set-buffer b)
-    (erase-buffer)
-    (insert "cd " d ";du -sk * \n")
-    (message "Running `cd %s;du -sk *'..." d)
-    (call-process-region (point-min) (point-max) shell-file-name t
-			 (current-buffer) nil)
-    (goto-char (point-min))
-    (message "Scanning output ...")
-    (while (re-search-forward "^\\([0-9]+\\)[ \t]+\\([^ \n]+\\)$" nil t)
-      (let* ((nam (buffer-substring (match-beginning 2) (match-end 2)))
-	     (num (buffer-substring (match-beginning 1) (match-end 1))))
-	(setq nmlst (cons nam nmlst)
-	      ;; * 1000 to put it into bytes
-	      cntlst (cons (* (string-to-number num) 1000) cntlst))))
+        b)
+    (if (executable-find "du")
+        (progn
+	  (setq b (get-buffer-create " *du-tmp*"))
+          (set-buffer b)
+          (erase-buffer)
+          (if (and (memq system-type '(windows-nt ms-dos))
+                   (fboundp 'w32-shell-dos-semantics)
+                   (w32-shell-dos-semantics))
+              (progn
+                ;; With Windows shells, 'cd' does not change the drive,
+                ;; and ';' is not reliable for running multiple
+                ;; commands, so use alternatives.  We quote the
+                ;; directory because otherwise pushd will barf on a
+                ;; directory with forward slashes.  Note that * will not
+                ;; skip dotfiles with Windows shells, unlike on Unix.
+                (insert "pushd \"" d "\" && du -sk * \n")
+                (message "Running `pushd \"%s\" && du -sk *'..." d))
+            (insert "cd " d ";du -sk * \n")
+            (message "Running `cd %s;du -sk *'..." d))
+          (call-process-region (point-min) (point-max) shell-file-name t
+			       (current-buffer) nil)
+          (goto-char (point-min))
+          (message "Scanning output ...")
+          (while (re-search-forward "^\\([0-9]+\\)[ \t]+\\([^ \n]+\\)$" nil t)
+            (let* ((nam (buffer-substring (match-beginning 2) (match-end 2)))
+	           (num (buffer-substring (match-beginning 1) (match-end 1))))
+	      (setq nmlst (cons nam nmlst)
+	            ;; * 1000 to put it into bytes
+	            cntlst (cons (* (string-to-number num) 1000) cntlst)))))
+      (dolist (file (directory-files d t directory-files-no-dot-files-regexp))
+        (let ((fbase (file-name-nondirectory file)))
+          ;; Typical shells exclude files and subdirectories whose names
+          ;; begin with a period when it expands *, so we do the same.
+          (unless (string-match-p "\\`\\." fbase)
+            (setq nmlst (cons fbase nmlst))
+            (if (file-regular-p file)
+                (setq cntlst (cons (chart--file-size
+                                    (nth 7 (file-attributes file)))
+                                   cntlst))
+              (setq cntlst (cons (chart--directory-size file) cntlst)))))))
     (if (not nmlst)
 	(error "No files found!"))
     (chart-bar-quickie 'vertical (format "Largest files in %s" d)
@@ -704,7 +753,7 @@ SORT-PRED if desired."
 	(cntlst nil))
     (save-excursion
       (goto-char (point-min))
-      (while (re-search-forward "\\-[A-Z][a-z][a-z] +\\(\\w+\\)@\\w+" nil t)
+      (while (re-search-forward "-[A-Z][a-z][a-z] +\\(\\w+\\)@\\w+" nil t)
 	(let* ((nam (buffer-substring (match-beginning 1) (match-end 1)))
 	       (m (member nam nmlst)))
 	  (message "Scanned username %s" nam)

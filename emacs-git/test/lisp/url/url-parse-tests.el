@@ -1,9 +1,8 @@
-;;; url-parse-tests.el --- Test suite for URI/URL parsing.
+;;; url-parse-tests.el --- Test suite for URI/URL parsing.  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2012-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 ;; Author: Alain Schneble <a.s@realize.ch>
-;; Version: 1.0
 
 ;; This file is part of GNU Emacs.
 
@@ -23,7 +22,7 @@
 ;;; Commentary:
 
 ;; Test cases covering generic URI syntax as described in RFC3986,
-;; section 3. Syntax Components and 4. Usage. See also appendix
+;; section 3. Syntax Components and 4. Usage.  See also appendix
 ;; A. Collected ABNF for URI, as the example given here are all
 ;; productions of this grammar.
 

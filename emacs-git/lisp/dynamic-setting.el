@@ -1,6 +1,6 @@
-;;; dynamic-setting.el --- Support dynamic changes
+;;; dynamic-setting.el --- Support dynamic changes  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
 ;; Author: Jan Djärv <jan.h.d@swipnet.se>
 ;; Maintainer: emacs-devel@gnu.org
@@ -24,8 +24,8 @@
 
 ;;; Commentary:
 
-;; This file provides the lisp part of the GConf and XSetting code in
-;; xsetting.c.  But it is nothing that prevents it from being used by
+;; This file provides the Lisp part of the GConf and XSetting code in
+;; xsetting.c.  But there is nothing that prevents it from being used by
 ;; other configuration schemes.
 
 ;;; Code:
@@ -33,6 +33,7 @@
 ;;; Customizable variables
 
 (declare-function font-get-system-font "xsettings.c" ())
+(declare-function reconsider-frame-font "frame.c" ())
 
 (defvar font-use-system-font)
 
@@ -40,8 +41,8 @@
   "Change font and/or font settings for frames on display DISPLAY-OR-FRAME.
 If DISPLAY-OR-FRAME is a frame, the display is the one for that frame.
 
-If SET-FONT is non-nil, change the font for frames.  Otherwise re-apply the
-current form for the frame (i.e. hinting or somesuch changed)."
+If SET-FONT is non-nil, change the font for frames.  Otherwise re-apply
+the current form for the frame (i.e. hinting or somesuch changed)."
   (let ((new-font (and (fboundp 'font-get-system-font)
 		       (font-get-system-font)))
 	(frame-list (frames-on-display-list display-or-frame)))
@@ -51,25 +52,17 @@ current form for the frame (i.e. hinting or somesuch changed)."
 	  ;; Set the font on all current and future frames, as though
 	  ;; the `default' face had been "set for this session":
 	  (set-frame-font new-font nil frame-list)
-	;; Just redraw the existing fonts on all frames:
-	(dolist (f frame-list)
-	  (let ((frame-font
-		 (or (font-get (face-attribute 'default :font f 'default)
-			       :user-spec)
-		     (frame-parameter f 'font-parameter))))
-	    (when frame-font
-	      (set-frame-parameter f 'font-parameter frame-font)
-	      (set-face-attribute 'default f
-				  :width 'normal
-				  :weight 'normal
-				  :slant 'normal
-				  :font frame-font))))))))
+	;; Just reconsider the existing fonts on all frames on each
+	;; display, by clearing the font and face caches.  This will
+	;; cause all fonts to be recreated.
+        (dolist (frame frame-list)
+          (reconsider-frame-fonts frame))))))
 
 (defun dynamic-setting-handle-config-changed-event (event)
   "Handle config-changed-event on the display in EVENT.
 Changes can be
-  The monospace font. If `font-use-system-font' is nil, the font
-    is not changed.
+  The monospace font.  If `font-use-system-font' is nil,
+    the font is not changed.
   The normal font.
   Xft parameters, like DPI and hinting.
   The Gtk+ theme name.
@@ -91,4 +84,7 @@ Changes can be
 	  ((eq type 'tool-bar-style) (force-mode-line-update t)))))
 
 (define-key special-event-map [config-changed-event]
-  'dynamic-setting-handle-config-changed-event)
+  #'dynamic-setting-handle-config-changed-event)
+
+(provide 'dynamic-setting)
+;;; dynamic-setting.el ends here

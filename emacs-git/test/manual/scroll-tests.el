@@ -1,21 +1,21 @@
-;;; scroll-tests.el -- tests for scrolling -*- lexical-binding: t -*-
+;;; scroll-tests.el --- tests for scrolling -*- lexical-binding: t -*-
 
-;; Copyright (C) 2017 Free Software Foundation, Inc.
+;; Copyright (C) 2017-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
-;; This program is free software; you can redistribute it and/or modify
+;; GNU Emacs is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 
-;; This program is distributed in the hope that it will be useful,
+;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -80,25 +80,25 @@
        ,@body)))
 
 (ert-deftest scroll-tests-scroll-margin-0 ()
-  (skip-unless (not noninteractive))
+  (skip-when noninteractive)
   (scroll-tests-with-buffer-window
     (scroll-tests-up-and-down 0)))
 
 (ert-deftest scroll-tests-scroll-margin-negative ()
   "A negative `scroll-margin' should be the same as 0."
-  (skip-unless (not noninteractive))
+  (skip-when noninteractive)
   (scroll-tests-with-buffer-window
     (scroll-tests-up-and-down -10 0)))
 
 (ert-deftest scroll-tests-scroll-margin-max ()
-  (skip-unless (not noninteractive))
+  (skip-when noninteractive)
   (scroll-tests-with-buffer-window
     (let ((max-margin (/ (window-text-height) 4)))
       (scroll-tests-up-and-down max-margin))))
 
 (ert-deftest scroll-tests-scroll-margin-over-max ()
   "A `scroll-margin' more than max should be the same as max."
-  (skip-unless (not noninteractive))
+  (skip-when noninteractive)
   (scroll-tests-with-buffer-window 7
     (let ((max-margin (/ (window-text-height) 4)))
       (scroll-tests-up-and-down (+ max-margin 1) max-margin)
@@ -155,7 +155,7 @@ middle of the window."
       (should (scroll-tests--point-in-middle-of-window-p)))))
 
 (ert-deftest scroll-tests-scroll-margin-whole-window ()
-  (skip-unless (not noninteractive))
+  (skip-when noninteractive)
   (scroll-tests--scroll-margin-whole-window))
 
 (ert-deftest scroll-tests-scroll-margin-whole-window-line-spacing ()

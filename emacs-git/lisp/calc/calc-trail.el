@@ -1,6 +1,6 @@
-;;; calc-trail.el --- functions for manipulating the Calc "trail"
+;;; calc-trail.el --- functions for manipulating the Calc "trail"  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1990-1993, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: David Gillespie <daveg@synaptics.com>
 
@@ -167,14 +167,7 @@
   (interactive "p")
   (calc-with-trail-buffer
    (let ((buffer-read-only nil))
-     (save-restriction
-       (narrow-to-region   ; don't delete "Emacs Trail" header
-	(save-excursion
-	  (goto-char (point-min))
-	  (forward-line 1)
-	  (point))
-	(point-max))
-       (kill-line n)))
+     (kill-line n))
    (calc-trail-here)))
 
 (provide 'calc-trail)

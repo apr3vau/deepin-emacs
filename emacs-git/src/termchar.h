@@ -1,5 +1,5 @@
 /* Flags and parameters describing terminal's characteristics.
-   Copyright (C) 1985-1986, 2001-2017 Free Software Foundation, Inc.
+   Copyright (C) 1985-1986, 2001-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -52,6 +52,11 @@ struct tty_display_info
                                    NULL if the terminal is suspended. */
   FILE *output;                 /* The stream to be used for terminal output.
                                    NULL if the terminal is suspended. */
+
+  /* Size of output buffer.  A value of zero means use the default of
+     BUFIZE.  If non-zero, also minimize writes to the tty by avoiding
+     calls to flush.  */
+  size_t output_buffer_size;
 
   FILE *termscript;             /* If nonzero, send all terminal output
                                    characters to this stream also.  */
@@ -136,6 +141,8 @@ struct tty_display_info
   const char *TS_enter_reverse_mode; /* "mr" -- enter reverse video mode.  */
   const char *TS_exit_underline_mode; /* "us" -- start underlining.  */
   const char *TS_enter_underline_mode; /* "ue" -- end underlining.  */
+  const char *TS_enter_strike_through_mode; /* "smxx" -- turn on strike-through
+					       mode.  */
 
   /* "as"/"ae" -- start/end alternate character set.  Not really
      supported, yet.  */
@@ -164,6 +171,13 @@ struct tty_display_info
                                    non-blank position.  Must clear before writing _.  */
   int TF_teleray;               /* termcap xt flag: many weird consequences.
                                    For t1061. */
+  const char *TF_set_underline_style; /* termcap Smulx entry: Switches the underline
+					 style based on the parameter.  Param should
+					 be one of: 0 (none), 1 (straight), 2 (double-line),
+					 3 (wave), 4 (dots), or 5 (dashes).  */
+  const char *TF_set_underline_color; /* Enabled when TF_set_underline_style is set:
+                                         Sets the color of the underline.  Accepts a
+                                         single parameter, the color index.  */
 
   int RPov;                     /* # chars to start a TS_repeat */
 
@@ -230,5 +244,9 @@ extern struct tty_display_info *tty_list;
    : (emacs_abort (), (struct tty_display_info *) 0))
 
 #define CURTTY() FRAME_TTY (SELECTED_FRAME())
+
+struct input_event;
+extern Lisp_Object tty_handle_tab_bar_click (struct frame *, int, int, bool,
+					     struct input_event *);
 
 #endif /* EMACS_TERMCHAR_H */

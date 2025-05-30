@@ -1,6 +1,6 @@
 ;;; less-css-mode.el --- Major mode for editing Less CSS files  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Author: Steve Purcell <steve@sanityinc.com>
 ;; Maintainer: Simen Heggestøyl <simenheg@gmail.com>
@@ -24,7 +24,7 @@
 ;;; Commentary:
 
 ;; This mode provides syntax highlighting for Less CSS files
-;; (http://lesscss.org/), plus optional support for compilation of
+;; (https://lesscss.org/), plus optional support for compilation of
 ;; .less files to .css files at the time they are saved: use
 ;; `less-css-compile-at-save' to enable this.
 ;;
@@ -32,7 +32,7 @@
 ;; `less-css-compile-at-save' to t.  To install "lessc" using the
 ;; Node.js package manager, run "npm install less".
 ;;
-;; Also make sure the "lessc" executable is in Emacs' PATH, example:
+;; Also make sure the "lessc" executable is in Emacs's PATH, example:
 ;; (push (expand-file-name "~/.gem/ruby/1.8/bin") exec-path)
 ;; or customize `less-css-lessc-command' to point to your "lessc"
 ;; executable.
@@ -73,11 +73,11 @@
 
 (require 'compile)
 (require 'css-mode)
-(require 'derived)
 (eval-when-compile (require 'subr-x))
 
 (defgroup less-css nil
   "Less CSS mode."
+  :version "26.1"
   :prefix "less-css-"
   :group 'css)
 
@@ -91,7 +91,7 @@ executable, e.g.: \"~/.gem/ruby/1.8/bin/lessc\"."
   "If non-nil, Less buffers are compiled to CSS after each save."
   :type 'boolean)
 ;;;###autoload
-(put 'less-css-compile-at-save 'safe-local-variable 'booleanp)
+(put 'less-css-compile-at-save 'safe-local-variable #'booleanp)
 
 (defcustom less-css-lessc-options '("--no-color")
   "Command line options for Less executable.
@@ -105,9 +105,9 @@ Use \"-x\" to minify output."
 This path is expanded relative to the directory of the Less file
 using `expand-file-name', so both relative and absolute paths
 will work as expected."
-  :type 'directory)
+  :type '(choice (const :tag "Same as Less file" nil) directory))
 ;;;###autoload
-(put 'less-css-output-directory 'safe-local-variable 'stringp)
+(put 'less-css-output-directory 'safe-local-variable #'stringp)
 
 (defcustom less-css-output-file-name nil
   "File name in which to save CSS, or nil to use <name>.css for <name>.less.
@@ -115,7 +115,7 @@ This can be also be set to a full path, or a relative path.  If
 the path is relative, it will be relative to the value of
 `less-css-output-dir', if set, or the current directory by
 default."
-  :type 'file)
+  :type '(choice (const :tag "Default" nil) file))
 (make-variable-buffer-local 'less-css-output-file-name)
 
 (defcustom less-css-input-file-name nil
@@ -131,9 +131,9 @@ variables.
 This can be also be set to a full path, or a relative path.  If
 the path is relative, it will be relative to the current
 directory by default."
-  :type 'file)
+  :type '(choice (const nil) file))
 ;;;###autoload
-(put 'less-css-input-file-name 'safe-local-variable 'stringp)
+(put 'less-css-input-file-name 'safe-local-variable #'stringp)
 (make-variable-buffer-local 'less-css-input-file-name)
 
 (defconst less-css-default-error-regex
@@ -193,10 +193,10 @@ directory by default."
 ;; - custom faces.
 (defconst less-css-font-lock-keywords
   '(;; Variables
-    ("@[a-z_-][a-z-_0-9]*" . font-lock-variable-name-face)
+    ("@[a-z_-][a-z_0-9-]*" . font-lock-variable-name-face)
     ("&" . font-lock-preprocessor-face)
     ;; Mixins
-    ("\\(?:[ \t{;]\\|^\\)\\(\\.[a-z_-][a-z-_0-9]*\\)[ \t]*;" .
+    ("\\(?:[ \t{;]\\|^\\)\\(\\.[a-z_-][a-z_0-9-]*\\)[ \t]*;" .
      (1 font-lock-keyword-face))))
 
 (defvar less-css-mode-syntax-table
@@ -209,15 +209,13 @@ directory by default."
     (modify-syntax-entry ?. "'" st)
     st))
 
-(defvar less-css-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "\C-c\C-c" 'less-css-compile)
-    map))
+(defvar-keymap less-css-mode-map
+  "C-c C-c" #'less-css-compile)
 
 ;;;###autoload (add-to-list 'auto-mode-alist '("\\.less\\'" . less-css-mode))
 ;;;###autoload
 (define-derived-mode less-css-mode css-mode "Less"
-  "Major mode for editing Less files (http://lesscss.org/).
+  "Major mode for editing Less files (https://lesscss.org/).
 Special commands:
 \\{less-css-mode-map}"
   (font-lock-add-keywords nil less-css-font-lock-keywords)
@@ -226,7 +224,7 @@ Special commands:
   (setq-local comment-continue " *")
   (setq-local comment-start-skip "/[*/]+[ \t]*")
   (setq-local comment-end-skip "[ \t]*\\(?:\n\\|\\*+/\\)")
-  (add-hook 'after-save-hook 'less-css-compile-maybe nil t))
+  (add-hook 'after-save-hook #'less-css-compile-maybe nil t))
 
 (provide 'less-css-mode)
 ;;; less-css-mode.el ends here

@@ -1,7 +1,6 @@
 ;;; scheme.el --- Scheme (and DSSSL) editing mode    -*- lexical-binding: t; -*-
 
-;; Copyright (C) 1986-1988, 1997-1998, 2001-2017 Free Software
-;; Foundation, Inc.
+;; Copyright (C) 1986-2025 Free Software Foundation, Inc.
 
 ;; Author: Bill Rozas <jinx@martigny.ai.mit.edu>
 ;; Adapted-by: Dave Love <d.love@dl.ac.uk>
@@ -28,7 +27,7 @@
 ;; the Lisp mode documented in the Emacs manual.  `dsssl-mode' is a
 ;; variant of scheme-mode for editing DSSSL specifications for SGML
 ;; documents.  [As of Apr 1997, some pointers for DSSSL may be found,
-;; for instance, at <URL:http://www.sil.org/sgml/related.html#dsssl>.]
+;; for instance, at <URL:https://www.sil.org/sgml/related.html#dsssl>.]
 ;; All these Lisp-ish modes vary basically in details of the language
 ;; syntax they highlight/indent/index, but dsssl-mode uses "^;;;" as
 ;; the page-delimiter since ^L isn't normally a valid SGML character.
@@ -51,6 +50,7 @@
 ;;; Code:
 
 (require 'lisp-mode)
+(eval-when-compile 'subr-x)             ;For `named-let'.
 
 (defvar scheme-mode-syntax-table
   (let ((st (make-syntax-table))
@@ -115,12 +115,59 @@
 (define-abbrev-table 'scheme-mode-abbrev-table ())
 
 (defvar scheme-imenu-generic-expression
-      '((nil
-         "^(define\\(\\|-\\(generic\\(\\|-procedure\\)\\|method\\)\\)*\\s-+(?\\(\\sw+\\)" 4)
-        ("Types"
-         "^(define-class\\s-+(?\\(\\sw+\\)" 1)
-        ("Macros"
-         "^(\\(defmacro\\|define-macro\\|define-syntax\\)\\s-+(?\\(\\sw+\\)" 2))
+  `((nil
+     ,(rx bol (zero-or-more space)
+          "(define"
+          (zero-or-one "*")
+          (zero-or-one "-public")
+          (one-or-more space)
+          (zero-or-one "(")
+          (group (one-or-more (or word (syntax symbol)))))
+     1)
+    ("Methods"
+     ,(rx bol (zero-or-more space)
+          "(define-"
+          (or "generic" "method" "accessor")
+          (one-or-more space)
+          (zero-or-one "(")
+          (group (one-or-more (or word (syntax symbol)))))
+     1)
+    ("Classes"
+     ,(rx bol (zero-or-more space)
+          "(define-class"
+          (one-or-more space)
+          (zero-or-one "(")
+          (group (one-or-more (or word (syntax symbol)))))
+     1)
+    ("Records"
+     ,(rx bol (zero-or-more space)
+          "(define-record-type"
+          (zero-or-one "*")
+          (one-or-more space)
+          (group (one-or-more (or word (syntax symbol)))))
+     1)
+    ("Conditions"
+     ,(rx bol (zero-or-more space)
+          "(define-condition-type"
+          (one-or-more space)
+          (group (one-or-more (or word (syntax symbol)))))
+     1)
+    ("Modules"
+     ,(rx bol (zero-or-more space)
+          "(define-module"
+          (one-or-more space)
+          (group "(" (one-or-more nonl) ")"))
+     1)
+    ("Macros"
+     ,(rx bol (zero-or-more space) "("
+          (or (and "defmacro"
+                   (zero-or-one "*")
+                   (zero-or-one "-public"))
+              "define-macro" "define-syntax" "define-syntax-rule")
+          (one-or-more space)
+          (zero-or-one "(")
+          (group (one-or-more (or word (syntax symbol)))))
+     1))
   "Imenu generic expression for Scheme mode.  See `imenu-generic-expression'.")
 
 (defun scheme-mode-variables ()
@@ -143,7 +190,6 @@
   (setq-local comment-start-skip ";+[ \t]*")
   (setq-local comment-use-syntax t)
   (setq-local comment-column 40)
-  (setq-local parse-sexp-ignore-comments t)
   (setq-local lisp-indent-function 'scheme-indent-function)
   (setq mode-line-process '("" scheme-mode-line-process))
   (setq-local imenu-case-fold-search t)
@@ -161,25 +207,24 @@
 
 (defvar scheme-mode-line-process "")
 
-(defvar scheme-mode-map
-  (let ((smap (make-sparse-keymap))
-        (map (make-sparse-keymap "Scheme")))
-    (set-keymap-parent smap lisp-mode-shared-map)
-    (define-key smap [menu-bar scheme] (cons "Scheme" map))
-    (define-key map [run-scheme] '("Run Inferior Scheme" . run-scheme))
-    (define-key map [uncomment-region]
-      '("Uncomment Out Region" . (lambda (beg end)
-                                   (interactive "r")
-                                   (comment-region beg end '(4)))))
-    (define-key map [comment-region] '("Comment Out Region" . comment-region))
-    (define-key map [indent-region] '("Indent Region" . indent-region))
-    (define-key map [indent-line] '("Indent Line" . lisp-indent-line))
-    (put 'comment-region 'menu-enable 'mark-active)
-    (put 'uncomment-region 'menu-enable 'mark-active)
-    (put 'indent-region 'menu-enable 'mark-active)
-    smap)
-  "Keymap for Scheme mode.
-All commands in `lisp-mode-shared-map' are inherited by this map.")
+(defvar-keymap scheme-mode-map
+  :doc "Keymap for Scheme mode.
+All commands in `lisp-mode-shared-map' are inherited by this map."
+  :parent lisp-mode-shared-map)
+
+(easy-menu-define scheme-mode-menu scheme-mode-map
+  "Menu for Scheme mode."
+  '("Scheme"
+    ["Indent Line" lisp-indent-line]
+    ["Indent Region" indent-region
+     :enable mark-active]
+    ["Comment Out Region" comment-region
+     :enable mark-active]
+    ["Uncomment Out Region" (lambda (beg end)
+                                (interactive "r")
+                                (comment-region beg end '(4)))
+     :enable mark-active]
+    ["Run Inferior Scheme" run-scheme]))
 
 ;; Used by cmuscheme
 (defun scheme-mode-commands (map)
@@ -215,8 +260,7 @@ Blank lines separate paragraphs.  Semicolons start comments.
 (defcustom scheme-mit-dialect t
   "If non-nil, scheme mode is specialized for MIT Scheme.
 Set this to nil if you normally use another dialect."
-  :type 'boolean
-  :group 'scheme)
+  :type 'boolean)
 
 (defcustom dsssl-sgml-declaration
   "<!DOCTYPE style-sheet PUBLIC \"-//James Clark//DTD DSSSL Style Sheet//EN\">
@@ -226,26 +270,22 @@ If it is defined as a string this will be inserted into an empty buffer
 which is in `dsssl-mode'.  It is typically James Clark's style-sheet
 doctype, as required for Jade."
   :type '(choice (string :tag "Specified string")
-                 (const :tag "None" :value nil))
-  :group 'scheme)
+                 (const :tag "None" :value nil)))
 
 (defcustom scheme-mode-hook nil
   "Normal hook run when entering `scheme-mode'.
 See `run-hooks'."
-  :type 'hook
-  :group 'scheme)
+  :type 'hook)
 
 (defcustom dsssl-mode-hook nil
   "Normal hook run when entering `dsssl-mode'.
 See `run-hooks'."
-  :type 'hook
-  :group 'scheme)
+  :type 'hook)
 
 ;; This is shared by cmuscheme and xscheme.
 (defcustom scheme-program-name "scheme"
   "Program invoked by the `run-scheme' command."
-  :type 'string
-  :group 'scheme)
+  :type 'string)
 
 (defvar dsssl-imenu-generic-expression
   ;; Perhaps this should also look for the style-sheet DTD tags.  I'm
@@ -303,7 +343,9 @@ See `run-hooks'."
        (concat
         "(" (regexp-opt
              '("begin" "call-with-current-continuation" "call/cc"
-               "call-with-input-file" "call-with-output-file" "case" "cond"
+               "call-with-input-file" "call-with-output-file"
+               "call-with-port"
+               "case" "cond"
                "do" "else" "for-each" "if" "lambda" "λ"
                "let" "let*" "let-syntax" "letrec" "letrec-syntax"
                ;; R6RS library subforms.
@@ -326,7 +368,7 @@ See `run-hooks'."
 	       ) t)
         "\\>") 1)
       ;;
-      ;; It wouldn't be Scheme w/o named-let.
+      ;; It wouldn't be Scheme without named-let.
       '("(let\\s-+\\(\\sw+\\)"
         (1 font-lock-function-name-face))
       ;;
@@ -345,43 +387,105 @@ See `run-hooks'."
 (defvar scheme-font-lock-keywords scheme-font-lock-keywords-1
   "Default expressions to highlight in Scheme modes.")
 
-(defconst scheme-sexp-comment-syntax-table
-  (let ((st (make-syntax-table scheme-mode-syntax-table)))
-    (modify-syntax-entry ?\; "." st)
-    (modify-syntax-entry ?\n " " st)
-    (modify-syntax-entry ?#  "'" st)
-    st))
+;; (defconst scheme-sexp-comment-syntax-table
+;;   (let ((st (make-syntax-table scheme-mode-syntax-table)))
+;;     (modify-syntax-entry ?\; "." st)
+;;     (modify-syntax-entry ?\n " " st)
+;;     (modify-syntax-entry ?#  "'" st)
+;;     st))
 
 (put 'lambda 'scheme-doc-string-elt 2)
+(put 'lambda* 'scheme-doc-string-elt 2)
 ;; Docstring's pos in a `define' depends on whether it's a var or fun def.
 (put 'define 'scheme-doc-string-elt
      (lambda ()
        ;; The function is called with point right after "define".
        (forward-comment (point-max))
        (if (eq (char-after) ?\() 2 0)))
+(put 'define* 'scheme-doc-string-elt 2)
+(put 'case-lambda 'scheme-doc-string-elt 1)
+(put 'case-lambda* 'scheme-doc-string-elt 1)
+(put 'define-syntax-rule 'scheme-doc-string-elt 2)
+(put 'syntax-rules 'scheme-doc-string-elt 2)
 
 (defun scheme-syntax-propertize (beg end)
   (goto-char beg)
-  (scheme-syntax-propertize-sexp-comment (point) end)
+  (scheme-syntax-propertize-sexp-comment end)
+  (scheme-syntax-propertize-regexp end)
   (funcall
    (syntax-propertize-rules
     ("\\(#\\);" (1 (prog1 "< cn"
-                     (scheme-syntax-propertize-sexp-comment (point) end)))))
+                     (scheme-syntax-propertize-sexp-comment end))))
+    ("\\(#\\)/" (1 (when (null (nth 8 (save-excursion
+                                        (syntax-ppss (match-beginning 0)))))
+                     (put-text-property
+                      (match-beginning 1)
+                      (match-end 1)
+                      'syntax-table (string-to-syntax "|"))
+                     (scheme-syntax-propertize-regexp end)
+                     nil))))
    (point) end))
 
-(defun scheme-syntax-propertize-sexp-comment (_ end)
-  (let ((state (syntax-ppss)))
+(defun scheme-syntax-propertize-sexp-comment (end)
+  (let ((state (syntax-ppss))
+        ;; (beg (point))
+        (checked (point)))
     (when (eq 2 (nth 7 state))
       ;; It's a sexp-comment.  Tell parse-partial-sexp where it ends.
-      (condition-case nil
-          (progn
-            (goto-char (+ 2 (nth 8 state)))
-            ;; FIXME: this doesn't handle the case where the sexp
-            ;; itself contains a #; comment.
-            (forward-sexp 1)
-            (put-text-property (1- (point)) (point)
-                               'syntax-table (string-to-syntax "> cn")))
-        (scan-error (goto-char end))))))
+      (named-let loop ((startpos (+ 2 (nth 8 state))))
+        (let ((found nil))
+          (while
+              (progn
+                (setq found nil)
+                (condition-case nil
+                    (save-restriction
+                      (narrow-to-region (point-min) end)
+                      (goto-char startpos)
+                      (forward-sexp 1)
+                      ;; (cl-assert (> (point) beg))
+                      (setq found (point)))
+                  (scan-error (goto-char end)))
+                ;; If there's a nested `#;', the syntax-tables will normally
+                ;; consider the `;' to start a normal comment, so the
+                ;; (forward-sexp 1) above may have landed at the wrong place.
+                ;; So look for `#;' in the text over which we jumped, and
+                ;; mark those we found as nested sexp-comments.
+                (let ((limit (min end (or found end))))
+                  (when (< checked limit)
+                    (goto-char checked)
+                    (while (and (re-search-forward "\\(#\\);" limit 'move)
+                                ;; Skip those #; inside comments and strings.
+                                (nth 8 (save-excursion
+                                         (parse-partial-sexp
+                                          startpos (match-beginning 0))))))
+                    (setq checked (point))
+                    (when (< (point) limit)
+                      (put-text-property (match-beginning 1) (match-end 1)
+                                         'syntax-table
+                                         (string-to-syntax "< cn"))
+                      (loop (point))
+                      ;; Try the `forward-sexp' with the new text state.
+                      t)))))
+          (when found
+            (goto-char found)
+            (put-text-property (1- found) found
+                               'syntax-table (string-to-syntax "> cn"))))))))
+
+(defun scheme-syntax-propertize-regexp (end)
+  (let* ((state (syntax-ppss))
+         (within-str (nth 3 state))
+         (start-delim-pos (nth 8 state)))
+    (when (and within-str
+               (char-equal ?# (char-after start-delim-pos)))
+      (while (and (re-search-forward "/" end 'move)
+                  (eq -1
+                      (% (save-excursion
+                           (backward-char)
+                           (skip-chars-backward "\\\\"))
+                         2))))
+      (when (< (point) end)
+       (put-text-property (match-beginning 0) (match-end 0)
+                          'syntax-table (string-to-syntax "|"))))))
 
 ;;;###autoload
 (define-derived-mode dsssl-mode scheme-mode "DSSSL"
@@ -429,12 +533,10 @@ that variable's value is a string."
            '(1 font-lock-keyword-face)
            '(4 font-lock-function-name-face))
      (cons
-      (concat "(\\("
-              ;; (make-regexp '("case" "cond" "else" "if" "lambda"
-              ;; "let" "let*" "letrec" "and" "or" "map" "with-mode"))
-              "and\\|c\\(ase\\|ond\\)\\|else\\|if\\|"
-              "l\\(ambda\\|et\\(\\|*\\|rec\\)\\)\\|map\\|or\\|with-mode"
-              "\\)\\>")
+      (concat "(" (regexp-opt
+                   '("case" "cond" "else" "if" "lambda"
+                     "let" "let*" "letrec" "and" "or" "map" "with-mode")
+                   'words))
       1)
      ;; DSSSL syntax
      '("(\\(element\\|mode\\|declare-\\w+\\)\\>[ \t]*\\(\\sw+\\)"
@@ -443,7 +545,7 @@ that variable's value is a string."
      '("(\\(element\\)\\>[ \t]*(\\(\\S)+\\))"
        (1 font-lock-keyword-face)
        (2 font-lock-type-face))
-     '("\\<\\sw+:\\>" . font-lock-constant-face) ; trailing `:' c.f. scheme
+     '("\\<\\sw+:\\>" . font-lock-constant-face) ; trailing `:' cf. scheme
      ;; SGML markup (from sgml-mode) :
      '("<\\([!?][-a-z0-9]+\\)" 1 font-lock-keyword-face)
      '("<\\(/?[-a-z0-9]+\\)" 1 font-lock-function-name-face)))
@@ -526,10 +628,20 @@ indentation."
       (lisp-indent-specform 2 state indent-point normal-indent)
     (lisp-indent-specform 1 state indent-point normal-indent)))
 
-;; (put 'begin 'scheme-indent-function 0), say, causes begin to be indented
-;; like defun if the first form is placed on the next line, otherwise
-;; it is indented like any other form (i.e. forms line up under first).
-
+;; See `scheme-indent-function' (the function) for what these do.
+;; In a nutshell:
+;;  . for forms with no `scheme-indent-function' property the 2nd
+;;    and subsequent lines will be indented with one space;
+;;  . if the value of the property is zero, then when the first form
+;;    is on a separate line, the next lines will be indented with 2
+;;    spaces instead of the default one space;
+;;  . if the value is a positive integer N, the first N lines after
+;;    the first one will be indented with 4 spaces, and the rest
+;;    will be indented with 2 spaces;
+;;  . if the value is `defun', the indentation is like for `defun';
+;;  . if the value is a function, it will be called to produce the
+;;    required indentation.
+;; See also http://community.schemewiki.org/?emacs-indentation.
 (put 'begin 'scheme-indent-function 0)
 (put 'case 'scheme-indent-function 1)
 (put 'delay 'scheme-indent-function 0)
@@ -540,14 +652,19 @@ indentation."
 (put 'letrec 'scheme-indent-function 1)
 (put 'let-values 'scheme-indent-function 1) ; SRFI 11
 (put 'let*-values 'scheme-indent-function 1) ; SRFI 11
+(put 'and-let* 'scheme-indent-function 1) ; SRFI 2
 (put 'sequence 'scheme-indent-function 0) ; SICP, not r4rs
 (put 'let-syntax 'scheme-indent-function 1)
 (put 'letrec-syntax 'scheme-indent-function 1)
-(put 'syntax-rules 'scheme-indent-function 1)
+(put 'syntax-rules 'scheme-indent-function 'defun)
 (put 'syntax-case 'scheme-indent-function 2) ; not r5rs
+(put 'with-syntax 'scheme-indent-function 1)
 (put 'library 'scheme-indent-function 1) ; R6RS
+;; Part of at least Guile, Chez Scheme, Chicken
+(put 'eval-when 'scheme-indent-function 1)
 
 (put 'call-with-input-file 'scheme-indent-function 1)
+(put 'call-with-port 'scheme-indent-function 1)
 (put 'with-input-from-file 'scheme-indent-function 1)
 (put 'with-input-from-port 'scheme-indent-function 1)
 (put 'call-with-output-file 'scheme-indent-function 1)
@@ -567,6 +684,14 @@ indentation."
 
 ;; SRFI-8
 (put 'receive 'scheme-indent-function 2)
+
+;; SRFI-204 (withdrawn, but provided in many implementations, see the SRFI text)
+(put 'match 'scheme-indent-function 1)
+(put 'match-lambda 'scheme-indent-function 0)
+(put 'match-lambda* 'scheme-indent-function 0)
+(put 'match-let 'scheme-indent-function 'scheme-let-indent)
+(put 'match-let* 'scheme-indent-function 1)
+(put 'match-letrec 'scheme-indent-function 1)
 
 ;;;; MIT Scheme specific indentation.
 

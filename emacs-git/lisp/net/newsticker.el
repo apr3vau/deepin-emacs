@@ -1,10 +1,9 @@
 ;;; newsticker.el --- A Newsticker for Emacs. -*- lexical-binding: t -*-
 
-;; Copyright (C) 2003-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
-;; Filename:    newsticker.el
-;; URL:         http://www.nongnu.org/newsticker
+;; URL:         https://www.nongnu.org/newsticker
 ;; Created:     17. June 2003
 ;; Keywords:    News, RSS, Atom
 
@@ -43,18 +42,17 @@
 ;; are contained in "RSS" (RDF Site Summary) or "Atom" files.  Newsticker
 ;; should work with the following RSS formats:
 ;;  * RSS 0.91
-;;    (see http://backend.userland.com/rss091 or
-;;    http://my.netscape.com/publish/formats/rss-spec-0.91.html)
+;;    (see http://backend.userland.com/rss091)
 ;;  * RSS 0.92
 ;;    (see http://backend.userland.com/rss092)
 ;;  * RSS 1.0
-;;    (see http://purl.org/rss/1.0/spec)
+;;    (see https://web.resource.org/rss/1.0/spec)
 ;;  * RSS 2.0
-;;    (see http://blogs.law.harvard.edu/tech/rss)
+;;    (see https://cyber.harvard.edu/rss/)
 ;; as well as the following Atom formats:
 ;;  * Atom 0.3
 ;;  * Atom 1.0
-;;    (see http://www.ietf.org/internet-drafts/draft-ietf-atompub-format-11.txt)
+;;    (see https://www.ietf.org/internet-drafts/draft-ietf-atompub-format-11.txt)
 ;; That makes Newsticker.el an "Atom aggregator, "RSS reader", "RSS
 ;; aggregator", and "Feed Reader".
 
@@ -71,25 +69,12 @@
 
 ;; Requirements
 ;; ------------
-;; Newsticker can be used with GNU Emacs version 21.1 or later as well as
-;; XEmacs.  It requires an XML-parser (`xml.el') which is part of GNU
-;; Emacs.  If you are using XEmacs you want to get the `net-utils' package
-;; which contains `xml.el' for XEmacs.
-
 ;; Newsticker requires a program which can retrieve files via http and
 ;; prints them to stdout.  By default Newsticker will use wget for this
 ;; task.
 
 ;; Installation
 ;; ------------
-
-;; If you are using Newsticker as part of GNU Emacs there is no need to
-;; perform any installation steps in order to use Newsticker.  Otherwise
-;; place Newsticker in a directory where Emacs can find it.  Add the
-;; following line to your init file:
-;;   (add-to-list 'load-path "/path/to/newsticker/")
-;;   (autoload 'newsticker-start "newsticker" "Emacs Newsticker" t)
-;;   (autoload 'newsticker-show-news "newsticker" "Emacs Newsticker" t)
 
 ;; If you are using `imenu', which allows for navigating with the help of a
 ;; menu, you should add the following to your Emacs startup file

@@ -1,6 +1,6 @@
 /* Inotify support for Emacs
 
-Copyright (C) 2012-2017 Free Software Foundation, Inc.
+Copyright (C) 2012-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -19,8 +19,6 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
-#ifdef HAVE_INOTIFY
-
 #include "lisp.h"
 #include "coding.h"
 #include "process.h"
@@ -28,6 +26,8 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "termhooks.h"
 
 #include <errno.h>
+#include <fcntl.h>
+
 #include <sys/inotify.h>
 #include <sys/ioctl.h>
 
@@ -41,6 +41,10 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #ifndef IN_ONLYDIR
 # define IN_ONLYDIR 0
 #endif
+
+#ifdef HAVE_ANDROID
+#include "android.h" /* For `android_is_special_directory'.  */
+#endif /* HAVE_ANDROID */
 
 /* File handle for inotify.  */
 static int inotifyfd = -1;
@@ -146,6 +150,11 @@ symbol_to_inotifymask (Lisp_Object symb)
   else if (EQ (symb, Qonlydir))
     return IN_ONLYDIR;
 
+  else if (EQ (symb, Qignored))
+    return IN_IGNORED;
+  else if (EQ (symb, Qunmount))
+    return IN_UNMOUNT;
+
   else if (EQ (symb, Qt) || EQ (symb, Qall_events))
     return IN_ALL_EVENTS;
   else
@@ -176,25 +185,24 @@ inotifyevent_to_event (Lisp_Object watch, struct inotify_event const *ev)
 {
   Lisp_Object name;
   uint32_t mask;
-  CONS_TO_INTEGER (Fnth (make_number (3), watch), uint32_t, mask);
+  CONS_TO_INTEGER (Fnth (make_fixnum (3), watch), uint32_t, mask);
 
   if (! (mask & ev->mask))
     return Qnil;
 
   if (ev->len > 0)
     {
-      size_t const len = strlen (ev->name);
-      name = make_unibyte_string (ev->name, min (len, ev->len));
+      name = make_unibyte_string (ev->name, strnlen (ev->name, ev->len));
       name = DECODE_FILE (name);
     }
   else
     name = XCAR (XCDR (watch));
 
-  return list2 (list4 (Fcons (INTEGER_TO_CONS (ev->wd), XCAR (watch)),
+  return list2 (list4 (Fcons (INT_TO_INTEGER (ev->wd), XCAR (watch)),
                        mask_to_aspects (ev->mask),
                        name,
-		       INTEGER_TO_CONS (ev->cookie)),
-		Fnth (make_number (2), watch));
+		       INT_TO_INTEGER (ev->cookie)),
+		Fnth (make_fixnum (2), watch));
 }
 
 /* Add a new watch to watch-descriptor WD watching FILENAME and using
@@ -204,10 +212,10 @@ static Lisp_Object
 add_watch (int wd, Lisp_Object filename,
 	   uint32_t imask, Lisp_Object callback)
 {
-  Lisp_Object descriptor = INTEGER_TO_CONS (wd);
+  Lisp_Object descriptor = INT_TO_INTEGER (wd);
   Lisp_Object tail = assoc_no_quit (descriptor, watch_list);
   Lisp_Object watch, watch_id;
-  Lisp_Object mask = INTEGER_TO_CONS (imask);
+  Lisp_Object mask = INT_TO_INTEGER (imask);
 
   EMACS_INT id = 0;
   if (NILP (tail))
@@ -220,7 +228,7 @@ add_watch (int wd, Lisp_Object filename,
       /* Assign a watch ID that is not already in use, by looking
 	 for a gap in the existing sorted list.  */
       for (; ! NILP (XCDR (tail)); tail = XCDR (tail), id++)
-	if (!EQ (XCAR (XCAR (XCDR (tail))), make_number (id)))
+	if (!BASE_EQ (XCAR (XCAR (XCDR (tail))), make_fixnum (id)))
 	  break;
       if (MOST_POSITIVE_FIXNUM < id)
 	emacs_abort ();
@@ -229,7 +237,7 @@ add_watch (int wd, Lisp_Object filename,
   /* Insert the newly-assigned ID into the previously-discovered gap,
      which is possibly at the end of the list.  Inserting it there
      keeps the list sorted.  */
-  watch_id = make_number (id);
+  watch_id = make_fixnum (id);
   watch = list4 (watch_id, filename, callback, mask);
   XSETCDR (tail, Fcons (watch, XCDR (tail)));
 
@@ -332,7 +340,7 @@ inotify_callback (int fd, void *_)
   for (ssize_t i = 0; i < n; )
     {
       struct inotify_event *ev = (struct inotify_event *) &buffer[i];
-      Lisp_Object descriptor = INTEGER_TO_CONS (ev->wd);
+      Lisp_Object descriptor = INT_TO_INTEGER (ev->wd);
       Lisp_Object prevtail = find_descriptor (descriptor);
 
       if (! NILP (prevtail))
@@ -422,12 +430,21 @@ IN_ONESHOT  */)
   int wd = -1;
   uint32_t imask = aspect_to_inotifymask (aspect);
   uint32_t mask = imask | IN_MASK_ADD | IN_EXCL_UNLINK;
+  char *name;
 
   CHECK_STRING (filename);
 
   if (inotifyfd < 0)
     {
+#ifdef HAVE_INOTIFY_INIT1
       inotifyfd = inotify_init1 (IN_NONBLOCK | IN_CLOEXEC);
+#else /* !HAVE_INOTIFY_INIT1 */
+      /* This is prey to race conditions with other threads calling
+	 exec.  */
+      inotifyfd = inotify_init ();
+      fcntl (inotifyfd, F_SETFL, O_NONBLOCK);
+      fcntl (inotifyfd, F_SETFD, O_CLOEXEC);
+#endif /* HAVE_INOTIFY_INIT1 */
       if (inotifyfd < 0)
 	report_file_notify_error ("File watching is not available", Qnil);
       watch_list = Qnil;
@@ -435,7 +452,19 @@ IN_ONESHOT  */)
     }
 
   encoded_file_name = ENCODE_FILE (filename);
-  wd = inotify_add_watch (inotifyfd, SSDATA (encoded_file_name), mask);
+  name = SSDATA (encoded_file_name);
+
+#if defined HAVE_ANDROID && !defined ANDROID_STUBIFY
+  /* If FILENAME actually lies in a special directory, return now
+     instead of letting inotify fail.  These directories cannot
+     receive file notifications as they are read only.  */
+
+  if (android_is_special_directory (name, "/assets")
+      || android_is_special_directory (name, "/content"))
+    return Qnil;
+#endif /* defined HAVE_ANDROID && !defined ANDROID_STUBIFY */
+
+  wd = inotify_add_watch (inotifyfd, name, mask);
   if (wd < 0)
     report_file_notify_error ("Could not add watch for file", filename);
 
@@ -446,12 +475,12 @@ static bool
 valid_watch_descriptor (Lisp_Object wd)
 {
   return (CONSP (wd)
-	  && (RANGED_INTEGERP (0, XCAR (wd), INT_MAX)
+	  && (RANGED_FIXNUMP (0, XCAR (wd), INT_MAX)
 	      || (CONSP (XCAR (wd))
-		  && RANGED_INTEGERP ((MOST_POSITIVE_FIXNUM >> 16) + 1,
+		  && RANGED_FIXNUMP ((MOST_POSITIVE_FIXNUM >> 16) + 1,
 				      XCAR (XCAR (wd)), INT_MAX >> 16)
-		  && RANGED_INTEGERP (0, XCDR (XCAR (wd)), (1 << 16) - 1)))
-	  && NATNUMP (XCDR (wd)));
+		  && RANGED_FIXNUMP (0, XCDR (XCAR (wd)), (1 << 16) - 1)))
+	  && FIXNATP (XCDR (wd)));
 }
 
 DEFUN ("inotify-rm-watch", Finotify_rm_watch, Sinotify_rm_watch, 1, 1, 0,
@@ -498,12 +527,14 @@ it invalid.  */)
 #ifdef INOTIFY_DEBUG
 DEFUN ("inotify-watch-list", Finotify_watch_list, Sinotify_watch_list, 0, 0, 0,
        doc: /* Return a copy of the internal watch_list.  */)
+  (void)
 {
   return Fcopy_sequence (watch_list);
 }
 
 DEFUN ("inotify-allocated-p", Finotify_allocated_p, Sinotify_allocated_p, 0, 0, 0,
-       doc: /* Return non-nil, if a inotify instance is allocated.  */)
+       doc: /* Return non-nil, if an inotify instance is allocated.  */)
+  (void)
 {
   return inotifyfd < 0 ? Qnil : Qt;
 }
@@ -533,7 +564,10 @@ syms_of_inotify (void)
   DEFSYM (Qdont_follow, "dont-follow");	/* IN_DONT_FOLLOW */
   DEFSYM (Qonlydir, "onlydir");		/* IN_ONLYDIR */
 
+#if 0
+  /* Defined in coding.c, which uses it on all platforms.  */
   DEFSYM (Qignored, "ignored");		/* IN_IGNORED */
+#endif
   DEFSYM (Qisdir, "isdir");		/* IN_ISDIR */
   DEFSYM (Qq_overflow, "q-overflow");	/* IN_Q_OVERFLOW */
   DEFSYM (Qunmount, "unmount");		/* IN_UNMOUNT */
@@ -550,5 +584,3 @@ syms_of_inotify (void)
 
   Fprovide (intern_c_string ("inotify"), Qnil);
 }
-
-#endif /* HAVE_INOTIFY */

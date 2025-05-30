@@ -1,11 +1,11 @@
 ;;; ob-makefile.el --- Babel Functions for Makefile  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2009-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
 ;; 	   Thomas S. Dye
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; URL: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -27,22 +27,24 @@
 ;; This file exists solely for tangling a Makefile from Org files.
 
 ;;; Code:
+
+(require 'org-macs)
+(org-assert-version)
+
 (require 'ob)
 
 (defvar org-babel-default-header-args:makefile '())
 
 (defun org-babel-execute:makefile (body _params)
-  "Execute a block of makefile code.
+  "Execute makefile BODY.
+Second function argument is ignored.
 This function is called by `org-babel-execute-src-block'."
   body)
 
 (defun org-babel-prep-session:makefile (_session _params)
-  "Return an error if the :session header argument is set.  Make
-does not support sessions."
+  "Signal error; Make does not support sessions."
   (error "Makefile sessions are nonsensical"))
 
 (provide 'ob-makefile)
-
-
 
 ;;; ob-makefile.el ends here

@@ -11,7 +11,7 @@ install it only on the emacs-24 branch, not on the master as well.
 Installing things manually into more than one branch makes merges more
 difficult.
 
-https://lists.gnu.org/archive/html/emacs-devel/2010-03/msg01124.html
+https://lists.gnu.org/r/emacs-devel/2010-03/msg01124.html
 
 The exception is, if you know that the change will be difficult to
 merge to the master (eg because the master code has changed a lot).
@@ -40,7 +40,25 @@ so interim merges are unnecessary.
 Or use shelves; or rebase; or do something else.  See the thread for
 yet another fun excursion into the exciting world of version control.
 
-https://lists.gnu.org/archive/html/emacs-devel/2010-04/msg00086.html
+https://lists.gnu.org/r/emacs-devel/2010-04/msg00086.html
+
+* feature and scratch branches
+
+Besides the master branch, which is where development takes place, and
+the "emacs-NN" release branches, we also have branches whose names
+start with "scratch/" and "feature/".  The "feature/" prefix is used
+for feature branches that are intended to live for some time, while
+"scratch/" is for one-off throw-away-after-use branches.
+
+We do not intend to "git merge" from scratch branches, so force-pushes
+are tolerated, as well as commits with poor style, incomplete commit
+messages, etc.
+
+We do expect to "git merge" from feature branches so: no force push,
+and no commits that don't have a proper commit message.
+
+Automatic tests are run for feature/* branches on EMBA.
+See: https://emba.gnu.org/emacs/emacs/-/pipelines
 
 * Installing changes from gnulib
 
@@ -58,16 +76,6 @@ variable in admin/merge-gnulib before running it.
 
 If you remove a gnulib module, or if a gnulib module
 removes a file, then remove the corresponding files by hand.
-
-* How to merge changes from emacs-24 to master
-
-[The section on git merge procedure has not yet been written.]
-
-You may see conflicts in autoload md5sums in comments.  Strictly
-speaking, the right thing to do is merge everything else, resolve the
-conflict by choosing either the master or branch version, then run
-'make -C lisp autoloads' to update the md5sums to the correct master
-value before committing.
 
 * Re-adding a file that has been removed from the repository
 
@@ -95,8 +103,8 @@ pre-commit state.
 
 If you have pushed  commit, resetting will be ineffective because it
 will only vanish the commit in your local copy.  Instead, use 'git
-revert', giving it the commit ID as argument. This will create a
-new commit that backs out the change. Then push that.
+revert', giving it the commit ID as argument.  This will create a
+new commit that backs out the change.  Then push that.
 
 Note that git will generate a log message for the revert that includes
 a git hash.  Please edit this to refer to the commit by the first line
@@ -109,6 +117,14 @@ again.
 
 This is a semi-automated way to find the revision that introduced a bug.
 Browse 'git help bisect' for technical instructions.
+
+It is recommended to start a bisection with the admin/git-bisect-start
+script.  Using that script ensures that commits in branches that are
+the result of merging external trees into the Emacs repository, as
+well as certain commits on which Emacs fails to build, are skipped
+during the bisection process.  That script can also be executed
+automatically when 'git bisect start' is called, with the help of a
+wrapper script that is included in its commentary section.
 
 * Maintaining ChangeLog history
 
@@ -124,6 +140,11 @@ This ChangeLog file is not put into the repository.
 'make change-history' copies all newer ChangeLog entries into the
 start of the newest ChangeLog history file.  These ChangeLog entries
 are thereafter considered to be old, so later uses of 'make ChangeLog'
-and/or 'make change-history' will no longer copy the entries.  To
-alter ChangeLog history, run 'make change-history', then edit
-the ChangeLog history files manually and commit your changes.
+and/or 'make change-history' will no longer copy the entries.
+
+To alter ChangeLog history, run 'make change-history' and commit the
+changes made by that command.  Then edit the ChangeLog history files
+manually and commit those changes in a second, distinct commit.
+Altering ChangeLog history like this can make things harder for those
+who handle merging branches and Emacs releases, so reserve it for
+correcting more serious mistakes.

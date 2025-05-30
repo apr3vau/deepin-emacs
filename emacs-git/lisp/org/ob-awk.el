@@ -1,10 +1,11 @@
 ;;; ob-awk.el --- Babel Functions for Awk            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Author: Eric Schulte
+;; Maintainer: Tyler Smith <tyler@plantarum.ca>
 ;; Keywords: literate programming, reproducible research
-;; Homepage: http://orgmode.org
+;; URL: https://orgmode.org
 
 ;; This file is part of GNU Emacs.
 
@@ -31,6 +32,10 @@
 ;;          which will be passed to the awk process through STDIN
 
 ;;; Code:
+
+(require 'org-macs)
+(org-assert-version)
+
 (require 'ob)
 (require 'org-compat)
 
@@ -43,14 +48,20 @@
 (defvar org-babel-awk-command "awk"
   "Name of the awk executable command.")
 
-(defun org-babel-expand-body:awk (body _params)
+(defun org-babel-expand-body:awk (body params)
   "Expand BODY according to PARAMS, return the expanded body."
-  body)
+  (let ((prologue (cdr (assq :prologue params)))
+        (epilogue (cdr (assq :epilogue params))))
+    (concat
+     (and prologue (concat prologue "\n"))
+     body
+     (and epilogue (concat "\n" epilogue "\n")))))
 
 (defun org-babel-execute:awk (body params)
-  "Execute a block of Awk code with org-babel.  This function is
-called by `org-babel-execute-src-block'"
-  (message "executing Awk source code block")
+  "Execute a block of Awk code BODY with org-babel.
+PARAMS is a plist of src block parameters .
+This function is called by `org-babel-execute-src-block'."
+  (unless noninteractive (message "Executing Awk source code block"))
   (let* ((result-params (cdr (assq :result-params params)))
          (cmd-line (cdr (assq :cmd-line params)))
          (in-file (cdr (assq :in-file params)))
@@ -58,12 +69,12 @@ called by `org-babel-execute-src-block'"
 	 (code-file (let ((file (org-babel-temp-file "awk-")))
                       (with-temp-file file (insert full-body)) file))
 	 (stdin (let ((stdin (cdr (assq :stdin params))))
-		   (when stdin
-		     (let ((tmp (org-babel-temp-file "awk-stdin-"))
-			   (res (org-babel-ref-resolve stdin)))
-		       (with-temp-file tmp
-			 (insert (org-babel-awk-var-to-awk res)))
-		       tmp))))
+		  (when stdin
+		    (let ((tmp (org-babel-temp-file "awk-stdin-"))
+			  (res (org-babel-ref-resolve stdin)))
+		      (with-temp-file tmp
+			(insert (org-babel-awk-var-to-awk res)))
+		      tmp))))
          (cmd (mapconcat #'identity
 			 (append
 			  (list org-babel-awk-command
@@ -95,7 +106,9 @@ called by `org-babel-execute-src-block'"
       (cdr (assq :rowname-names params)) (cdr (assq :rownames params))))))
 
 (defun org-babel-awk-var-to-awk (var &optional sep)
-  "Return a printed value of VAR suitable for parsing with awk."
+  "Return a printed value of VAR suitable for parsing with awk.
+SEP, when non-nil is a separator used when converting list values to awk
+table."
   (let ((echo-var (lambda (v) (if (stringp v) v (format "%S" v)))))
     (cond
      ((and (listp var) (listp (car var)))
@@ -105,7 +118,5 @@ called by `org-babel-execute-src-block'"
      (t (funcall echo-var var)))))
 
 (provide 'ob-awk)
-
-
 
 ;;; ob-awk.el ends here

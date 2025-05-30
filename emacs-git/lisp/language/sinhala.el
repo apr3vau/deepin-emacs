@@ -1,4 +1,4 @@
-;;; sinhala.el --- support for Sinhala -*- coding: utf-8 -*-
+;;; sinhala.el --- support for Sinhala -*- coding: utf-8; lexical-binding: t -*-
 
 ;; Copyright (C) 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -21,6 +21,8 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
+;;; Commentary:
+
 ;;; Code:
 
 (set-language-info-alist
@@ -34,15 +36,15 @@
  composition-function-table
  '(#xD80 . #xDFF)
  (list (vector
-	;; C:consonant, H:HALANT, J:ZWJ, v:vowel sign,
+	;; C:consonant, H:HALANTA, J:ZWJ, v:vowel sign,
 	;; V:independent vowel, a:ANUSVARA .. VISARGA
 	(concat
-	 ;; C(HJC)*v*H?a?, or
-	 "[\u0D9A-\u0DC6]\\(?:\u0DCA\u200D[\u0D9A-\u0DC6]\\)*[\u0DCF-\u0DDF\u0DF2-\u0DF3]*\u0DCA?[\u0D82-\u0D83]?\\|"
+	 ;; C(HJ|JH)C)*v*H?a?, or
+	 "[\u0D9A-\u0DC6]\\(?:\\(\u0DCA\u200D\\|\u200D\u0DCA\\)[\u0D9A-\u0DC6]\\)*[\u0DCF-\u0DDF\u0DF2-\u0DF3]*\u0DCA?[\u0D82-\u0D83]?\\|"
 	 ;; Va?, or
 	 "[\u0D85-\u0D96][\u0D82-\u0D83]?\\|"
 	 ;; any other singleton characters
 	 "[\u0D80-\u0DFF]")
-	0 'font-shape-gstring)))
+	0 #'font-shape-gstring)))
 
-;; sinhala.el ends here
+;;; sinhala.el ends here

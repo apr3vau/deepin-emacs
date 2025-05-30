@@ -1,11 +1,13 @@
-;;; cperl-mode.el --- Perl code editing commands for Emacs
+;;; cperl-mode.el --- Perl code editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1987, 1991-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1985-2025 Free Software Foundation, Inc.
 
-;; Author: Ilya Zakharevich
+;; Author: Ilya Zakharevich <ilyaz@cpan.org>
 ;;	Bob Olson
+;;	Jonathan Rockway <jon@jrock.us>
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: languages, Perl
+;; Package-Requires: ((emacs "26.1"))
 
 ;; This file is part of GNU Emacs.
 
@@ -22,142 +24,74 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
-;;; Corrections made by Ilya Zakharevich ilyaz@cpan.org
-
 ;;; Commentary:
 
 ;; You can either fine-tune the bells and whistles of this mode or
-;; bulk enable them by putting
+;; bulk enable them by putting this in your Init file:
 
-;; (setq cperl-hairy t)
-
-;; in your .emacs file.  (Emacs rulers do not consider it politically
-;; correct to make whistles enabled by default.)
+;;     (setq cperl-hairy t)
 
 ;; DO NOT FORGET to read micro-docs (available from `Perl' menu)   <<<<<<
-;; or as help on variables `cperl-tips', `cperl-problems',         <<<<<<
-;; `cperl-praise', `cperl-speed'.				   <<<<<<
+;; or as help on variables `cperl-tips', `cperl-praise',           <<<<<<
+;; `cperl-speed'.                                                  <<<<<<
+;;
+;; Or search for "Short extra-docs" further down in this file for
+;; details on how to use `cperl-mode' instead of `perl-mode' and lots
+;; of other details.
 
 ;; The mode information (on C-h m) provides some customization help.
-;; If you use font-lock feature of this mode, it is advisable to use
-;; either lazy-lock-mode or fast-lock-mode.  I prefer lazy-lock.
 
-;; Faces used now: three faces for first-class and second-class keywords
+;; Faces used: three faces for first-class and second-class keywords
 ;; and control flow words, one for each: comments, string, labels,
 ;; functions definitions and packages, arrays, hashes, and variable
-;; definitions.  If you do not see all these faces, your font-lock does
-;; not define them, so you need to define them manually.
+;; definitions.
 
-;; This mode supports font-lock, imenu and mode-compile.  In the
-;; hairy version font-lock is on, but you should activate imenu
-;; yourself (note that mode-compile is not standard yet).  Well, you
-;; can use imenu from keyboard anyway (M-x imenu), but it is better
-;; to bind it like that:
+;; This mode supports imenu.  You can use imenu from the keyboard
+;; (M-g i), but you might prefer binding it like this:
+;;
+;;     (define-key global-map [M-S-down-mouse-3] #'imenu)
 
-;; (define-key global-map [M-S-down-mouse-3] 'imenu)
-
-;;; Font lock bugs as of v4.32:
-
-;; The following kinds of Perl code erroneously start strings:
-;; \$`  \$'  \$"
-;; $opt::s  $opt_s  $opt{s}  (s => ...)  /\s+.../
-;; likewise with m, tr, y, q, qX instead of s
+;; This version supports the syntax added by the MooseX::Declare CPAN
+;; module, as well as Perl 5.10 keywords.
 
 ;;; Code:
 
+;;; Compatibility with older versions (for publishing on ELPA)
+;; The following helpers allow cperl-mode.el to work with older
+;; versions of Emacs.
+;;
+;; Whenever the minimum version is bumped (see "Package-Requires"
+;; above), please eliminate the corresponding compatibility-helpers.
+;; Whenever you create a new compatibility-helper, please add it here.
+
+;; Available in Emacs 27.1: time-convert
+(defalias 'cperl--time-convert
+  (if (fboundp 'time-convert) 'time-convert
+    'encode-time))
+
+;; Available in Emacs 28: format-prompt
+(defalias 'cperl--format-prompt
+  (if (fboundp 'format-prompt) 'format-prompt
+    (lambda (msg default)
+      (if default (format "%s (default %s): " msg default)
+	(concat msg ": ")))))
+
+(eval-when-compile (require 'cl-lib))
+(require 'facemenu)
+
+(defvar Man-switches)
+(defvar manual-program)
+(defvar imenu-max-items)
+(defvar msb-menu-cond)
+(defvar gud-perldb-history)
 (defvar vc-rcs-header)
 (defvar vc-sccs-header)
-
-(eval-when-compile
-      (condition-case nil
-	  (require 'custom)
-	(error nil))
-      (condition-case nil
-	  (require 'man)
-	(error nil))
-      (defvar cperl-can-font-lock
-	(or (featurep 'xemacs)
-	    (and (boundp 'emacs-major-version)
-		 (or window-system
-		     (> emacs-major-version 20)))))
-      (if cperl-can-font-lock
-	  (require 'font-lock))
-      (defvar msb-menu-cond)
-      (defvar gud-perldb-history)
-      (defvar font-lock-background-mode) ; not in Emacs
-      (defvar font-lock-display-type)	; ditto
-      (defvar paren-backwards-message)	; Not in newer XEmacs?
-      (or (fboundp 'defgroup)
-	  (defmacro defgroup (name val doc &rest arr)
-	    nil))
-      (or (fboundp 'custom-declare-variable)
-	  (defmacro defcustom (name val doc &rest arr)
-	    `(defvar ,name ,val ,doc)))
-      (or (and (fboundp 'custom-declare-variable)
-	       (string< "19.31" emacs-version))	;  Checked with 19.30: defface does not work
-	  (defmacro defface (&rest arr)
-	    nil))
-      ;; Avoid warning (tmp definitions)
-      (or (fboundp 'x-color-defined-p)
-	  (defmacro x-color-defined-p (col)
-	    (cond ((fboundp 'color-defined-p) `(color-defined-p ,col))
-		  ;; XEmacs >= 19.12
-		  ((fboundp 'valid-color-name-p) `(valid-color-name-p ,col))
-		  ;; XEmacs 19.11
-		  ((fboundp 'x-valid-color-name-p) `(x-valid-color-name-p ,col))
-		  (t '(error "Cannot implement color-defined-p")))))
-      (defmacro cperl-is-face (arg)	; Takes quoted arg
-	(cond ((fboundp 'find-face)
-	       `(find-face ,arg))
-	      (;;(and (fboundp 'face-list)
-	       ;;	(face-list))
-	       (fboundp 'face-list)
-	       `(member ,arg (and (fboundp 'face-list)
-                                  (face-list))))
-	      (t
-	       `(boundp ,arg))))
-      (defmacro cperl-make-face (arg descr) ; Takes unquoted arg
-	(cond ((fboundp 'make-face)
-	       `(make-face (quote ,arg)))
-	      (t
-	       `(defvar ,arg (quote ,arg) ,descr))))
-      (defmacro cperl-force-face (arg descr) ; Takes unquoted arg
-	`(progn
-	     (or (cperl-is-face (quote ,arg))
-		 (cperl-make-face ,arg ,descr))
-	     (or (boundp (quote ,arg)) ; We use unquoted variants too
-		 (defvar ,arg (quote ,arg) ,descr))))
-      (if (featurep 'xemacs)
-	  (defmacro cperl-etags-snarf-tag (file line)
-	    `(progn
-               (beginning-of-line 2)
-               (list ,file ,line)))
-	(defmacro cperl-etags-snarf-tag (file line)
-	  `(etags-snarf-tag)))
-      (if (featurep 'xemacs)
-	  (defmacro cperl-etags-goto-tag-location (elt)
-	    ;;(progn
-            ;; (switch-to-buffer (get-file-buffer (elt ,elt 0)))
-            ;; (set-buffer (get-file-buffer (elt ,elt 0)))
-            ;; Probably will not work due to some save-excursion???
-            ;; Or save-file-position?
-            ;; (message "Did I get to line %s?" (elt ,elt 1))
-            `(goto-line (string-to-int (elt ,elt 1))))
-	;;)
-	(defmacro cperl-etags-goto-tag-location (elt)
-	  `(etags-goto-tag-location ,elt))))
-
-(defvar cperl-can-font-lock
-  (or (featurep 'xemacs)
-      (and (boundp 'emacs-major-version)
-	   (or window-system
-	       (> emacs-major-version 20)))))
 
 (defun cperl-choose-color (&rest list)
   (let (answer)
     (while list
       (or answer
-	  (if (or (x-color-defined-p (car list))
+          (if (or (color-defined-p (car list))
 		  (null (cdr list)))
 	      (setq answer (car list))))
       (setq list (cdr list)))
@@ -170,7 +104,10 @@
   :version "20.3")
 
 (defgroup cperl-indentation-details nil
-  "Indentation."
+  "Indentation.
+The option `cperl-file-style' (which see) can be used to set
+several indentation options in one go, following popular
+indentation styles."
   :prefix "cperl-"
   :group 'cperl)
 
@@ -223,15 +160,38 @@ for constructs with multiline if/unless/while/until/for/foreach condition."
   :type 'boolean
   :group 'cperl-autoinsert-details)
 
+(defcustom cperl-file-style nil
+  "Indentation style to use in `cperl-mode'.
+Setting this option will override options as given in
+`cperl-style-alist' for the keyword provided here.  If nil, then
+the individual options as customized are used.
+\"PBP\" is the style recommended in the Book \"Perl Best
+Practices\" by Damian Conway.  \"CPerl\" is the traditional style
+of `cperl-mode', and \"PerlStyle\" follows the Perl documentation
+in perlstyle.  The other styles have been developed for other
+programming languages, mostly C."
+  :type '(choice (const "PBP")
+                 (const "CPerl")
+                 (const "PerlStyle")
+                 (const "GNU")
+                 (const "C++")
+                 (const "K&R")
+                 (const "BSD")
+                 (const "Whitesmith")
+                 (const :tag "Default" nil))
+  :group 'cperl-indentation-details
+  :version "29.1")
+;;;###autoload(put 'cperl-file-style 'safe-local-variable 'stringp)
+
 (defcustom cperl-indent-level 2
   "Indentation of CPerl statements with respect to containing block."
   :type 'integer
   :group 'cperl-indentation-details)
 
-;; Is is not unusual to put both things like perl-indent-level and
-;; cperl-indent-level in the local variable section of a file. If only
+;; It is not unusual to put both things like perl-indent-level and
+;; cperl-indent-level in the local variable section of a file.  If only
 ;; one of perl-mode and cperl-mode is in use, a warning will be issued
-;; about the variable. Autoload these here, so that no warning is
+;; about the variable.  Autoload these here, so that no warning is
 ;; issued when using either perl-mode or cperl-mode.
 ;;;###autoload(put 'cperl-indent-level 'safe-local-variable 'integerp)
 ;;;###autoload(put 'cperl-brace-offset 'safe-local-variable 'integerp)
@@ -272,7 +232,7 @@ to the right of the start of its line."
   :group 'cperl-indentation-details)
 (defcustom cperl-continued-brace-offset 0
   "Extra indent for substatements that start with open-braces.
-This is in addition to cperl-continued-statement-offset."
+This is in addition to `cperl-continued-statement-offset'."
   :type 'integer
   :group 'cperl-indentation-details)
 (defcustom cperl-close-paren-offset -1
@@ -283,6 +243,13 @@ This is in addition to cperl-continued-statement-offset."
 (defcustom cperl-indent-wrt-brace t
   "Non-nil means indent statements in if/etc block relative brace, not if/etc.
 Versions 5.2 ... 5.20 behaved as if this were nil."
+  :type 'boolean
+  :group 'cperl-indentation-details)
+
+(defcustom cperl-indent-subs-specially t
+  "If non-nil, indent subs inside other blocks relative to \"sub\" keyword.
+Otherwise, indent them relative to statement that contains the declaration.
+This applies to, for example, hash values."
   :type 'boolean
   :group 'cperl-indentation-details)
 
@@ -337,14 +304,7 @@ Can be overwritten by `cperl-hairy' if nil."
   :type '(choice (const null) boolean)
   :group 'cperl-affected-by-hairy)
 
-(defvar zmacs-regions)			; Avoid warning
-
-(defcustom cperl-electric-parens-mark
-  (and window-system
-       (or (and (boundp 'transient-mark-mode) ; For Emacs
-		transient-mark-mode)
-	   (and (boundp 'zmacs-regions) ; For XEmacs
-		zmacs-regions)))
+(defcustom cperl-electric-parens-mark (not (not window-system))
   "Not-nil means that electric parens look for active mark.
 Default is yes if there is visual feedback on mark."
   :type 'boolean
@@ -362,12 +322,11 @@ Can be overwritten by `cperl-hairy' if nil."
 Can be overwritten by `cperl-hairy' if nil.
 
 Uses `abbrev-mode' to do the expansion.  If you want to use your
-own abbrevs in cperl-mode, but do not want keywords to be
+own abbrevs in `cperl-mode', but do not want keywords to be
 electric, you must redefine `cperl-mode-abbrev-table': do
 \\[edit-abbrevs], search for `cperl-mode-abbrev-table', and, in
 that paragraph, delete the words that appear at the ends of lines and
-that begin with \"cperl-electric\".
-"
+that begin with \"cperl-electric\"."
   :type '(choice (const null) boolean)
   :group 'cperl-affected-by-hairy)
 
@@ -403,34 +362,17 @@ Affects: `cperl-font-lock', `cperl-electric-lbrace-space',
 (defcustom cperl-vc-rcs-header '("($rcs) = (' $Id\ $ ' =~ /(\\d+(\\.\\d+)+)/);")
   "Special version of `vc-rcs-header' that is used in CPerl mode buffers."
   :type '(repeat string)
-     :group 'cperl)
-
-;; This became obsolete...
-(defvar cperl-vc-header-alist nil)
-(make-obsolete-variable
- 'cperl-vc-header-alist
- "use cperl-vc-rcs-header or cperl-vc-sccs-header instead."
- "22.1")
-
-;; (defcustom cperl-clobber-mode-lists
-;;   (not
-;;    (and
-;;     (boundp 'interpreter-mode-alist)
-;;     (assoc "miniperl" interpreter-mode-alist)
-;;     (assoc "\\.\\([pP][Llm]\\|al\\)$" auto-mode-alist)))
-;;   "Whether to install us into `interpreter-' and `extension' mode lists."
-;;   :type 'boolean
-;;   :group 'cperl)
+  :group 'cperl)
 
 (defcustom cperl-info-on-command-no-prompt nil
-  "Not-nil (and non-null) means not to prompt on C-h f.
+  "Not-nil (and non-null) means not to prompt on \\[cperl-info-on-command].
 The opposite behavior is always available if prefixed with C-c.
 Can be overwritten by `cperl-hairy' if nil."
   :type '(choice (const null) boolean)
   :group 'cperl-affected-by-hairy)
 
 (defcustom cperl-clobber-lisp-bindings nil
-  "Not-nil (and non-null) means not overwrite C-h f.
+  "Not-nil (and non-null) means not overwrite \\[describe-function].
 The function is available on \\[cperl-info-on-command], \\[cperl-get-help].
 Can be overwritten by `cperl-hairy' if nil."
   :type '(choice (const null) boolean)
@@ -458,16 +400,15 @@ Font for POD headers."
   :type 'face
   :group 'cperl-faces)
 
-;;; Some double-evaluation happened with font-locks...  Needed with 21.2...
-(defvar cperl-singly-quote-face (featurep 'xemacs))
-
 (defcustom cperl-invalid-face 'underline
   "Face for highlighting trailing whitespace."
   :type 'face
   :version "21.1"
   :group 'cperl-faces)
+(make-obsolete-variable 'cperl-invalid-face
+                        'show-trailing-whitespace "30.1")
 
-(defcustom cperl-pod-here-fontify '(featurep 'font-lock)
+(defcustom cperl-pod-here-fontify t
   "Not-nil after evaluation means to highlight POD and here-docs sections."
   :type 'boolean
   :group 'cperl-faces)
@@ -505,12 +446,6 @@ after reload."
   :type 'boolean
   :group 'cperl-speed)
 
-(defcustom cperl-imenu-addback nil
-  "Not-nil means add backreferences to generated `imenu's.
-May require patched `imenu' and `imenu-go'.  Obsolete."
-  :type 'boolean
-  :group 'cperl-help-system)
-
 (defcustom cperl-max-help-size 66
   "Non-nil means shrink-wrapping of info-buffer allowed up to these percents."
   :type '(choice integer (const nil))
@@ -522,13 +457,17 @@ May require patched `imenu' and `imenu-go'.  Obsolete."
   :group 'cperl-help-system)
 
 (defcustom cperl-info-page "perl"
-  "Name of the info page containing perl docs.
+  "Name of the Info manual containing perl docs.
 Older version of this page was called `perl5', newer `perl'."
   :type 'string
   :group 'cperl-help-system)
+(make-obsolete-variable 'cperl-info-page
+                        (concat "The Perl info page is no longer maintained. "
+                                "Consider installing the perl-doc package from "
+                                "GNU ELPA to access Perl documentation.")
+                        "30.1")
 
-(defcustom cperl-use-syntax-table-text-property
-  (boundp 'parse-sexp-lookup-properties)
+(defcustom cperl-use-syntax-table-text-property t
   "Non-nil means CPerl sets up and uses `syntax-table' text property."
   :type 'boolean
   :group 'cperl-speed)
@@ -567,21 +506,15 @@ If nil, the value of `cperl-indent-level' will be used."
   :group 'cperl)
 (make-obsolete-variable 'cperl-under-as-char 'superword-mode "24.4")
 
-(defcustom cperl-extra-perl-args ""
-  "Extra arguments to use when starting Perl.
-Currently used with `cperl-check-syntax' only."
-  :type 'string
-  :group 'cperl)
-
 (defcustom cperl-message-electric-keyword t
   "Non-nil means that the `cperl-electric-keyword' prints a help message."
   :type 'boolean
   :group 'cperl-help-system)
 
 (defcustom cperl-indent-region-fix-constructs 1
-  "Amount of space to insert between `}' and `else' or `elsif'
-in `cperl-indent-region'.  Set to nil to leave as is.  Values other
-than 1 and nil will probably not work."
+  "Amount of space to insert between `}' and `else' or `elsif'.
+Used by `cperl-indent-region'.  Set to nil to leave as is.
+Values other than 1 and nil will probably not work."
   :type '(choice (const nil) (const 1))
   :group 'cperl-indentation-details)
 
@@ -611,9 +544,7 @@ One should tune up `cperl-close-paren-offset' as well."
   :type 'boolean
   :group 'cperl-indentation-details)
 
-(defcustom cperl-syntaxify-by-font-lock
-  (and cperl-can-font-lock
-       (boundp 'parse-sexp-lookup-properties))
+(defcustom cperl-syntaxify-by-font-lock t
   "Non-nil means that CPerl uses the `font-lock' routines for syntaxification."
   :type '(choice (const message) boolean)
   :group 'cperl-speed)
@@ -631,6 +562,19 @@ when syntaxifying a chunk of buffer."
 This way enabling/disabling of menu items is more correct."
   :type 'boolean
   :group 'cperl-speed)
+
+(defcustom cperl-fontify-trailer
+  'perl-code
+  "How to fontify text after an \"__END__\" or \"__DATA__\" token.
+If \"perl-code\", treat as Perl code for fontification, and
+examine for imenu entries.  Use this setting if you have trailing
+POD documentation, or for modules which use AutoLoad or
+AutoSplit.  If \"comment\", treat as comment, and do not look for
+imenu entries."
+  :type '(choice (const perl-code)
+		 (const comment))
+  :version "30.1"
+  :group 'cperl-faces)
 
 (defcustom cperl-ps-print-face-properties
   '((font-lock-keyword-face		nil nil		bold shadow)
@@ -701,22 +645,14 @@ This way enabling/disabling of menu items is more correct."
 ;;; Short extra-docs.
 
 (defvar cperl-tips 'please-ignore-this-line
-  "Note that to enable Compile choices in the menu you need to install
-mode-compile.el.
-
-If your Emacs does not default to `cperl-mode' on Perl files, and you
+  "If your Emacs does not default to `cperl-mode' on Perl files, and you
 want it to: put the following into your .emacs file:
 
-  (defalias \\='perl-mode \\='cperl-mode)
+  (add-to-list \\='major-mode-remap-alist \\='(perl-mode . cperl-mode))
 
-Get perl5-info from
-  $CPAN/doc/manual/info/perl5-old/perl5-info.tar.gz
-Also, one can generate a newer documentation running `pod2texi' converter
-  $CPAN/doc/manual/info/perl5/pod2texi-0.1.tar.gz
-
-If you use imenu-go, run imenu on perl5-info buffer (you can do it
-from Perl menu).  If many files are related, generate TAGS files from
-Tools/Tags submenu in Perl menu.
+To read Perl documentation in info format you can convert POD to
+texinfo with the converter `pod2texi' from the texinfo project:
+  https://www.gnu.org/software/texinfo/manual/pod2texi.html
 
 If some class structure is too complicated, use Tools/Hierarchy-view
 from Perl menu, or hierarchic view of imenu.  The second one uses the
@@ -727,8 +663,8 @@ Run Perl/Tools/Insert-spaces-if-needed to fix your lazy typing.
 
 Switch auto-help on/off with Perl/Tools/Auto-help.
 
-Though with contemporary Emaxen CPerl mode should maintain the correct
-parsing of Perl even when editing, sometimes it may be lost.  Fix this by
+Though CPerl mode should maintain the correct parsing of Perl even when
+editing, sometimes it may be lost.  Fix this by
 
   \\[normal-mode]
 
@@ -742,70 +678,22 @@ micro-docs on what I know about CPerl problems.")
 
 (defvar cperl-problems 'please-ignore-this-line
   "Description of problems in CPerl mode.
-Some faces will not be shown on some versions of Emacs unless you
-install choose-color.el, available from
-  http://ilyaz.org/software/emacs
-
 `fill-paragraph' on a comment may leave the point behind the
 paragraph.  It also triggers a bug in some versions of Emacs (CPerl tries
-to detect it and bulk out).
-
-See documentation of a variable `cperl-problems-old-emaxen' for the
-problems which disappear if you upgrade Emacs to a reasonably new
-version (20.3 for Emacs, and those of 2004 for XEmacs).")
+to detect it and bulk out).")
 
 (defvar cperl-problems-old-emaxen 'please-ignore-this-line
-  "Description of problems in CPerl mode specific for older Emacs versions.
-
-Emacs had a _very_ restricted syntax parsing engine until version
-20.1.  Most problems below are corrected starting from this version of
-Emacs, and all of them should be fixed in version 20.3.  (Or apply
-patches to Emacs 19.33/34 - see tips.)  XEmacs was very backward in
-this respect (until 2003).
-
-Note that even with newer Emacsen in some very rare cases the details
-of interaction of `font-lock' and syntaxification may be not cleaned
-up yet.  You may get slightly different colors basing on the order of
-fontification and syntaxification.  Say, the initial faces is correct,
-but editing the buffer breaks this.
-
-Even with older Emacsen CPerl mode tries to corrects some Emacs
-misunderstandings, however, for efficiency reasons the degree of
-correction is different for different operations.  The partially
-corrected problems are: POD sections, here-documents, regexps.  The
-operations are: highlighting, indentation, electric keywords, electric
-braces.
-
-This may be confusing, since the regexp s#//#/#; may be highlighted
-as a comment, but it will be recognized as a regexp by the indentation
-code.  Or the opposite case, when a POD section is highlighted, but
-may break the indentation of the following code (though indentation
-should work if the balance of delimiters is not broken by POD).
-
-The main trick (to make $ a \"backslash\") makes constructions like
-${aaa} look like unbalanced braces.  The only trick I can think of is
-to insert it as $ {aaa} (valid in perl5, not in perl4).
-
-Similar problems arise in regexps, when /(\\s|$)/ should be rewritten
-as /($|\\s)/.  Note that such a transposition is not always possible.
-
-The solution is to upgrade your Emacs or patch an older one.  Note
-that Emacs 20.2 has some bugs related to `syntax-table' text
-properties.  Patches are available on the main CPerl download site,
-and on CPAN.
-
-If these bugs cannot be fixed on your machine (say, you have an inferior
-environment and cannot recompile), you may still disable all the fancy stuff
-via `cperl-use-syntax-table-text-property'.")
+  "This used to contain a description of problems in CPerl mode
+specific for very old Emacs versions.  This is no longer relevant
+and has been removed.")
+(make-obsolete-variable 'cperl-problems-old-emaxen nil "28.1")
 
 (defvar cperl-praise 'please-ignore-this-line
   "Advantages of CPerl mode.
 
 0) It uses the newest `syntax-table' property ;-);
 
-1) It does 99% of Perl syntax correct (as opposed to 80-90% in Perl
-mode - but the latter number may have improved too in last years) even
-with old Emaxen which do not support `syntax-table' property.
+1) It does 99% of Perl syntax correct.
 
 When using `syntax-table' property for syntax assist hints, it should
 handle 99.995% of lines correct - or somesuch.  It automatically
@@ -828,48 +716,45 @@ voice);
         d) Has support for imenu, including:
                 1) Separate unordered list of \"interesting places\";
                 2) Separate TOC of POD sections;
-                3) Separate list of packages;
+                3) Separate list of packages/classes;
                 4) Hierarchical view of methods in (sub)packages;
                 5) and functions (by the full name - with package);
-        e) Has an interface to INFO docs for Perl; The interface is
-                very flexible, including shrink-wrapping of
-                documentation buffer/frame;
-        f) Has a builtin list of one-line explanations for perl constructs.
-        g) Can show these explanations if you stay long enough at the
+        e) Has a builtin list of one-line explanations for perl constructs.
+        f) Can show these explanations if you stay long enough at the
                 corresponding place (or on demand);
-        h) Has an enhanced fontification (using 3 or 4 additional faces
+        g) Has an enhanced fontification (using 3 or 4 additional faces
                 comparing to font-lock - basically, different
                 namespaces in Perl have different colors);
-        i) Can construct TAGS basing on its knowledge of Perl syntax,
+        h) Can construct TAGS basing on its knowledge of Perl syntax,
                 the standard menu has 6 different way to generate
                 TAGS (if \"by directory\", .xs files - with C-language
                 bindings - are included in the scan);
-        j) Can build a hierarchical view of classes (via imenu) basing
+        i) Can build a hierarchical view of classes (via imenu) basing
                 on generated TAGS file;
-        k) Has electric parentheses, electric newlines, uses Abbrev
+        j) Has electric parentheses, electric newlines, uses Abbrev
                 for electric logical constructs
                         while () {}
                 with different styles of expansion (context sensitive
                 to be not so bothering).  Electric parentheses behave
                 \"as they should\" in a presence of a visible region.
-        l) Changes msb.el \"on the fly\" to insert a group \"Perl files\";
-        m) Can convert from
+        k) Changes msb.el \"on the fly\" to insert a group \"Perl files\";
+        l) Can convert from
 		if (A) { B }
 	   to
 		B if A;
 
-        n) Highlights (by user-choice) either 3-delimiters constructs
+        m) Highlights (by user-choice) either 3-delimiters constructs
 	   (such as tr/a/b/), or regular expressions and `y/tr';
-	o) Highlights trailing whitespace;
-	p) Is able to manipulate Perl Regular Expressions to ease
+        o) Is able to manipulate Perl Regular Expressions to ease
 	   conversion to a more readable form.
-        q) Can ispell POD sections and HERE-DOCs.
-	r) Understands comments and character classes inside regular
+        p) Can ispell POD sections and HERE-DOCs.
+        q) Understands comments and character classes inside regular
 	   expressions; can find matching () and [] in a regular expression.
-	s) Allows indentation of //x-style regular expressions;
-	t) Highlights different symbols in regular expressions according
+        r) Allows indentation of //x-style regular expressions;
+        s) Highlights different symbols in regular expressions according
 	   to their function; much less problems with backslashitis;
-	u) Allows to find regular expressions which contain interpolated parts.
+        t) Allows you to locate regular expressions which contain
+	   interpolated parts.
 
 5) The indentation engine was very smart, but most of tricks may be
 not needed anymore with the support for `syntax-table' property.  Has
@@ -886,15 +771,13 @@ the settings present before the switch.
 9) When doing indentation of control constructs, may correct
 line-breaks/spacing between elements of the construct.
 
-10) Uses a linear-time algorithm for indentation of regions (on Emaxen with
-capable syntax engines).
+10) Uses a linear-time algorithm for indentation of regions.
 
-11) Syntax-highlight, indentation, sexp-recognition inside regular expressions.
-")
+11) Syntax-highlight, indentation, sexp-recognition inside regular expressions.")
 
 (defvar cperl-speed 'please-ignore-this-line
   "This is an incomplete compendium of what is available in other parts
-of CPerl documentation.  (Please inform me if I skept anything.)
+of CPerl documentation.  (Please inform me if I skipped anything.)
 
 There is a perception that CPerl is slower than alternatives.  This part
 of documentation is designed to overcome this misconception.
@@ -911,8 +794,8 @@ syntax-parsing routines, and marks them up so that either
 
     A1) CPerl may work around these deficiencies (for big chunks, mostly
         PODs and HERE-documents), or
-    A2) On capable Emaxen CPerl will use improved syntax-handling
-	which reads mark-up hints directly.
+    A2) CPerl will use improved syntax-handling which reads mark-up
+        hints directly.
 
     The scan in case A2 is much more comprehensive, thus may be slower.
 
@@ -937,7 +820,7 @@ B) Speed of editing operations.
     of, say, long POD sections.")
 
 (defvar cperl-tips-faces 'please-ignore-this-line
-  "CPerl mode uses following faces for highlighting:
+  "CPerl mode uses the following faces for highlighting:
 
   `cperl-array-face'			Array names
   `cperl-hash-face'			Hash names
@@ -959,7 +842,6 @@ B) Speed of editing operations.
   `font-lock-type-face'		Overridable keywords
   `font-lock-variable-name-face' Variable declarations, indirect array and
 				hash names, POD headers/item names
-  `cperl-invalid-face'		Trailing whitespace
 
 Note that in several situations the highlighting tries to inform about
 possible confusion, such as different colors for function names in
@@ -987,20 +869,11 @@ In regular expressions (including character classes):
 				backslashes of escape sequences
   `font-lock-variable-name-face' Interpolated constructs, embedded code,
 				POSIX classes (inside charclasses)
-  `font-lock-comment-face'	Embedded comments
-
-")
+  `font-lock-comment-face'	Embedded comments")
 
 
 
 ;;; Portability stuff:
-
-(defmacro cperl-define-key (emacs-key definition &optional xemacs-key)
-  `(define-key cperl-mode-map
-     ,(if xemacs-key
-	  `(if (featurep 'xemacs) ,xemacs-key ,emacs-key)
-	emacs-key)
-     ,definition))
 
 (defvar cperl-del-back-ch
   (car (append (where-is-internal 'delete-backward-char)
@@ -1010,44 +883,16 @@ In regular expressions (including character classes):
 (and (vectorp cperl-del-back-ch) (= (length cperl-del-back-ch) 1)
      (setq cperl-del-back-ch (aref cperl-del-back-ch 0)))
 
-(defun cperl-mark-active () (mark))	; Avoid undefined warning
-(if (featurep 'xemacs)
-    (progn
-      ;; "Active regions" are on: use region only if active
-      ;; "Active regions" are off: use region unconditionally
-      (defun cperl-use-region-p ()
-	(if zmacs-regions (mark) t)))
-  (defun cperl-use-region-p ()
-    (if transient-mark-mode mark-active t))
-  (defun cperl-mark-active () mark-active))
-
-(defsubst cperl-enable-font-lock ()
-  cperl-can-font-lock)
-
-(defun cperl-putback-char (c)		; Emacs 19
-  (push c unread-command-events))       ; Avoid undefined warning
-
-(if (featurep 'xemacs)
-    (defun cperl-putback-char (c)	; XEmacs >= 19.12
-      (push (eval '(character-to-event c)) unread-command-events)))
-
-(or (fboundp 'uncomment-region)
-    (defun uncomment-region (beg end)
-      (interactive "r")
-      (comment-region beg end -1)))
-
-(defvar cperl-do-not-fontify
-  (if (string< emacs-version "19.30")
-      'fontified
-    'lazy-lock)
-  "Text property which inhibits refontification.")
+(defun cperl-putback-char (c)
+  (declare (obsolete nil "29.1"))
+  (push c unread-command-events))
 
 (defsubst cperl-put-do-not-fontify (from to &optional post)
   ;; If POST, do not do it with postponed fontification
   (if (and post cperl-syntaxify-by-font-lock)
       nil
     (put-text-property (max (point-min) (1- from))
-		       to cperl-do-not-fontify t)))
+                       to 'fontified t)))
 
 (defcustom cperl-mode-hook nil
   "Hook run by CPerl mode."
@@ -1056,8 +901,6 @@ In regular expressions (including character classes):
 
 (defvar cperl-syntax-state nil)
 (defvar cperl-syntax-done-to nil)
-(defvar cperl-emacs-can-parse (> (length (save-excursion
-					   (parse-partial-sexp (point) (point)))) 9))
 
 ;; Make customization possible "in reverse"
 (defsubst cperl-val (symbol &optional default hairy)
@@ -1068,345 +911,667 @@ In regular expressions (including character classes):
 
 
 (defun cperl-make-indent (column &optional minimum keep)
-  "Makes indent of the current line the requested amount.
-Unless KEEP, removes the old indentation.  Works around a bug in ancient
-versions of Emacs."
-  (let ((prop (get-text-property (point) 'syntax-type)))
-    (or keep
-	(delete-horizontal-space))
-    (indent-to column minimum)
-    ;; In old versions (e.g., 19.33) `indent-to' would not inherit properties
-    (and prop
-	 (> (current-column) 0)
-	 (save-excursion
-	   (beginning-of-line)
-	   (or (get-text-property (point) 'syntax-type)
-	       (and (looking-at "\\=[ \t]")
-		      (put-text-property (point) (match-end 0)
-					 'syntax-type prop)))))))
+  "Indent from point with tabs and spaces until COLUMN is reached.
+MINIMUM is like in `indent-to', which see.
+Unless KEEP, removes the old indentation."
+  (or keep
+      (delete-horizontal-space))
+  (indent-to column minimum))
 
-;;; Probably it is too late to set these guys already, but it can help later:
+(define-abbrev-table 'cperl-mode-electric-keywords-abbrev-table
+  (mapcar (lambda (x)
+            (let ((name (car x))
+                  (fun (cadr x)))
+              (list name name fun :system t)))
+          '(("if" cperl-electric-keyword)
+            ("elsif" cperl-electric-keyword)
+            ("while" cperl-electric-keyword)
+            ("until" cperl-electric-keyword)
+            ("unless" cperl-electric-keyword)
+            ("else" cperl-electric-else)
+            ("continue" cperl-electric-else)
+            ("for" cperl-electric-keyword)
+            ("foreach" cperl-electric-keyword)
+            ("formy" cperl-electric-keyword)
+            ("foreachmy" cperl-electric-keyword)
+            ("do" cperl-electric-keyword)
+            ("=pod" cperl-electric-pod)
+            ("=begin" cperl-electric-pod t)
+            ("=over" cperl-electric-pod)
+            ("=head1" cperl-electric-pod)
+            ("=head2" cperl-electric-pod)
+            ("pod" cperl-electric-pod)
+            ("over" cperl-electric-pod)
+            ("head1" cperl-electric-pod)
+            ("head2" cperl-electric-pod)))
+  "Abbrev table for electric keywords.  Controlled by `cperl-electric-keywords'."
+  :case-fixed t
+  :enable-function (lambda () (cperl-val 'cperl-electric-keywords)))
 
-;;;(and cperl-clobber-mode-lists
-;;;(setq auto-mode-alist
-;;;      (append '(("\\.\\([pP][Llm]\\|al\\)$" . perl-mode))  auto-mode-alist ))
-;;;(and (boundp 'interpreter-mode-alist)
-;;;     (setq interpreter-mode-alist (append interpreter-mode-alist
-;;;					  '(("miniperl" . perl-mode))))))
-(eval-when-compile
-  (mapc (lambda (p)
-	  (condition-case nil
-	      (require p)
-	    (error nil)))
-	'(imenu easymenu etags timer man info))
-  (if (fboundp 'ps-extend-face-list)
-      (defmacro cperl-ps-extend-face-list (arg)
-	`(ps-extend-face-list ,arg))
-    (defmacro cperl-ps-extend-face-list (arg)
-      `(error "This version of Emacs has no `ps-extend-face-list'")))
-  ;; Calling `cperl-enable-font-lock' below doesn't compile on XEmacs,
-  ;; macros instead of defsubsts don't work on Emacs, so we do the
-  ;; expansion manually.  Any other suggestions?
-  (require 'cl))
+(define-abbrev-table 'cperl-mode-abbrev-table ()
+  "Abbrev table in use in CPerl mode buffers."
+  :parents (list cperl-mode-electric-keywords-abbrev-table))
 
-(define-abbrev-table 'cperl-mode-abbrev-table
-  '(
-    ("if" "if" cperl-electric-keyword :system t)
-    ("elsif" "elsif" cperl-electric-keyword :system t)
-    ("while" "while" cperl-electric-keyword :system t)
-    ("until" "until" cperl-electric-keyword :system t)
-    ("unless" "unless" cperl-electric-keyword :system t)
-    ("else" "else" cperl-electric-else :system t)
-    ("continue" "continue" cperl-electric-else :system t)
-    ("for" "for" cperl-electric-keyword :system t)
-    ("foreach" "foreach" cperl-electric-keyword :system t)
-    ("formy" "formy" cperl-electric-keyword :system t)
-    ("foreachmy" "foreachmy" cperl-electric-keyword :system t)
-    ("do" "do" cperl-electric-keyword :system t)
-    ("=pod" "=pod" cperl-electric-pod :system t)
-    ("=over" "=over" cperl-electric-pod :system t)
-    ("=head1" "=head1" cperl-electric-pod :system t)
-    ("=head2" "=head2" cperl-electric-pod :system t)
-    ("pod" "pod" cperl-electric-pod :system t)
-    ("over" "over" cperl-electric-pod :system t)
-    ("head1" "head1" cperl-electric-pod :system t)
-    ("head2" "head2" cperl-electric-pod :system t))
-  "Abbrev table in use in CPerl mode buffers.")
+(defvar cperl-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "{" 'cperl-electric-lbrace)
+    (define-key map "[" 'cperl-electric-paren)
+    (define-key map "(" 'cperl-electric-paren)
+    (define-key map "<" 'cperl-electric-paren)
+    (define-key map "}" 'cperl-electric-brace)
+    (define-key map "]" 'cperl-electric-rparen)
+    (define-key map ")" 'cperl-electric-rparen)
+    (define-key map ";" 'cperl-electric-semi)
+    (define-key map ":" 'cperl-electric-terminator)
+    (define-key map "\C-j" 'newline-and-indent)
+    (define-key map "\C-c\C-j" 'cperl-linefeed)
+    (define-key map "\C-c\C-t" 'cperl-invert-if-unless)
+    (define-key map "\C-c\C-a" 'cperl-toggle-auto-newline)
+    (define-key map "\C-c\C-k" 'cperl-toggle-abbrev)
+    (define-key map "\C-c\C-w" 'cperl-toggle-construct-fix)
+    (define-key map "\C-c\C-f" 'auto-fill-mode)
+    (define-key map "\C-c\C-e" 'cperl-toggle-electric)
+    (define-key map "\C-c\C-b" 'cperl-find-bad-style)
+    (define-key map "\C-c\C-p" 'cperl-pod-spell)
+    (define-key map "\C-c\C-d" 'cperl-here-doc-spell)
+    (define-key map "\C-c\C-n" 'cperl-narrow-to-here-doc)
+    (define-key map "\C-c\C-v" 'cperl-next-interpolated-REx)
+    (define-key map "\C-c\C-x" 'cperl-next-interpolated-REx-0)
+    (define-key map "\C-c\C-y" 'cperl-next-interpolated-REx-1)
+    (define-key map "\C-c\C-ha" 'cperl-toggle-autohelp)
+    (define-key map "\C-c\C-hp" 'cperl-perldoc)
+    (define-key map "\C-c\C-hP" 'cperl-perldoc-at-point)
+    (define-key map "\e\C-q" 'cperl-indent-exp) ; Usually not bound
+    (define-key map [(control meta ?|)] 'cperl-lineup)
+    ;;(define-key map "\M-q" 'cperl-fill-paragraph)
+    ;;(define-key map "\e;" 'cperl-indent-for-comment)
+    (define-key map "\177" 'cperl-electric-backspace)
+    (define-key map "\t" 'cperl-indent-command)
+    ;; don't clobber the backspace binding:
+    (define-key map [(control ?c) (control ?h) ?F] 'cperl-perldoc)
+    (if (cperl-val 'cperl-clobber-lisp-bindings)
+        (progn
+	  (define-key map [(control ?h) ?f]
+	    ;;(concat (char-to-string help-char) "f") ; does not work
+	    'cperl-perldoc)
+	  (define-key map [(control ?h) ?v]
+	    ;;(concat (char-to-string help-char) "v") ; does not work
+	    'cperl-get-help)
+	  (define-key map [(control ?c) (control ?h) ?f]
+	    ;;(concat (char-to-string help-char) "f") ; does not work
+	    (key-binding "\C-hf"))
+	  (define-key map [(control ?c) (control ?h) ?v]
+	    ;;(concat (char-to-string help-char) "v") ; does not work
+	    (key-binding "\C-hv")))
+      (define-key map [(control ?c) (control ?h) ?f]
+        'cperl-perldoc)
+      (define-key map [(control ?c) (control ?h) ?v]
+	;;(concat (char-to-string help-char) "v") ; does not work
+	'cperl-get-help))
+    (define-key map [remap indent-sexp]        #'cperl-indent-exp)
+    (define-key map [remap indent-region]      #'cperl-indent-region)
+    (define-key map [remap indent-for-comment] #'cperl-indent-for-comment)
+    map)
+  "Keymap used in CPerl mode.")
 
-(add-hook 'edit-var-mode-alist '(perl-mode (regexp . "^cperl-")))
-
-(defvar cperl-mode-map () "Keymap used in CPerl mode.")
-
-(if cperl-mode-map nil
-  (setq cperl-mode-map (make-sparse-keymap))
-  (cperl-define-key "{" 'cperl-electric-lbrace)
-  (cperl-define-key "[" 'cperl-electric-paren)
-  (cperl-define-key "(" 'cperl-electric-paren)
-  (cperl-define-key "<" 'cperl-electric-paren)
-  (cperl-define-key "}" 'cperl-electric-brace)
-  (cperl-define-key "]" 'cperl-electric-rparen)
-  (cperl-define-key ")" 'cperl-electric-rparen)
-  (cperl-define-key ";" 'cperl-electric-semi)
-  (cperl-define-key ":" 'cperl-electric-terminator)
-  (cperl-define-key "\C-j" 'newline-and-indent)
-  (cperl-define-key "\C-c\C-j" 'cperl-linefeed)
-  (cperl-define-key "\C-c\C-t" 'cperl-invert-if-unless)
-  (cperl-define-key "\C-c\C-a" 'cperl-toggle-auto-newline)
-  (cperl-define-key "\C-c\C-k" 'cperl-toggle-abbrev)
-  (cperl-define-key "\C-c\C-w" 'cperl-toggle-construct-fix)
-  (cperl-define-key "\C-c\C-f" 'auto-fill-mode)
-  (cperl-define-key "\C-c\C-e" 'cperl-toggle-electric)
-  (cperl-define-key "\C-c\C-b" 'cperl-find-bad-style)
-  (cperl-define-key "\C-c\C-p" 'cperl-pod-spell)
-  (cperl-define-key "\C-c\C-d" 'cperl-here-doc-spell)
-  (cperl-define-key "\C-c\C-n" 'cperl-narrow-to-here-doc)
-  (cperl-define-key "\C-c\C-v" 'cperl-next-interpolated-REx)
-  (cperl-define-key "\C-c\C-x" 'cperl-next-interpolated-REx-0)
-  (cperl-define-key "\C-c\C-y" 'cperl-next-interpolated-REx-1)
-  (cperl-define-key "\C-c\C-ha" 'cperl-toggle-autohelp)
-  (cperl-define-key "\C-c\C-hp" 'cperl-perldoc)
-  (cperl-define-key "\C-c\C-hP" 'cperl-perldoc-at-point)
-  (cperl-define-key "\e\C-q" 'cperl-indent-exp) ; Usually not bound
-  (cperl-define-key [?\C-\M-\|] 'cperl-lineup
-		    [(control meta |)])
-  ;;(cperl-define-key "\M-q" 'cperl-fill-paragraph)
-  ;;(cperl-define-key "\e;" 'cperl-indent-for-comment)
-  (cperl-define-key "\177" 'cperl-electric-backspace)
-  (cperl-define-key "\t" 'cperl-indent-command)
-  ;; don't clobber the backspace binding:
-  (cperl-define-key "\C-c\C-hF" 'cperl-info-on-command
-		    [(control c) (control h) F])
-  (if (cperl-val 'cperl-clobber-lisp-bindings)
-      (progn
-	(cperl-define-key "\C-hf"
-			  ;;(concat (char-to-string help-char) "f") ; does not work
-			  'cperl-info-on-command
-			  [(control h) f])
-	(cperl-define-key "\C-hv"
-			  ;;(concat (char-to-string help-char) "v") ; does not work
-			  'cperl-get-help
-			  [(control h) v])
-	(cperl-define-key "\C-c\C-hf"
-			  ;;(concat (char-to-string help-char) "f") ; does not work
-			  (key-binding "\C-hf")
-			  [(control c) (control h) f])
-	(cperl-define-key "\C-c\C-hv"
-			  ;;(concat (char-to-string help-char) "v") ; does not work
-			  (key-binding "\C-hv")
-			  [(control c) (control h) v]))
-    (cperl-define-key "\C-c\C-hf" 'cperl-info-on-current-command
-		      [(control c) (control h) f])
-    (cperl-define-key "\C-c\C-hv"
-		      ;;(concat (char-to-string help-char) "v") ; does not work
-		      'cperl-get-help
-		      [(control c) (control h) v]))
-  (if (and (featurep 'xemacs)
-	   (<= emacs-minor-version 11) (<= emacs-major-version 19))
-      (progn
-	;; substitute-key-definition is usefulness-deenhanced...
-	;;;;;(cperl-define-key "\M-q" 'cperl-fill-paragraph)
-	(cperl-define-key "\e;" 'cperl-indent-for-comment)
-	(cperl-define-key "\e\C-\\" 'cperl-indent-region))
-    (or (boundp 'fill-paragraph-function)
-	(substitute-key-definition
-	 'fill-paragraph 'cperl-fill-paragraph
-	 cperl-mode-map global-map))
-    (substitute-key-definition
-     'indent-sexp 'cperl-indent-exp
-     cperl-mode-map global-map)
-    (substitute-key-definition
-     'indent-region 'cperl-indent-region
-     cperl-mode-map global-map)
-    (substitute-key-definition
-     'indent-for-comment 'cperl-indent-for-comment
-     cperl-mode-map global-map)))
-
-(defvar cperl-menu)
 (defvar cperl-lazy-installed)
 (defvar cperl-old-style nil)
-(condition-case nil
-    (progn
-      (require 'easymenu)
-      (easy-menu-define
-       cperl-menu cperl-mode-map "Menu for CPerl mode"
-       '("Perl"
-	 ["Beginning of function" beginning-of-defun t]
-	 ["End of function" end-of-defun t]
-	 ["Mark function" mark-defun t]
-	 ["Indent expression" cperl-indent-exp t]
-	  ["Fill paragraph/comment" fill-paragraph t]
-	 "----"
-	 ["Line up a construction" cperl-lineup (cperl-use-region-p)]
-	 ["Invert if/unless/while etc" cperl-invert-if-unless t]
-	 ("Regexp"
-	  ["Beautify" cperl-beautify-regexp
-	   cperl-use-syntax-table-text-property]
-	  ["Beautify one level deep" (cperl-beautify-regexp 1)
-	   cperl-use-syntax-table-text-property]
-	  ["Beautify a group" cperl-beautify-level
-	   cperl-use-syntax-table-text-property]
-	  ["Beautify a group one level deep" (cperl-beautify-level 1)
-	   cperl-use-syntax-table-text-property]
-	  ["Contract a group" cperl-contract-level
-	   cperl-use-syntax-table-text-property]
-	  ["Contract groups" cperl-contract-levels
-	   cperl-use-syntax-table-text-property]
-	  "----"
-	  ["Find next interpolated" cperl-next-interpolated-REx
-	   (next-single-property-change (point-min) 'REx-interpolated)]
-	  ["Find next interpolated (no //o)"
-	   cperl-next-interpolated-REx-0
-	   (or (text-property-any (point-min) (point-max) 'REx-interpolated t)
-	       (text-property-any (point-min) (point-max) 'REx-interpolated 1))]
-	  ["Find next interpolated (neither //o nor whole-REx)"
-	   cperl-next-interpolated-REx-1
-	   (text-property-any (point-min) (point-max) 'REx-interpolated t)])
-	 ["Insert spaces if needed to fix style" cperl-find-bad-style t]
-	 ["Refresh \"hard\" constructions" cperl-find-pods-heres t]
-	 "----"
-	 ["Indent region" cperl-indent-region (cperl-use-region-p)]
-	 ["Comment region" cperl-comment-region (cperl-use-region-p)]
-	 ["Uncomment region" cperl-uncomment-region (cperl-use-region-p)]
-	 "----"
-	 ["Run" mode-compile (fboundp 'mode-compile)]
-	 ["Kill" mode-compile-kill (and (fboundp 'mode-compile-kill)
-					(get-buffer "*compilation*"))]
-	 ["Next error" next-error (get-buffer "*compilation*")]
-	 ["Check syntax" cperl-check-syntax (fboundp 'mode-compile)]
-	 "----"
-	 ["Debugger" cperl-db t]
-	 "----"
-	 ("Tools"
-	  ["Imenu" imenu (fboundp 'imenu)]
-	  ["Imenu on Perl Info" cperl-imenu-on-info (featurep 'imenu)]
-	  "----"
-	  ["Ispell PODs" cperl-pod-spell
-	   ;; Better not to update syntaxification here:
-	   ;; debugging syntaxification can be broken by this???
-	   (or
-	    (get-text-property (point-min) 'in-pod)
-	    (< (progn
-		 (and cperl-syntaxify-for-menu
-		      (cperl-update-syntaxification (point-max) (point-max)))
-		 (next-single-property-change (point-min) 'in-pod nil (point-max)))
-	       (point-max)))]
-	  ["Ispell HERE-DOCs" cperl-here-doc-spell
-	   (< (progn
-		(and cperl-syntaxify-for-menu
-		     (cperl-update-syntaxification (point-max) (point-max)))
-		(next-single-property-change (point-min) 'here-doc-group nil (point-max)))
-	      (point-max))]
-	  ["Narrow to this HERE-DOC" cperl-narrow-to-here-doc
-	   (eq 'here-doc  (progn
-		(and cperl-syntaxify-for-menu
-		     (cperl-update-syntaxification (point) (point)))
-		(get-text-property (point) 'syntax-type)))]
-	  ["Select this HERE-DOC or POD section"
-	   cperl-select-this-pod-or-here-doc
-	   (memq (progn
-		   (and cperl-syntaxify-for-menu
-			(cperl-update-syntaxification (point) (point)))
-		   (get-text-property (point) 'syntax-type))
-		 '(here-doc pod))]
-	  "----"
-	  ["CPerl pretty print (experimental)" cperl-ps-print
-	   (fboundp 'ps-extend-face-list)]
-	  "----"
-	  ["Syntaxify region" cperl-find-pods-heres-region
-	   (cperl-use-region-p)]
-	  ["Profile syntaxification" cperl-time-fontification t]
-	  ["Debug errors in delayed fontification" cperl-emulate-lazy-lock t]
-	  ["Debug unwind for syntactic scan" cperl-toggle-set-debug-unwind t]
-	  ["Debug backtrace on syntactic scan (BEWARE!!!)"
-	   (cperl-toggle-set-debug-unwind nil t) t]
-	  "----"
-	  ["Class Hierarchy from TAGS" cperl-tags-hier-init t]
-	  ;;["Update classes" (cperl-tags-hier-init t) tags-table-list]
-	  ("Tags"
-;;;	     ["Create tags for current file" cperl-etags t]
-;;;	     ["Add tags for current file" (cperl-etags t) t]
-;;;	     ["Create tags for Perl files in directory" (cperl-etags nil t) t]
-;;;	     ["Add tags for Perl files in directory" (cperl-etags t t) t]
-;;;	     ["Create tags for Perl files in (sub)directories"
-;;;	      (cperl-etags nil 'recursive) t]
-;;;	     ["Add tags for Perl files in (sub)directories"
-;;;	      (cperl-etags t 'recursive) t])
-;;;; cperl-write-tags (&optional file erase recurse dir inbuffer)
-	   ["Create tags for current file" (cperl-write-tags nil t) t]
-	   ["Add tags for current file" (cperl-write-tags) t]
-	   ["Create tags for Perl files in directory"
-	    (cperl-write-tags nil t nil t) t]
-	   ["Add tags for Perl files in directory"
-	    (cperl-write-tags nil nil nil t) t]
-	   ["Create tags for Perl files in (sub)directories"
-	    (cperl-write-tags nil t t t) t]
-	   ["Add tags for Perl files in (sub)directories"
-	    (cperl-write-tags nil nil t t) t]))
-	 ("Perl docs"
-	  ["Define word at point" imenu-go-find-at-position
-	   (fboundp 'imenu-go-find-at-position)]
-	  ["Help on function" cperl-info-on-command t]
-	  ["Help on function at point" cperl-info-on-current-command t]
-	  ["Help on symbol at point" cperl-get-help t]
-	  ["Perldoc" cperl-perldoc t]
-	  ["Perldoc on word at point" cperl-perldoc-at-point t]
-	  ["View manpage of POD in this file" cperl-build-manpage t]
-	  ["Auto-help on" cperl-lazy-install
-	   (and (fboundp 'run-with-idle-timer)
-		(not cperl-lazy-installed))]
-	  ["Auto-help off" cperl-lazy-unstall
-	   (and (fboundp 'run-with-idle-timer)
-		cperl-lazy-installed)])
-	 ("Toggle..."
-	  ["Auto newline" cperl-toggle-auto-newline t]
-	  ["Electric parens" cperl-toggle-electric t]
-	  ["Electric keywords" cperl-toggle-abbrev t]
-	  ["Fix whitespace on indent" cperl-toggle-construct-fix t]
-	  ["Auto-help on Perl constructs" cperl-toggle-autohelp t]
-	  ["Auto fill" auto-fill-mode t])
-	 ("Indent styles..."
-	  ["CPerl" (cperl-set-style "CPerl") t]
-	  ["PerlStyle" (cperl-set-style "PerlStyle") t]
-	  ["GNU" (cperl-set-style "GNU") t]
-	  ["C++" (cperl-set-style "C++") t]
-	  ["K&R" (cperl-set-style "K&R") t]
-	  ["BSD" (cperl-set-style "BSD") t]
-	  ["Whitesmith" (cperl-set-style "Whitesmith") t]
-	  ["Memorize Current" (cperl-set-style "Current") t]
-	  ["Memorized" (cperl-set-style-back) cperl-old-style])
-	 ("Micro-docs"
-	  ["Tips" (describe-variable 'cperl-tips) t]
-	  ["Problems" (describe-variable 'cperl-problems) t]
-	  ["Speed" (describe-variable 'cperl-speed) t]
-	  ["Praise" (describe-variable 'cperl-praise) t]
-	  ["Faces" (describe-variable 'cperl-tips-faces) t]
-	  ["CPerl mode" (describe-function 'cperl-mode) t]
-	  ["CPerl version"
-	   (message "The version of master-file for this CPerl is %s-Emacs"
-		    cperl-version) t]))))
-  (error nil))
+(easy-menu-define cperl-menu cperl-mode-map
+  "Menu for CPerl mode."
+  '("Perl"
+    ["Beginning of function" beginning-of-defun t]
+    ["End of function" end-of-defun t]
+    ["Mark function" mark-defun t]
+    ["Indent expression" cperl-indent-exp t]
+    ["Fill paragraph/comment" fill-paragraph t]
+    "----"
+    ["Line up a construction" cperl-lineup (use-region-p)]
+    ["Invert if/unless/while etc" cperl-invert-if-unless t]
+    ("Regexp"
+     ["Beautify" cperl-beautify-regexp
+      cperl-use-syntax-table-text-property]
+     ["Beautify one level deep" (cperl-beautify-regexp 1)
+      cperl-use-syntax-table-text-property]
+     ["Beautify a group" cperl-beautify-level
+      cperl-use-syntax-table-text-property]
+     ["Beautify a group one level deep" (cperl-beautify-level 1)
+      cperl-use-syntax-table-text-property]
+     ["Contract a group" cperl-contract-level
+      cperl-use-syntax-table-text-property]
+     ["Contract groups" cperl-contract-levels
+      cperl-use-syntax-table-text-property]
+     "----"
+     ["Find next interpolated" cperl-next-interpolated-REx
+      (next-single-property-change (point-min) 'REx-interpolated)]
+     ["Find next interpolated (no //o)"
+      cperl-next-interpolated-REx-0
+      (or (text-property-any (point-min) (point-max) 'REx-interpolated t)
+          (text-property-any (point-min) (point-max) 'REx-interpolated 1))]
+     ["Find next interpolated (neither //o nor whole-REx)"
+      cperl-next-interpolated-REx-1
+      (text-property-any (point-min) (point-max) 'REx-interpolated t)])
+    ["Insert spaces if needed to fix style" cperl-find-bad-style t]
+    ["Refresh \"hard\" constructions" cperl-find-pods-heres t]
+    "----"
+    ["Indent region" cperl-indent-region (use-region-p)]
+    ["Comment region" cperl-comment-region (use-region-p)]
+    ["Uncomment region" cperl-uncomment-region (use-region-p)]
+    "----"
+    ["Debugger" cperl-db t]
+    "----"
+    ("Tools"
+     ["Imenu" imenu]
+     "----"
+     ["Ispell PODs" cperl-pod-spell
+      ;; Better not to update syntaxification here:
+      ;; debugging syntaxification can be broken by this???
+      (or
+       (get-text-property (point-min) 'in-pod)
+       (< (progn
+            (and cperl-syntaxify-for-menu
+                 (cperl-update-syntaxification (point-max)))
+            (next-single-property-change (point-min) 'in-pod nil (point-max)))
+          (point-max)))]
+     ["Ispell HERE-DOCs" cperl-here-doc-spell
+      (< (progn
+           (and cperl-syntaxify-for-menu
+                (cperl-update-syntaxification (point-max)))
+           (next-single-property-change (point-min) 'here-doc-group nil (point-max)))
+         (point-max))]
+     ["Narrow to this HERE-DOC" cperl-narrow-to-here-doc
+      (eq 'here-doc  (progn
+                       (and cperl-syntaxify-for-menu
+                            (cperl-update-syntaxification (point)))
+                       (get-text-property (point) 'syntax-type)))]
+     ["Select this HERE-DOC or POD section"
+      cperl-select-this-pod-or-here-doc
+      (memq (progn
+              (and cperl-syntaxify-for-menu
+                   (cperl-update-syntaxification (point)))
+              (get-text-property (point) 'syntax-type))
+            '(here-doc pod))]
+     "----"
+     ["CPerl pretty print (experimental)" cperl-ps-print]
+     "----"
+     ["Syntaxify region" cperl-find-pods-heres-region
+      (use-region-p)]
+     ["Profile syntaxification" cperl-time-fontification t]
+     ["Debug errors in delayed fontification" cperl-emulate-lazy-lock t]
+     ["Debug unwind for syntactic scan" cperl-toggle-set-debug-unwind t]
+     ["Debug backtrace on syntactic scan (BEWARE!!!)"
+      (cperl-toggle-set-debug-unwind nil t) t]
+     "----"
+     ["Class Hierarchy from TAGS" cperl-tags-hier-init t]
+     ;;["Update classes" (cperl-tags-hier-init t) tags-table-list]
+     ("Tags"
+      ["Create tags for current file" (cperl-write-tags nil t) t]
+      ["Add tags for current file" (cperl-write-tags) t]
+      ["Create tags for Perl files in directory"
+       (cperl-write-tags nil t nil t) t]
+      ["Add tags for Perl files in directory"
+       (cperl-write-tags nil nil nil t) t]
+      ["Create tags for Perl files in (sub)directories"
+       (cperl-write-tags nil t t t) t]
+      ["Add tags for Perl files in (sub)directories"
+       (cperl-write-tags nil nil t t) t]))
+    ("Perl docs"
+     ["Define word at point" imenu-go-find-at-position
+      ;; This is from imenu-go.el.  I can't find it on any ELPA
+      ;; archive, so I'm not sure if it's still in use or not.
+      (fboundp 'imenu-go-find-at-position)]
+     ["Help on symbol at point" cperl-get-help t]
+     ["Perldoc" cperl-perldoc t]
+     ["Perldoc on word at point" cperl-perldoc-at-point t]
+     ["View manpage of POD in this file" cperl-build-manpage t]
+     ["Auto-help on" cperl-lazy-install
+      (not cperl-lazy-installed)]
+     ["Auto-help off" cperl-lazy-unstall
+      cperl-lazy-installed])
+    ("Toggle..."
+     ["Auto newline" cperl-toggle-auto-newline t]
+     ["Electric parens" cperl-toggle-electric t]
+     ["Electric keywords" cperl-toggle-abbrev t]
+     ["Extra paired delimiters" cperl-extra-paired-delimiters-mode t]
+     ["Fix whitespace on indent" cperl-toggle-construct-fix t]
+     ["Auto-help on Perl constructs" cperl-toggle-autohelp t]
+     ["Auto fill" auto-fill-mode t])
+    ("Default indent styles..."
+     ["CPerl" (cperl-set-style "CPerl") t]
+     ["PBP" (cperl-set-style  "PBP") t]
+     ["PerlStyle" (cperl-set-style "PerlStyle") t]
+     ["GNU" (cperl-set-style "GNU") t]
+     ["C++" (cperl-set-style "C++") t]
+     ["K&R" (cperl-set-style "K&R") t]
+     ["BSD" (cperl-set-style "BSD") t]
+     ["Whitesmith" (cperl-set-style "Whitesmith") t]
+     ["Memorize Current" (cperl-set-style "Current") t]
+     ["Memorized" (cperl-set-style-back) cperl-old-style])
+    ("Indent styles for current buffer..."
+     ["CPerl" (cperl-set-style "CPerl") t]
+     ["PBP" (cperl-file-style  "PBP") t]
+     ["PerlStyle" (cperl-file-style "PerlStyle") t]
+     ["GNU" (cperl-file-style "GNU") t]
+     ["C++" (cperl-file-style "C++") t]
+     ["K&R" (cperl-file-style "K&R") t]
+     ["BSD" (cperl-file-style "BSD") t]
+     ["Whitesmith" (cperl-file-style "Whitesmith") t])
+    ("Micro-docs"
+     ["Tips" (describe-variable 'cperl-tips) t]
+     ["Problems" (describe-variable 'cperl-problems) t]
+     ["Speed" (describe-variable 'cperl-speed) t]
+     ["Praise" (describe-variable 'cperl-praise) t]
+     ["Faces" (describe-variable 'cperl-tips-faces) t]
+     ["CPerl mode" (describe-function 'cperl-mode) t])))
 
 (autoload 'c-macro-expand "cmacexp"
   "Display the result of expanding all C macros occurring in the region.
 The expansion is entirely correct because it uses the C preprocessor."
   t)
 
-;;; These two must be unwound, otherwise take exponential time
-(defconst cperl-maybe-white-and-comment-rex "[ \t\n]*\\(#[^\n]*\n[ \t\n]*\\)*"
+
+;;; Perl Grammar Components
+;;
+;; The following regular expressions are building blocks for a
+;; minimalistic Perl grammar, to be used instead of individual (and
+;; not always consistent) literal regular expressions.
+
+;; This is necessary to compile this file under Emacs 26.1
+;; (there's no rx-define which would help)
+(eval-and-compile
+
+  (defconst cperl--basic-identifier-rx
+    ;; The rx expression in the following line is a workaround for
+    ;; bug#70948 under Emacs 29
+    '(regex "[_[:alpha:]][_[:word:]]*")
+    ;; The rx expression in the following line is equivalent but
+    ;; inefficient under Emacs 29.3
+    ;; '(sequence (or alpha "_") (* (or word "_")))
+    "A regular expression for the name of a \"basic\" Perl variable.
+Neither namespace separators nor sigils are included.  As is,
+this regular expression applies to labels,subroutine calls where
+the ampersand sigil is not required, and names of attributes.")
+
+  (defconst cperl--label-rx
+    `(sequence symbol-start
+               ,cperl--basic-identifier-rx
+               (0+ space)
+               ":")
+    "A regular expression for a Perl label.
+By convention, labels are uppercase alphabetics, but this isn't
+enforced.")
+
+  (defconst cperl--false-label-rx
+    '(sequence (or (in "sym") "tr") (0+ space) ":")
+    "A regular expression which is similar to a label, but might as
+well be a quote-like operator with a colon as delimiter.")
+
+  (defconst cperl--normal-identifier-rx
+    `(or (sequence (1+ (sequence
+                        (opt ,cperl--basic-identifier-rx)
+                        "::"))
+                   (opt ,cperl--basic-identifier-rx))
+         ,cperl--basic-identifier-rx)
+    "A regular expression for a Perl variable name with optional namespace.
+Examples are `foo`, `Some::Module::VERSION`, and `::` (yes, that
+is a legal variable name).")
+
+  (defconst cperl--special-identifier-rx
+    '(or
+      (1+ digit)                          ; $0, $1, $2, ...
+      (sequence "^" (any "A-Z" "]^_?\\")) ; $^V
+      (sequence "{" (0+ space)            ; ${^MATCH}
+                "^" (any "A-Z" "]^_?\\")
+                (0+ (any "A-Z" "_" digit))
+                (0+ space) "}")
+      (in "!\"$%&'()+,-./:;<=>?@\\]^_`|~"))   ; $., $|, $", ... but not $^ or ${
+    "The list of Perl \"punctuation\" variables, as listed in perlvar.")
+
+  (defconst cperl--basic-scalar-rx
+    `(sequence "$" ,cperl--basic-identifier-rx)
+    "Regular expression for a scalar (without package).
+This regexp intentionally does not support spaces (nor newlines
+and comments) between the sigil and the identifier, for
+educational reasons.  So \"$foo\" will be matched, but \"$ foo\"
+or \"${ foo }\" will not.")
+
+  (defconst cperl--basic-array-rx
+    `(sequence "@" ,cperl--basic-identifier-rx)
+    "Regular expression for an array variable (without package).
+This regexp intentionally does not support spaces (nor newlines
+and comments) between the sigil and the identifier, for
+educational reasons.  So \"@foo\" will be matched, but \"@ foo\"
+or \"@{ foo }\" will not.")
+
+  (defconst cperl--basic-hash-rx
+    `(sequence "%" ,cperl--basic-identifier-rx)
+    "Regular expression for a hash variable (without package).
+This regexp intentionally does not support spaces (nor newlines
+and comments) between the sigil and the identifier, for
+educational reasons.  So \"%foo\" will be matched, but \"% foo\"
+or \"%{ foo }\" will not.")
+
+  (defconst cperl--ws-rx
+    '(sequence (or space "\n"))
+    "Regular expression for a single whitespace in Perl.")
+
+  (defconst cperl--eol-comment-rx
+    '(sequence "#" (0+ (not (in "\n"))) "\n")
+    "Regular expression for a single end-of-line comment in Perl")
+
+  (defconst cperl--ws-or-comment-rx
+    `(or ,cperl--ws-rx
+         ,cperl--eol-comment-rx)
+    "A regular expression for either whitespace or comment")
+
+  (defconst cperl--ws*-rx
+    `(0+ ,cperl--ws-or-comment-rx)
+    "Regular expression for optional whitespaces or comments in Perl")
+
+  (defconst cperl--ws+-rx
+    `(1+ ,cperl--ws-or-comment-rx)
+    "Regular expression for a sequence of whitespace and comments in Perl.")
+
+  (defconst cperl--basic-variable-rx
+    `(sequence (in "$@%") ,cperl--basic-identifier-rx)
+    "Regular expression for a Perl variable (scalar, array or hash).
+This regexp intentionally does not support spaces (nor newlines
+and comments) between the sigil and the identifier, for
+educational reasons.  So \"$foo\" will be matched, but \"$ foo\"
+or \"${ foo }\" will not.")
+
+  (defconst cperl--variable-list-rx
+    `(sequence "("
+	       (optional (sequence
+                          ,cperl--ws*-rx
+                          ,cperl--basic-variable-rx
+			  (0+ (sequence
+			       ,cperl--ws*-rx
+			       ","
+			       ,cperl--ws*-rx
+			       ,cperl--basic-variable-rx))
+                          ,cperl--ws*-rx)))
+    "Regular expression for a list of Perl variables for declarations.")
+
+  ;; This is left as a string regexp.  There are many version schemes in
+  ;; the wild, so people might want to fiddle with this variable.
+  (defconst cperl--version-regexp
+    (rx-to-string
+     `(or
+       (sequence (optional "v")
+	         (>= 2 (sequence (1+ digit) "."))
+	         (1+ digit)
+	         (optional (sequence "_" (1+ word))))
+       (sequence (1+ digit)
+	         (optional (sequence "." (1+ digit)))
+	         (optional (sequence "_" (1+ word))))))
+    "A sequence for recommended version number schemes in Perl.")
+
+  (defconst cperl--single-attribute-rx
+    `(sequence ,cperl--basic-identifier-rx
+               (optional (sequence "("
+                                   (0+ (or (sequence "\\" not-newline)
+                                           (not (any "()\\"))
+                                           (sequence "("
+		                                     (zero-or-more
+		                                      (not
+		                                       (any "()\\")))
+		                                     ")")))
+                                   ")")))
+    "A regular expression for a single attribute, without leading colon.
+It may have parameters in parens, one level of parens within the
+parameter's value is supported.  This regexp does not have
+capture groups.")
+
+  (defconst cperl--attribute-list-rx
+    `(sequence ":"
+               (optional
+                ,cperl--ws*-rx
+                ,cperl--single-attribute-rx
+                (0+ (sequence
+                     (or (sequence ,cperl--ws*-rx
+                                   ":"
+                                   ,cperl--ws*-rx)
+                         ,cperl--ws+-rx)
+                     ,cperl--single-attribute-rx))
+                (optional ":")))
+    "A regular expression for an attribute list.
+Attribute lists may only occur in certain declarations.  A colon
+is required before the first attribute but optional between
+subsequent attributes.  This regexp does not have capture groups.")
+
+  (defconst cperl--prototype-rx
+    `(sequence "("
+               (0+ (any "$@%&*;\\[]"))
+               ")")
+    "A regular expression for a subroutine prototype.  Not as strict
+as the actual prototype syntax, but good enough to distinguish
+prototypes from signatures.")
+
+  (defconst cperl--signature-rx
+    `(sequence "("
+               (optional
+                (sequence
+                 (0+ (sequence ,cperl--ws*-rx
+                               (or ,cperl--basic-scalar-rx "$")
+                               ,cperl--ws*-rx
+                               ","))
+                 ,cperl--ws*-rx
+                 (or ,cperl--basic-scalar-rx
+                     ,cperl--basic-array-rx
+                     ,cperl--basic-hash-rx
+                     "$" "%" "@")))
+               (optional (sequence ,cperl--ws*-rx) "," )
+               ,cperl--ws*-rx
+               ")")
+    "A rx sequence subroutine signature without initializers.
+These are a bit more restricted than \"my\" declaration lists
+because they allow only one slurpy variable, and only in the last
+place.")
+
+  (defconst cperl--sloppy-signature-rx
+    `(sequence "("
+               ,cperl--ws*-rx
+               (or ,cperl--basic-scalar-rx
+                   ,cperl--basic-array-rx
+                   ,cperl--basic-hash-rx)
+               ,cperl--ws*-rx
+               (or "," "=" "||=" "//=" ")"))
+    "A rx sequence for the begin of a signature with initializers.
+Initializers can contain almost all Perl constructs and thus can
+not be covered by regular expressions.  This sequence captures
+enough to distinguish a signature from a prototype.")
+
+  (defconst cperl--package-rx
+    `(sequence (group (or "package" "class"))
+               ,cperl--ws+-rx
+               (group ,cperl--normal-identifier-rx)
+               (optional (sequence ,cperl--ws+-rx
+                                   (group (regexp ,cperl--version-regexp)))))
+    "A regular expression for package|class NAME VERSION in Perl.
+Contains three groups for the initial keyword \"package\" or
+\"class\", for the package name and for the version.")
+
+  (defconst cperl--package-for-imenu-rx
+    `(sequence symbol-start
+               (group-n 1 "package")
+               ,cperl--ws+-rx
+               (group-n 2 ,cperl--normal-identifier-rx)
+               (optional (sequence ,cperl--ws+-rx
+                                   (regexp ,cperl--version-regexp)))
+               ,cperl--ws*-rx
+               (group-n 3 (or ";" "{")))
+    "A regular expression to collect package names for `imenu'.
+Catches \"package NAME;\", \"package NAME VERSION;\", \"package
+NAME BLOCK\" and \"package NAME VERSION BLOCK.\" Contains three
+groups: One for the keyword \"package\", one for the package
+name, and one for the discovery of a following BLOCK.")
+
+  ;; This gets a regexp of its own because classes allow attributes
+  ;; (e.g. ":isa(Parent)") while packages don't.  We skip over it, but
+  ;; like for "package" we capture the following ";" or "{".
+  (defconst cperl--class-for-imenu-rx
+    `(sequence (or space line-start)
+               (group-n 1 "class")
+               ,cperl--ws+-rx
+               (group-n 2 ,cperl--normal-identifier-rx)
+               (optional (sequence ,cperl--ws+-rx
+                                   (regexp ,cperl--version-regexp)))
+               (optional (sequence ,cperl--ws*-rx
+                                   ,cperl--attribute-list-rx))
+               ,cperl--ws*-rx
+               (group-n 3 (or ";" "{")))
+    "A regular expression to collect package names for `imenu'.
+Catches \"class NAME;\", \"class NAME VERSION;\", \"class NAME
+BLOCK\" and \"class NAME VERSION BLOCK\" and allows for
+attributes like \":isa(Parent)\".  Contains three groups: One for
+the keyword \"package\", one for the package name, and one for
+the discovery of a following BLOCK.")
+
+  (defconst cperl--sub-name-for-imenu-rx
+    `(sequence symbol-start
+               (optional (sequence (group-n 3 (or "my" "state" "our"))
+	                           ,cperl--ws+-rx))
+               (group-n 1 (or "method" "sub"))
+               ,cperl--ws+-rx
+               (group-n 2 ,cperl--normal-identifier-rx))
+    "A regular expression to detect a subroutine or method start.
+Contains three groups: One to distinguish lexical from \"normal\"
+subroutines, for the keyword \"sub\" or \"method\", and one for
+the subroutine name.")
+
+  (defconst cperl--sub-name-generated-rx
+    `(sequence symbol-start
+               (optional (group-n 3 unmatchable))
+               ;; autogenerated methods are not lexicals, so enforce the
+               ;; first capture group to be nil
+               "field"
+               ,cperl--ws+-rx
+               (or
+                (sequence (in "$%@")
+                          (group-n 2 ,cperl--basic-identifier-rx)
+                          (1+ (not (in ";={")))
+                          ":"
+                          (group-n 1 "reader")
+                          (not "("))
+                (sequence ,cperl--basic-variable-rx
+                          (1+ (not (in ";={")))
+                          ":"
+                          (group-n 1 "reader")
+                          "("
+                          (group-n 2 ,cperl--basic-identifier-rx)
+                          ")")))
+    "A regular expression to capture autogenerated reader methods.
+The name of the method is either the field name without its sigil, or
+given in parentheses after the \":reader\" keyword.")
+  ;; I don't dare to think about :writer where the generated name does
+  ;; not even occur in the text.
+
+(defconst cperl--block-declaration-rx
+  `(sequence
+    (or "class" "method" "package" "sub")
+    (1+ ,cperl--ws-or-comment-rx)
+    ,cperl--normal-identifier-rx)
+  "A regular expression to find a declaration for a named block.
+Used for indentation.  These declarations introduce a block which
+does not need a semicolon to terminate the statement.")
+
+(defconst cperl--field-declaration-rx
+  `(sequence
+    "field"
+    (1+ ,cperl--ws-or-comment-rx)
+    ,cperl--basic-variable-rx
+    (optional (sequence ,cperl--ws+-rx ,cperl--attribute-list-rx))
+    )
+  "A regular expression to find a declaration for a field.
+Fields can have attributes for fontification, and even for imenu because
+for example \":reader\" implicitly declares a method.")
+
+(defconst cperl--pod-heading-rx
+  `(sequence line-start
+             (group-n 1 "=head")
+             (group-n 3 (in "1-4"))
+             (1+ (in " \t"))
+             (group-n 2 (1+ (not (in "\n")))))
+  "A regular expression to detect a POD heading.
+Contains two groups: One for the heading level, and one for the
+heading text.")
+
+(defconst cperl--imenu-entries-rx
+  `(or ,cperl--package-for-imenu-rx
+       ,cperl--class-for-imenu-rx
+       ,cperl--sub-name-for-imenu-rx
+       ,cperl--sub-name-generated-rx
+       ,cperl--pod-heading-rx)
+  "A regular expression to collect stuff that goes into the `imenu' index.
+Covers packages and classes, subroutines and methods, and POD headings.")
+
+;; end of eval-and-compiled stuff
+)
+
+
+(defun cperl-declaration-header-p (pos)
+  "Return t if POS is in the header of a declaration.
+Perl syntax can have various constructs between a
+keyword (e.g. \"sub\") and its associated block of code, and
+these can span several lines.  These blocks are identified and
+marked with a text-property in `cperl-find-pods-heres'.  This
+function tests that property."
+  (equal (get-text-property pos 'syntax-type) 'sub-decl))
+
+(defun cperl-block-declaration-p ()
+  "Test whether the following ?\\{ opens a declaration block.
+Returns the column where the declaring keyword is found, or nil
+if this isn't a declaration block.  Declaration blocks are named
+subroutines, packages and the like.  They start with a keyword
+and a name, to be followed by various descriptive items which are
+just skipped over for our purpose.  Declaration blocks end a
+statement, so there's no semicolon."
+  ;; A scan error means that none of the declarators has been found
+  (condition-case nil
+      (let ((is-block-declaration nil)
+            (continue-searching t))
+        (while (and continue-searching (not (bobp)))
+          (forward-sexp -1)
+          (cond
+           ((looking-at (rx (eval cperl--block-declaration-rx)))
+            (setq is-block-declaration (current-column)
+                  continue-searching nil))
+           ((cperl-declaration-header-p (point))
+            (setq is-block-declaration (current-column)
+                  continue-searching nil))
+           ;; Another brace means this is no block declaration
+           ((looking-at "{")
+            (setq continue-searching nil))
+           (t
+            (cperl-backward-to-noncomment (point-min))
+            ;; A semicolon or an opening brace prevent this block from
+            ;; being a block declaration
+            (when (or (eq (preceding-char) ?\;)
+                      (eq (preceding-char) ?{))
+              (setq continue-searching nil)))))
+        is-block-declaration)
+    (error nil)))
+
+
+;; These two must be unwound, otherwise take exponential time
+(defconst cperl-maybe-white-and-comment-rex
+  (rx (group (eval cperl--ws*-rx)))
+  ;; was: "[ \t\n]*\\(#[^\n]*\n[ \t\n]*\\)*"
 "Regular expression to match optional whitespace with interspersed comments.
 Should contain exactly one group.")
 
-;;; This one is tricky to unwind; still very inefficient...
-(defconst cperl-white-and-comment-rex "\\([ \t\n]\\|#[^\n]*\n\\)+"
+;; This one is tricky to unwind; still very inefficient...
+(defconst cperl-white-and-comment-rex
+  (rx (group (eval cperl--ws+-rx)))
+  ;; was: "\\([ \t\n]\\|#[^\n]*\n\\)+"
 "Regular expression to match whitespace with interspersed comments.
 Should contain exactly one group.")
 
 
-;;; Is incorporated in `cperl-imenu--function-name-regexp-perl'
-;;; `cperl-outline-regexp', `defun-prompt-regexp'.
-;;; Details of groups in this may be used in several functions; see comments
-;;; near mentioned above variable(s)...
-;;; sub($$):lvalue{}  sub:lvalue{} Both allowed...
+;; Is incorporated in `cperl-outline-regexp', `defun-prompt-regexp'.
+;; Details of groups in this may be used in several functions; see comments
+;; near mentioned above variable(s)...
+;; sub($$):lvalue{}  sub:lvalue{} Both allowed...
 (defsubst cperl-after-sub-regexp (named attr) ; 9 groups without attr...
   "Match the text after `sub' in a subroutine declaration.
 If NAMED is nil, allows anonymous subroutines.  Matches up to the first \":\"
@@ -1415,7 +1580,7 @@ the last)."
   (concat				; Assume n groups before this...
    "\\("				; n+1=name-group
      cperl-white-and-comment-rex	; n+2=pre-name
-     "\\(::[a-zA-Z_0-9:']+\\|[a-zA-Z_'][a-zA-Z_0-9:']*\\)" ; n+3=name
+     (rx-to-string `(group ,cperl--normal-identifier-rx))
    "\\)"				; END n+1=name-group
    (if named "" "?")
    "\\("				; n+4=proto-group
@@ -1429,9 +1594,9 @@ the last)."
 	(if attr (concat
 		  "\\("
 		     cperl-maybe-white-and-comment-rex ; whitespace-comments
-		     "\\(\\sw\\|_\\)+"	; attr-name
+		     "\\(\\<\\sw\\|_\\)+"	; attr-name
 		     ;; attr-arg (1 level of internal parens allowed!)
-		     "\\((\\(\\\\.\\|[^\\\\()]\\|([^\\\\()]*)\\)*)\\)?"
+		     "\\((\\(\\\\.\\|[^\\()]\\|([^\\()]*)\\)*)\\)?"
 		     "\\("		; optional : (XXX allows trailing???)
 		        cperl-maybe-white-and-comment-rex ; whitespace-comments
 		     ":\\)?"
@@ -1441,32 +1606,57 @@ the last)."
    "\\)?"				; END n+6=proto-group
    ))
 
-;;; Details of groups in this are used in `cperl-imenu--create-perl-index'
-;;;  and `cperl-outline-level'.
-;;;; Was: 2=sub|package; now 2=package-group, 5=package-name 8=sub-name (+3)
-(defvar cperl-imenu--function-name-regexp-perl
-  (concat
-   "^\\("				; 1 = all
-       "\\([ \t]*package"		; 2 = package-group
-          "\\("				; 3 = package-name-group
-	    cperl-white-and-comment-rex ; 4 = pre-package-name
-	       "\\([a-zA-Z_0-9:']+\\)\\)?\\)" ; 5 = package-name
-       "\\|"
-          "[ \t]*sub"
-	  (cperl-after-sub-regexp 'named nil) ; 8=name 11=proto 14=attr-start
-	  cperl-maybe-white-and-comment-rex	; 15=pre-block
-   "\\|"
-     "=head\\([1-4]\\)[ \t]+"		; 16=level
-     "\\([^\n]+\\)$"			; 17=text
-   "\\)"))
+;; Tired of editing this in 8 places every time I remember that there
+;; is another method-defining keyword
+(defvar cperl-sub-keywords
+  '("sub" "method"))
+
+(defvar cperl-sub-regexp (regexp-opt cperl-sub-keywords))
+
+(defun cperl-char-ends-sub-keyword-p (char)
+  "Return t if CHAR is the last character of a perl sub keyword."
+  (cl-loop for keyword in cperl-sub-keywords
+           when (eq char (aref keyword (1- (length keyword))))
+           return t))
 
 (defvar cperl-outline-regexp
-  (concat cperl-imenu--function-name-regexp-perl "\\|" "\\`"))
+  (rx (sequence line-start (0+ blank) (eval cperl--imenu-entries-rx)))
+  "The regular expression used for `outline-minor-mode'.")
 
-(defvar cperl-mode-syntax-table nil
+(defvar cperl-mode-syntax-table
+  (let ((st (make-syntax-table)))
+    (modify-syntax-entry ?\\ "\\" st)
+    (modify-syntax-entry ?/  "."  st)
+    (modify-syntax-entry ?*  "."  st)
+    (modify-syntax-entry ?+  "."  st)
+    (modify-syntax-entry ?-  "."  st)
+    (modify-syntax-entry ?=  "."  st)
+    (modify-syntax-entry ?%  "."  st)
+    (modify-syntax-entry ?<  "."  st)
+    (modify-syntax-entry ?>  "."  st)
+    (modify-syntax-entry ?&  "."  st)
+    (modify-syntax-entry ?$  "\\" st)
+    (modify-syntax-entry ?\n ">"  st)
+    (modify-syntax-entry ?#  "<"  st)
+    (modify-syntax-entry ?'  "\"" st)
+    (modify-syntax-entry ?`  "\"" st)
+    (if cperl-under-as-char
+        (modify-syntax-entry ?_ "w" st))
+    (modify-syntax-entry ?:  "_"  st)
+    (modify-syntax-entry ?|  "."  st)
+    st)
   "Syntax table in use in CPerl mode buffers.")
 
-(defvar cperl-string-syntax-table nil
+(defvar cperl-string-syntax-table
+  (let ((st (copy-syntax-table cperl-mode-syntax-table)))
+    (modify-syntax-entry ?$  "." st)
+    (modify-syntax-entry ?\{ "." st)
+    (modify-syntax-entry ?\} "." st)
+    (modify-syntax-entry ?\" "." st)
+    (modify-syntax-entry ?'  "." st)
+    (modify-syntax-entry ?`  "." st)
+    (modify-syntax-entry ?#  "." st) ; (?# comment )
+    st)
   "Syntax table in use in CPerl mode string-like chunks.")
 
 (defsubst cperl-1- (p)
@@ -1475,54 +1665,22 @@ the last)."
 (defsubst cperl-1+ (p)
   (min (point-max) (1+ p)))
 
-(if cperl-mode-syntax-table
-    ()
-  (setq cperl-mode-syntax-table (make-syntax-table))
-  (modify-syntax-entry ?\\ "\\" cperl-mode-syntax-table)
-  (modify-syntax-entry ?/ "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?* "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?+ "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?- "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?= "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?% "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?< "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?> "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?& "." cperl-mode-syntax-table)
-  (modify-syntax-entry ?$ "\\" cperl-mode-syntax-table)
-  (modify-syntax-entry ?\n ">" cperl-mode-syntax-table)
-  (modify-syntax-entry ?# "<" cperl-mode-syntax-table)
-  (modify-syntax-entry ?' "\"" cperl-mode-syntax-table)
-  (modify-syntax-entry ?` "\"" cperl-mode-syntax-table)
-  (if cperl-under-as-char
-      (modify-syntax-entry ?_ "w" cperl-mode-syntax-table))
-  (modify-syntax-entry ?: "_" cperl-mode-syntax-table)
-  (modify-syntax-entry ?| "." cperl-mode-syntax-table)
-  (setq cperl-string-syntax-table (copy-syntax-table cperl-mode-syntax-table))
-  (modify-syntax-entry ?$ "." cperl-string-syntax-table)
-  (modify-syntax-entry ?\{ "." cperl-string-syntax-table)
-  (modify-syntax-entry ?\} "." cperl-string-syntax-table)
-  (modify-syntax-entry ?\" "." cperl-string-syntax-table)
-  (modify-syntax-entry ?' "." cperl-string-syntax-table)
-  (modify-syntax-entry ?` "." cperl-string-syntax-table)
-  (modify-syntax-entry ?# "." cperl-string-syntax-table)) ; (?# comment )
-
-
 
 (defvar cperl-faces-init nil)
 ;; Fix for msb.el
 (defvar cperl-msb-fixed nil)
 (defvar cperl-use-major-mode 'cperl-mode)
-(defvar cperl-font-lock-multiline-start nil)
-(defvar cperl-font-lock-multiline nil)
 (defvar cperl-font-locking nil)
 
-;; NB as it stands the code in cperl-mode assumes this only has one
-;; element. If XEmacs 19 support were dropped, this could all be simplified.
-(defvar cperl-compilation-error-regexp-alist
+(defvar cperl-compilation-error-regexp-list
   ;; This look like a paranoiac regexp: could anybody find a better one? (which WORKS).
-  '(("^[^\n]* \\(file\\|at\\) \\([^ \t\n]+\\) [^\n]*line \\([0-9]+\\)[\\., \n]"
-     2 3))
-  "Alist that specifies how to match errors in perl output.")
+  '("^[^\n]* \\(file\\|at\\) \\([^ \t\n]+\\) [^\n]*line \\([0-9]+\\)[\\., \n]"
+    2 3)
+  "List that specifies how to match errors in Perl output.")
+
+(defvar cperl-compilation-error-regexp-alist)
+(make-obsolete-variable 'cperl-compilation-error-regexp-alist
+                        'cperl-compilation-error-regexp-list "28.1")
 
 (defvar compilation-error-regexp-alist)
 
@@ -1595,36 +1753,27 @@ into
 
 \\{cperl-mode-map}
 
-Setting the variable `cperl-font-lock' to t switches on font-lock-mode
-\(even with older Emacsen), `cperl-electric-lbrace-space' to t switches
-on electric space between $ and {, `cperl-electric-parens-string' is
-the string that contains parentheses that should be electric in CPerl
-\(see also `cperl-electric-parens-mark' and `cperl-electric-parens'),
-setting `cperl-electric-keywords' enables electric expansion of
-control structures in CPerl.  `cperl-electric-linefeed' governs which
-one of two linefeed behavior is preferable.  You can enable all these
-options simultaneously (recommended mode of use) by setting
-`cperl-hairy' to t.  In this case you can switch separate options off
-by setting them to `null'.  Note that one may undo the extra
-whitespace inserted by semis and braces in `auto-newline'-mode by
-consequent \\[cperl-electric-backspace].
+Setting the variable `cperl-font-lock' to t switches on `font-lock-mode',
+`cperl-electric-lbrace-space' to t switches on electric space between $
+and {, `cperl-electric-parens-string' is the string that contains
+parentheses that should be electric in CPerl (see also
+`cperl-electric-parens-mark' and `cperl-electric-parens'), setting
+`cperl-electric-keywords' enables electric expansion of control
+structures in CPerl.  `cperl-electric-linefeed' governs which one of two
+linefeed behavior is preferable.  You can enable all these options
+simultaneously by setting `cperl-hairy' to t.  In this case you can
+switch separate options off by setting them to `null'.  Note that one may
+undo the extra whitespace inserted by semis and braces in
+`auto-newline'-mode by consequent \\[cperl-electric-backspace].
 
-If your site has perl5 documentation in info format, you can use commands
-\\[cperl-info-on-current-command] and \\[cperl-info-on-command] to access it.
-These keys run commands `cperl-info-on-current-command' and
-`cperl-info-on-command', which one is which is controlled by variable
-`cperl-info-on-command-no-prompt' and `cperl-clobber-lisp-bindings'
-\(in turn affected by `cperl-hairy').
-
-Even if you have no info-format documentation, short one-liner-style
-help is available on \\[cperl-get-help], and one can run perldoc or
-man via menu.
+Short one-liner-style help is available on \\[cperl-get-help],
+and one can run perldoc or man via menu.
 
 It is possible to show this help automatically after some idle time.
 This is regulated by variable `cperl-lazy-help-time'.  Default with
 `cperl-hairy' (if the value of `cperl-lazy-help-time' is nil) is 5
 secs idle time .  It is also possible to switch this on/off from the
-menu, or via \\[cperl-toggle-autohelp].  Requires `run-with-idle-timer'.
+menu, or via \\[cperl-toggle-autohelp].
 
 Use \\[cperl-lineup] to vertically lineup some construction - put the
 beginning of the region at the start of construction, and make region
@@ -1632,8 +1781,7 @@ span the needed amount of lines.
 
 Variables `cperl-pod-here-scan', `cperl-pod-here-fontify',
 `cperl-pod-face', `cperl-pod-head-face' control processing of POD and
-here-docs sections.  With capable Emaxen results of scan are used
-for indentation too, otherwise they are used for highlighting only.
+here-docs sections.  Results of scan are used for indentation too.
 
 Variables controlling indentation style:
  `cperl-tab-always-indent'
@@ -1670,17 +1818,19 @@ Variables controlling indentation style:
  `cperl-min-label-indent'
     Minimal indentation for line that is a label.
 
-Settings for classic indent-styles: K&R BSD=C++ GNU PerlStyle=Whitesmith
-  `cperl-indent-level'                5   4       2   4
-  `cperl-brace-offset'                0   0       0   0
-  `cperl-continued-brace-offset'     -5  -4       0   0
-  `cperl-label-offset'               -5  -4      -2  -4
-  `cperl-continued-statement-offset'  5   4       2   4
+Settings for classic indent-styles: K&R BSD=C++ GNU PBP PerlStyle=Whitesmith
+  `cperl-indent-level'                5   4       2   4   4
+  `cperl-brace-offset'                0   0       0   0   0
+  `cperl-continued-brace-offset'     -5  -4       0   0   0
+  `cperl-label-offset'               -5  -4      -2  -2  -4
+  `cperl-continued-statement-offset'  5   4       2   4   4
 
 CPerl knows several indentation styles, and may bulk set the
-corresponding variables.  Use \\[cperl-set-style] to do this.  Use
-\\[cperl-set-style-back] to restore the memorized preexisting values
-\(both available from menu).  See examples in `cperl-style-examples'.
+corresponding variables.  Use \\[cperl-set-style] to do this or
+set the `cperl-file-style' user option.  Use
+\\[cperl-set-style-back] to restore the memorized preexisting
+values \(both available from menu).  See examples in
+`cperl-style-examples'.
 
 Part of the indentation style is how different parts of if/elsif/else
 statements are broken into lines; in CPerl, this is reflected on how
@@ -1709,203 +1859,134 @@ or as help on variables `cperl-tips', `cperl-problems',
        (cperl-val 'cperl-info-on-command-no-prompt))
       (progn
 	;; don't clobber the backspace binding:
-	(cperl-define-key "\C-hf" 'cperl-info-on-current-command [(control h) f])
-	(cperl-define-key "\C-c\C-hf" 'cperl-info-on-command
-			  [(control c) (control h) f])))
+	(define-key cperl-mode-map "\C-hf" 'cperl-perldoc)
+	(define-key cperl-mode-map "\C-c\C-hf" 'cperl-perldoc)))
   (setq local-abbrev-table cperl-mode-abbrev-table)
   (if (cperl-val 'cperl-electric-keywords)
       (abbrev-mode 1))
   (set-syntax-table cperl-mode-syntax-table)
+  ;; Workaround for Bug#30393, needed for Emacs 26.
+  (when (< emacs-major-version 27)
+    (setq-local open-paren-in-column-0-is-defun-start nil))
   ;; Until Emacs is multi-threaded, we do not actually need it local:
-  (make-local-variable 'cperl-font-lock-multiline-start)
   (make-local-variable 'cperl-font-locking)
-  (make-local-variable 'outline-regexp)
-  ;; (setq outline-regexp imenu-example--function-name-regexp-perl)
-  (setq outline-regexp cperl-outline-regexp)
-  (make-local-variable 'outline-level)
-  (setq outline-level 'cperl-outline-level)
-  (make-local-variable 'add-log-current-defun-function)
-  (setq add-log-current-defun-function
-	(lambda ()
-	  (save-excursion
-	    (if (re-search-backward "^sub[ \t]+\\([^({ \t\n]+\\)" nil t)
-		(match-string-no-properties 1)))))
+  (setq-local outline-regexp cperl-outline-regexp)
+  (setq-local outline-level 'cperl-outline-level)
+  (setq-local add-log-current-defun-function
+              (lambda ()
+                (save-excursion
+                  (if (re-search-backward "^sub[ \t]+\\([^({ \t\n]+\\)" nil t)
+                      (match-string-no-properties 1)))))
 
-  (make-local-variable 'paragraph-start)
-  (setq paragraph-start (concat "^$\\|" page-delimiter))
-  (make-local-variable 'paragraph-separate)
-  (setq paragraph-separate paragraph-start)
-  (make-local-variable 'paragraph-ignore-fill-prefix)
-  (setq paragraph-ignore-fill-prefix t)
-  (if (featurep 'xemacs)
-    (progn
-      (make-local-variable 'paren-backwards-message)
-      (set 'paren-backwards-message t)))
-  (make-local-variable 'indent-line-function)
-  (setq indent-line-function 'cperl-indent-line)
-  (make-local-variable 'require-final-newline)
-  (setq require-final-newline mode-require-final-newline)
-  (make-local-variable 'comment-start)
-  (setq comment-start "# ")
-  (make-local-variable 'comment-end)
-  (setq comment-end "")
-  (make-local-variable 'comment-column)
-  (setq comment-column cperl-comment-column)
-  (make-local-variable 'comment-start-skip)
-  (setq comment-start-skip "#+ *")
-  (make-local-variable 'defun-prompt-regexp)
-;;;       "[ \t]*sub"
-;;;	  (cperl-after-sub-regexp 'named nil) ; 8=name 11=proto 14=attr-start
-;;;	  cperl-maybe-white-and-comment-rex	; 15=pre-block
-  (setq defun-prompt-regexp
-	(concat "^[ \t]*\\(sub"
-		(cperl-after-sub-regexp 'named 'attr-groups)
-		"\\|"			; per toke.c
-		"\\(BEGIN\\|CHECK\\|INIT\\|END\\|AUTOLOAD\\|DESTROY\\)"
-		"\\)"
-		cperl-maybe-white-and-comment-rex))
-  (make-local-variable 'comment-indent-function)
-  (setq comment-indent-function 'cperl-comment-indent)
-  (and (boundp 'fill-paragraph-function)
-      (progn
-	(make-local-variable 'fill-paragraph-function)
-	(set 'fill-paragraph-function 'cperl-fill-paragraph)))
-  (make-local-variable 'parse-sexp-ignore-comments)
-  (setq parse-sexp-ignore-comments t)
-  (make-local-variable 'indent-region-function)
-  (setq indent-region-function 'cperl-indent-region)
-  ;;(setq auto-fill-function 'cperl-do-auto-fill) ; Need to switch on and off!
-  (make-local-variable 'imenu-create-index-function)
-  (setq imenu-create-index-function
-	(function cperl-imenu--create-perl-index))
-  (make-local-variable 'imenu-sort-function)
-  (setq imenu-sort-function nil)
-  (make-local-variable 'vc-rcs-header)
-  (set 'vc-rcs-header cperl-vc-rcs-header)
-  (make-local-variable 'vc-sccs-header)
-  (set 'vc-sccs-header cperl-vc-sccs-header)
-  (when (featurep 'xemacs)
-    ;; This one is obsolete...
-    (make-local-variable 'vc-header-alist)
-    (set 'vc-header-alist (or cperl-vc-header-alist ; Avoid warning
-			      `((SCCS ,(car cperl-vc-sccs-header))
-				(RCS ,(car cperl-vc-rcs-header))))))
-  (cond ((boundp 'compilation-error-regexp-alist-alist);; xemacs 20.x
-	 (make-local-variable 'compilation-error-regexp-alist-alist)
-	 (set 'compilation-error-regexp-alist-alist
-	      (cons (cons 'cperl (car cperl-compilation-error-regexp-alist))
-		    (symbol-value 'compilation-error-regexp-alist-alist)))
-	 (if (fboundp 'compilation-build-compilation-error-regexp-alist)
-	     (let ((f 'compilation-build-compilation-error-regexp-alist))
-	       (funcall f))
-	   (make-local-variable 'compilation-error-regexp-alist)
-	   (push 'cperl compilation-error-regexp-alist)))
-	((boundp 'compilation-error-regexp-alist);; xemacs 19.x
-	 (make-local-variable 'compilation-error-regexp-alist)
-	 (set 'compilation-error-regexp-alist
-	       (append cperl-compilation-error-regexp-alist
-		       (symbol-value 'compilation-error-regexp-alist)))))
-  (make-local-variable 'font-lock-defaults)
-  (setq	font-lock-defaults
-	(cond
-	 ((string< emacs-version "19.30")
-	  '(cperl-font-lock-keywords-2 nil nil ((?_ . "w"))))
-	 ((string< emacs-version "19.33") ; Which one to use?
-	  '((cperl-font-lock-keywords
-	     cperl-font-lock-keywords-1
-	     cperl-font-lock-keywords-2) nil nil ((?_ . "w"))))
-	 (t
-	  '((cperl-load-font-lock-keywords
-	     cperl-load-font-lock-keywords-1
-	     cperl-load-font-lock-keywords-2) nil nil ((?_ . "w"))))))
-  (make-local-variable 'cperl-syntax-state)
-  (setq cperl-syntax-state nil)		; reset syntaxification cache
-  (if cperl-use-syntax-table-text-property
-      (if (eval-when-compile (fboundp 'syntax-propertize-rules))
-          (progn
-            ;; Reset syntaxification cache.
-            (set (make-local-variable 'cperl-syntax-done-to) nil)
-            (set (make-local-variable 'syntax-propertize-function)
-                 (lambda (start end)
-                   (goto-char start)
-                   ;; Even if cperl-fontify-syntaxically has already gone
-                   ;; beyond `start', syntax-propertize has just removed
-                   ;; syntax-table properties between start and end, so we have
-                   ;; to re-apply them.
-                   (setq cperl-syntax-done-to start)
-                   (cperl-fontify-syntaxically end))))
-	(make-local-variable 'parse-sexp-lookup-properties)
-	;; Do not introduce variable if not needed, we check it!
-	(set 'parse-sexp-lookup-properties t)
-	;; Fix broken font-lock:
-	(or (boundp 'font-lock-unfontify-region-function)
-	    (set 'font-lock-unfontify-region-function
-		 'font-lock-default-unfontify-region))
-	(unless (featurep 'xemacs)		; Our: just a plug for wrong font-lock
-	  (make-local-variable 'font-lock-unfontify-region-function)
-	  (set 'font-lock-unfontify-region-function ; not present with old Emacs
-	       'cperl-font-lock-unfontify-region-function))
-	(make-local-variable 'cperl-syntax-done-to)
-	(setq cperl-syntax-done-to nil)	; reset syntaxification cache
-	(make-local-variable 'font-lock-syntactic-keywords)
-	(setq font-lock-syntactic-keywords
-	      (if cperl-syntaxify-by-font-lock
-		  '((cperl-fontify-syntaxically))
-                ;; unless font-lock-syntactic-keywords, font-lock (pre-22.1)
-                ;;  used to ignore syntax-table text-properties.  (t) is a hack
-                ;;  to make font-lock think that font-lock-syntactic-keywords
-                ;;  are defined.
-		'(t)))))
-  (if (boundp 'font-lock-multiline)	; Newer font-lock; use its facilities
-      (progn
-	(setq cperl-font-lock-multiline t) ; Not localized...
-	(set (make-local-variable 'font-lock-multiline) t))
-    (make-local-variable 'font-lock-fontify-region-function)
-    (set 'font-lock-fontify-region-function ; not present with old Emacs
-	 'cperl-font-lock-fontify-region-function))
-  (make-local-variable 'font-lock-fontify-region-function)
-  (set 'font-lock-fontify-region-function ; not present with old Emacs
-       'cperl-font-lock-fontify-region-function)
+  (setq-local paragraph-start (concat "^$\\|" page-delimiter))
+  (setq-local paragraph-separate paragraph-start)
+  (setq-local paragraph-ignore-fill-prefix t)
+  (setq-local indent-line-function #'cperl-indent-line)
+  (setq-local require-final-newline mode-require-final-newline)
+  (setq-local comment-start "# ")
+  (setq-local comment-end "")
+  (setq-local comment-column cperl-comment-column)
+  (setq-local comment-start-skip "#+ *")
+
+;;       "[ \t]*sub"
+;;	  (cperl-after-sub-regexp 'named nil) ; 8=name 11=proto 14=attr-start
+;;	  cperl-maybe-white-and-comment-rex	; 15=pre-block
+  (setq-local defun-prompt-regexp
+              (concat "^[ \t]*\\("
+                      cperl-sub-regexp
+                      (cperl-after-sub-regexp 'named 'attr-groups)
+                      (rx (eval cperl--ws*-rx))
+                      (rx (optional (eval cperl--signature-rx)))
+                      "\\|"			; per toke.c
+                      (rx (or "ADJUST" "AUTOLOAD" "BEGIN" "CHECK" "DESTROY"
+                              "END" "INIT" "UNITCHECK"))
+                      "\\)"
+                      cperl-maybe-white-and-comment-rex))
+  (setq-local comment-indent-function #'cperl-comment-indent)
+  (setq-local fill-paragraph-function #'cperl-fill-paragraph)
+  (setq-local parse-sexp-ignore-comments t)
+  (setq-local indent-region-function #'cperl-indent-region)
+  ;;(setq auto-fill-function #'cperl-do-auto-fill) ; Need to switch on and off!
+  (setq-local imenu-create-index-function #'cperl-imenu--create-perl-index)
+  (setq-local imenu-sort-function nil)
+  (setq-local vc-rcs-header cperl-vc-rcs-header)
+  (setq-local vc-sccs-header cperl-vc-sccs-header)
+  (when (boundp 'compilation-error-regexp-alist-alist)
+    ;; The let here is just a compatibility kludge for the obsolete
+    ;; variable `cperl-compilation-error-regexp-alist'.  It can be removed
+    ;; when that variable is removed.
+    (let ((regexp (if (boundp 'cperl-compilation-error-regexp-alist)
+                           (car cperl-compilation-error-regexp-alist)
+                         cperl-compilation-error-regexp-list)))
+      (setq-local compilation-error-regexp-alist-alist
+                  (cons (cons 'cperl regexp)
+                        compilation-error-regexp-alist-alist)))
+    (make-local-variable 'compilation-error-regexp-alist)
+    (push 'cperl compilation-error-regexp-alist))
+  (setq-local font-lock-defaults
+              '((cperl-load-font-lock-keywords
+                 cperl-load-font-lock-keywords-1
+                 cperl-load-font-lock-keywords-2)
+                nil nil ((?_ . "w")) nil
+                (font-lock-syntactic-face-function
+                 . cperl-font-lock-syntactic-face-function)))
+  ;; Reset syntaxification cache.
+  (setq-local cperl-syntax-state nil)
+  (when cperl-use-syntax-table-text-property
+    ;; Reset syntaxification cache.
+    (setq-local cperl-syntax-done-to nil)
+    (setq-local syntax-propertize-function
+                (lambda (start end)
+                  (goto-char start)
+                  ;; Even if cperl-fontify-syntactically has already gone
+                  ;; beyond `start', syntax-propertize has just removed
+                  ;; syntax-table properties between start and end, so we have
+                  ;; to re-apply them.
+                  (setq cperl-syntax-done-to start)
+                  (cperl-fontify-syntactically end))))
+  (setq-local font-lock-multiline t)
+  (setq-local font-lock-fontify-region-function
+              #'cperl-font-lock-fontify-region-function)
   (make-local-variable 'cperl-old-style)
-  (if (boundp 'normal-auto-fill-function) ; 19.33 and later
-      (set (make-local-variable 'normal-auto-fill-function)
-	   'cperl-do-auto-fill)
-    (or (fboundp 'cperl-old-auto-fill-mode)
-	(progn
-	  (fset 'cperl-old-auto-fill-mode (symbol-function 'auto-fill-mode))
-	  (defun auto-fill-mode (&optional arg)
-	    (interactive "P")
-	    (eval '(cperl-old-auto-fill-mode arg)) ; Avoid a warning
-	    (and auto-fill-function (memq major-mode '(perl-mode cperl-mode))
-		 (setq auto-fill-function 'cperl-do-auto-fill))))))
-  (if (cperl-enable-font-lock)
-      (if (cperl-val 'cperl-font-lock)
-	  (progn (or cperl-faces-init (cperl-init-faces))
-		 (font-lock-mode 1))))
-  (set (make-local-variable 'facemenu-add-face-function)
-       'cperl-facemenu-add-face-function) ; XXXX What this guy is for???
+  (setq-local normal-auto-fill-function
+              #'cperl-do-auto-fill)
+  (if (cperl-val 'cperl-font-lock)
+      (progn (or cperl-faces-init (cperl-init-faces))
+	     (font-lock-mode 1)))
+  (setq-local facemenu-add-face-function
+              #'cperl-facemenu-add-face-function) ; XXXX What this guy is for???
   (and (boundp 'msb-menu-cond)
        (not cperl-msb-fixed)
        (cperl-msb-fix))
-  (if (fboundp 'easy-menu-add)
-      (easy-menu-add cperl-menu))	; A NOP in Emacs.
-  (run-mode-hooks 'cperl-mode-hook)
   (if cperl-hook-after-change
-      (add-hook 'after-change-functions 'cperl-after-change-function nil t))
+      (add-hook 'after-change-functions #'cperl-after-change-function nil t))
   ;; After hooks since fontification will break this
-  (if cperl-pod-here-scan
-      (or cperl-syntaxify-by-font-lock
-       (progn (or cperl-faces-init (cperl-init-faces-weak))
-	      (cperl-find-pods-heres)))))
+  (when (and cperl-pod-here-scan
+             (not cperl-syntaxify-by-font-lock))
+    (cperl-find-pods-heres))
+  (when cperl-file-style
+    (cperl-set-style cperl-file-style))
+  (add-hook 'hack-local-variables-hook #'cperl--set-file-style nil t)
+  ;; Setup Flymake
+  (add-hook 'flymake-diagnostic-functions #'perl-flymake nil t))
+
+(when (fboundp 'derived-mode-add-parents) ; to run under Emacs <30
+  (derived-mode-add-parents 'cperl-mode '(perl-mode)))
+
+(defun cperl--set-file-style ()
+  (when cperl-file-style
+    (cperl-file-style cperl-file-style)))
+
 
 ;; Fix for perldb - make default reasonable
 (defun cperl-db ()
   (interactive)
   (require 'gud)
+  ;; FIXME: Use `read-string' or `read-shell-command'?
   (perldb (read-from-minibuffer "Run perldb (like this): "
 				(if (consp gud-perldb-history)
 				    (car gud-perldb-history)
-				  (concat "perl "
+				  (concat "perl -d "
 					  (buffer-file-name)))
 				nil nil
 				'(gud-perldb-history . 1))))
@@ -1969,25 +2050,6 @@ or as help on variables `cperl-tips', `cperl-problems',
 	  (cperl-make-indent comment-column 1) ; Indent min 1
 	  c)))))
 
-;;;(defun cperl-comment-indent-fallback ()
-;;;  "Is called if the standard comment-search procedure fails.
-;;;Point is at start of real comment."
-;;;  (let ((c (current-column)) target cnt prevc)
-;;;    (if (= c comment-column) nil
-;;;      (setq cnt (skip-chars-backward "[ \t]"))
-;;;      (setq target (max (1+ (setq prevc
-;;;			     (current-column))) ; Else indent at comment column
-;;;		   comment-column))
-;;;      (if (= c comment-column) nil
-;;;	(delete-backward-char cnt)
-;;;	(while (< prevc target)
-;;;	  (insert "\t")
-;;;	  (setq prevc (current-column)))
-;;;	(if (> prevc target) (progn (delete-char -1) (setq prevc (current-column))))
-;;;	(while (< prevc target)
-;;;	  (insert " ")
-;;;	  (setq prevc (current-column)))))))
-
 (defun cperl-indent-for-comment ()
   "Substitute for `indent-for-comment' in CPerl."
   (interactive)
@@ -2022,7 +2084,7 @@ char is \"{\", insert extra newline before only if
   (interactive "P")
   (let (insertpos
 	(other-end (if (and cperl-electric-parens-mark
-			    (cperl-mark-active)
+			    (region-active-p)
 			    (< (mark) (point)))
 		       (mark)
 		     nil)))
@@ -2094,13 +2156,13 @@ char is \"{\", insert extra newline before only if
 	(cperl-auto-newline cperl-auto-newline)
 	(other-end (or end
 		       (if (and cperl-electric-parens-mark
-				(cperl-mark-active)
+				(region-active-p)
 				(> (mark) (point)))
 			   (save-excursion
 			     (goto-char (mark))
 			     (point-marker))
 			 nil)))
-	pos after)
+	pos)
     (and (cperl-val 'cperl-electric-lbrace-space)
 	 (eq (preceding-char) ?$)
 	 (save-excursion
@@ -2130,9 +2192,8 @@ char is \"{\", insert extra newline before only if
   "Insert an opening parenthesis or a matching pair of parentheses.
 See `cperl-electric-parens'."
   (interactive "P")
-  (let ((beg (point-at-bol))
-	(other-end (if (and cperl-electric-parens-mark
-			    (cperl-mark-active)
+  (let ((other-end (if (and cperl-electric-parens-mark
+			    (region-active-p)
 			    (> (mark) (point)))
 		       (save-excursion
 			 (goto-char (mark))
@@ -2142,7 +2203,6 @@ See `cperl-electric-parens'."
 	     (memq last-command-event
 		   (append cperl-electric-parens-string nil))
 	     (>= (save-excursion (cperl-to-comment-or-eol) (point)) (point))
-	     ;;(not (save-excursion (search-backward "#" beg t)))
 	     (if (eq last-command-event ?<)
 		 (progn
 		   ;; This code is too electric, see Bug#3943.
@@ -2167,12 +2227,11 @@ See `cperl-electric-parens'."
 If not, or if we are not at the end of marking range, would self-insert.
 Affected by `cperl-electric-parens'."
   (interactive "P")
-  (let ((beg (point-at-bol))
-	(other-end (if (and cperl-electric-parens-mark
+  (let ((other-end (if (and cperl-electric-parens-mark
 			    (cperl-val 'cperl-electric-parens)
 			    (memq last-command-event
 				  (append cperl-electric-parens-string nil))
-			    (cperl-mark-active)
+			    (region-active-p)
 			    (< (mark) (point)))
 		       (mark)
 		     nil))
@@ -2181,7 +2240,6 @@ Affected by `cperl-electric-parens'."
 	     (cperl-val 'cperl-electric-parens)
 	     (memq last-command-event '( ?\) ?\] ?\} ?\> ))
 	     (>= (save-excursion (cperl-to-comment-or-eol) (point)) (point))
-	     ;;(not (save-excursion (search-backward "#" beg t)))
 	     )
 	(progn
 	  (self-insert-command (prefix-numeric-value arg))
@@ -2200,7 +2258,7 @@ Affected by `cperl-electric-parens'."
   "Insert a construction appropriate after a keyword.
 Help message may be switched off by setting `cperl-message-electric-keyword'
 to nil."
-  (let ((beg (point-at-bol))
+  (let ((beg (line-beginning-position))
 	(dollar (and (eq last-command-event ?$)
 		     (eq this-command 'self-insert-command)))
 	(delete (and (memq last-command-event '(?\s ?\n ?\t ?\f))
@@ -2221,6 +2279,7 @@ to nil."
 	 (save-excursion (or (not (re-search-backward "^=" nil t))
 			     (or
 			      (looking-at "=cut")
+			      (looking-at "=end")
 			      (and cperl-use-syntax-table-text-property
 				   (not (eq (get-text-property (point)
 							       'syntax-type)
@@ -2262,7 +2321,7 @@ to nil."
 		   (delete-char -1)
 		   (delete-char 1))))
 	   (if delete
-	       (cperl-putback-char cperl-del-back-ch))
+               (push cperl-del-back-ch unread-command-events))
 	   (if cperl-message-electric-keyword
 	       (message "Precede char by C-q to avoid expansion"))))))
 
@@ -2295,7 +2354,7 @@ to nil."
 	     (get-text-property (point) 'in-pod)
 	     (cperl-after-expr-p nil "{;:")
 	     (and (re-search-backward "\\(\\`\n?\\|^\n\\)=\\sw+" (point-min) t)
-		  (not (looking-at "\n*=cut"))
+		  (not (or (looking-at "\n*=cut") (looking-at "\n*=end")))
 		  (or (not cperl-use-syntax-table-text-property)
 		      (eq (get-text-property (point) 'syntax-type) 'pod))))))
 	 (progn
@@ -2336,15 +2395,15 @@ to nil."
 		 (end-of-line)
 		 (setq really-delete t)))
 	   (if (and delete really-delete)
-	       (cperl-putback-char cperl-del-back-ch))))))
+               (push cperl-del-back-ch unread-command-events))))))
 
 (defun cperl-electric-else ()
   "Insert a construction appropriate after a keyword.
 Help message may be switched off by setting `cperl-message-electric-keyword'
 to nil."
-  (let ((beg (point-at-bol)))
+  (let ((beg (line-beginning-position)))
     (and (save-excursion
-	   (backward-sexp 1)
+           (skip-chars-backward "[:alpha:]")
 	   (cperl-after-expr-p nil "{;:"))
 	 (save-excursion
 	   (not
@@ -2353,6 +2412,7 @@ to nil."
 	     beg t)))
 	 (save-excursion (or (not (re-search-backward "^=" nil t))
 			     (looking-at "=cut")
+			     (looking-at "=end")
 			     (and cperl-use-syntax-table-text-property
 				  (not (eq (get-text-property (point)
 							      'syntax-type)
@@ -2372,7 +2432,7 @@ to nil."
 	   (cperl-indent-line)
 	   (forward-line -1)
 	   (cperl-indent-line)
-	   (cperl-putback-char cperl-del-back-ch)
+           (push cperl-del-back-ch unread-command-events)
 	   (setq this-command 'cperl-electric-else)
 	   (if cperl-message-electric-keyword
 	       (message "Precede char by C-q to avoid expansion"))))))
@@ -2381,8 +2441,8 @@ to nil."
   "Go to end of line, open a new line and indent appropriately.
 If in POD, insert appropriate lines."
   (interactive)
-  (let ((beg (point-at-bol))
-	(end (point-at-eol))
+  (let ((beg (line-beginning-position))
+        (end (line-end-position))
 	(pos (point)) start over cut res)
     (if (and				; Check if we need to split:
 					; i.e., on a boundary and inside "{...}"
@@ -2452,7 +2512,7 @@ If in POD, insert appropriate lines."
 	  ;; We are after \n now, so look for the rest
 	  (if (looking-at "\\(\\`\n?\\|\n\\)=\\sw+")
 	      (progn
-		(setq cut (looking-at "\\(\\`\n?\\|\n\\)=cut\\>"))
+		(setq cut (looking-at "\\(\\`\n?\\|\n\\)=\\(cut\\|end\\)\\>"))
 		(setq over (looking-at "\\(\\`\n?\\|\n\\)=over\\>"))
 		t)))
 	(if (and over
@@ -2460,8 +2520,8 @@ If in POD, insert appropriate lines."
 		   (forward-paragraph -1)
 		   (forward-word-strictly 1)
 		   (setq pos (point))
-		   (setq cut (buffer-substring (point) (point-at-eol)))
-		   (delete-char (- (point-at-eol) (point)))
+                   (setq cut (buffer-substring (point) (line-end-position)))
+                   (delete-char (- (line-end-position) (point)))
 		   (setq res (expand-abbrev))
 		   (save-excursion
 		     (goto-char pos)
@@ -2570,7 +2630,8 @@ Will untabify if `cperl-electric-backspace-untabify' is non-nil."
 
 (put 'cperl-electric-backspace 'delete-selection 'supersede)
 
-(defun cperl-inside-parens-p ()		;; NOT USED????
+(defun cperl-inside-parens-p ()
+  (declare (obsolete nil "28.1")) ; not used
   (condition-case ()
       (save-excursion
 	(save-restriction
@@ -2591,7 +2652,7 @@ means indent rigidly all the lines of the expression starting after point
 so that this line becomes properly indented.
 The relative indentation among the lines of the expression are preserved."
   (interactive "P")
-  (cperl-update-syntaxification (point) (point))
+  (cperl-update-syntaxification (point))
   (if whole-exp
       ;; If arg, always indent this line as Perl
       ;; and shift remaining lines of expression the same amount.
@@ -2620,11 +2681,10 @@ The relative indentation among the lines of the expression are preserved."
 Return the amount the indentation changed by."
   (let ((case-fold-search nil)
 	(pos (- (point-max) (point)))
-	indent i beg shift-amt)
+	indent i shift-amt)
     (setq indent (cperl-calculate-indent parse-data)
 	  i indent)
     (beginning-of-line)
-    (setq beg (point))
     (cond ((or (eq indent nil) (eq indent t))
 	   (setq indent (current-indentation) i nil))
 	  ;;((eq indent t)    ; Never?
@@ -2634,8 +2694,9 @@ Return the amount the indentation changed by."
 	  (t
 	   (skip-chars-forward " \t")
 	   (if (listp indent) (setq indent (car indent)))
-	   (cond ((and (looking-at "[A-Za-z_][A-Za-z_0-9]*:[^:]")
-		       (not (looking-at "[smy]:\\|tr:")))
+	   (cond ((and (looking-at (rx (sequence (eval cperl--label-rx)
+                                                 (not (in ":")))))
+                       (not (looking-at (rx (eval cperl--false-label-rx)))))
 		  (and (> indent 0)
 		       (setq indent (max cperl-min-label-indent
 					 (+ indent cperl-label-offset)))))
@@ -2651,8 +2712,8 @@ Return the amount the indentation changed by."
 	    (zerop shift-amt))
 	(if (> (- (point-max) pos) (point))
 	    (goto-char (- (point-max) pos)))
-      ;;;(delete-region beg (point))
-      ;;;(indent-to indent)
+      ;;(delete-region beg (point))
+      ;;(indent-to indent)
       (cperl-make-indent indent)
       ;; If initial point was within line's indentation,
       ;; position after the indentation.  Else stay at same point in text.
@@ -2667,22 +2728,26 @@ Return the amount the indentation changed by."
 	     '(?w ?_))
        (progn
 	 (backward-sexp)
-	 (looking-at "[a-zA-Z_][a-zA-Z0-9_]*:[^:]"))))
+         (looking-at (rx (sequence (eval cperl--label-rx)
+                                   (not (in ":"))))))))
 
 (defun cperl-get-state (&optional parse-start start-state)
-  ;; returns list (START STATE DEPTH PRESTART),
-  ;; START is a good place to start parsing, or equal to
-  ;; PARSE-START if preset,
-  ;; STATE is what is returned by `parse-partial-sexp'.
-  ;; DEPTH is true is we are immediately after end of block
-  ;; which contains START.
-  ;; PRESTART is the position basing on which START was found.
+  "Return list (START STATE DEPTH PRESTART).
+START is a good place to start parsing, or equal to
+PARSE-START if preset.
+STATE is what is returned by `parse-partial-sexp'.
+DEPTH is true is we are immediately after end of block
+which contains START.
+PRESTART is the position basing on which START was found."
   (save-excursion
     (let ((start-point (point)) depth state start prestart)
       (if (and parse-start
 	       (<= parse-start start-point))
 	  (goto-char parse-start)
 	(beginning-of-defun)
+        (when (cperl-declaration-header-p (point))
+          (goto-char (cperl-beginning-of-property (point) 'syntax-type))
+          (beginning-of-line))
 	(setq start-state nil))
       (setq prestart (point))
       (if start-state nil
@@ -2705,22 +2770,22 @@ Return the amount the indentation changed by."
 (defun cperl-beginning-of-property (p prop &optional lim)
   "Given that P has a property PROP, find where the property starts.
 Will not look before LIM."
-  ;;; XXXX What to do at point-max???
+;; XXXX What to do at point-max???
   (or (previous-single-property-change (cperl-1+ p) prop lim)
       (point-min))
-;;;  (cond ((eq p (point-min))
-;;;	 p)
-;;;	((and lim (<= p lim))
-;;;	 p)
-;;;	((not (get-text-property (1- p) prop))
-;;;	 p)
-;;;	(t (or (previous-single-property-change p look-prop lim)
-;;;	       (point-min))))
+  ;; (cond ((eq p (point-min))
+  ;;        p)
+  ;;       ((and lim (<= p lim))
+  ;;        p)
+  ;;       ((not (get-text-property (1- p) prop))
+  ;;        p)
+  ;;       (t (or (previous-single-property-change p look-prop lim)
+  ;;              (point-min))))
   )
 
 (defun cperl-sniff-for-indent (&optional parse-data) ; was parse-start
   ;; the sniffer logic to understand what the current line MEANS.
-  (cperl-update-syntaxification (point) (point))
+  (cperl-update-syntaxification (point))
   (let ((res (get-text-property (point) 'syntax-type)))
     (save-excursion
       (cond
@@ -2819,6 +2884,7 @@ Will not look before LIM."
 		   ;; in which case this line is the first argument decl.
 		   (skip-chars-forward " \t")
 		   (cperl-backward-to-noncomment (or old-indent (point-min)))
+                   ;; Determine whether point is between statements
 		   (setq state
 			 (or (bobp)
 			     (eq (point) old-indent) ; old-indent was at comment
@@ -2827,13 +2893,18 @@ Will not look before LIM."
 			     (and (eq (preceding-char) ?\})
 				  (cperl-after-block-and-statement-beg
 				   (point-min))) ; Was start - too close
+                             (and char-after (char-equal char-after ?{)
+                                  (save-excursion (cperl-block-declaration-p)))
 			     (memq char-after (append ")]}" nil))
 			     (and (eq (preceding-char) ?\:) ; label
 				  (progn
 				    (forward-sexp -1)
 				    (skip-chars-backward " \t")
-				    (looking-at "[ \t]*[a-zA-Z_][a-zA-Z_0-9]*[ \t]*:")))
-			     (get-text-property (point) 'first-format-line)))
+				    (looking-at
+                                     (rx (sequence (0+ blank)
+                                                   (eval cperl--label-rx))))))
+			     (get-text-property (1- (point)) 'first-format-line)
+                             (equal (get-text-property (point) 'syntax-type) 'format)))
 
 		   ;; Look at previous line that's at column 0
 		   ;; to determine whether we are in top-level decls
@@ -2870,12 +2941,13 @@ Will not look before LIM."
 		   ;; Back up over label lines, since they don't
 		   ;; affect whether our line is a continuation.
 		   ;; (Had \, too)
-		   (while;;(or (eq (preceding-char) ?\,)
-		       (and (eq (preceding-char) ?:)
-			    (or;;(eq (char-after (- (point) 2)) ?\') ; ????
-			     (memq (char-syntax (char-after (- (point) 2)))
-				   '(?w ?_))))
-		     ;;)
+                   (while (save-excursion
+                            (and (eq (preceding-char) ?:)
+                                 (re-search-backward
+                                  (rx (sequence (eval cperl--label-rx) point))
+                                  nil t)
+                                 ;; Ignore if in comment or RE
+                                 (not (nth 3 (syntax-ppss)))))
 		     ;; This is always FALSE?
 		     (if (eq (preceding-char) ?\,)
 			 ;; Will go to beginning of line, essentially.
@@ -2885,11 +2957,17 @@ Will not look before LIM."
 		     (cperl-backward-to-noncomment containing-sexp))
 		   ;; Now we get non-label preceding the indent point
 		   (if (not (or (eq (1- (point)) containing-sexp)
+                                (and cperl-indent-parens-as-block
+                                     (not is-block))
+                                (and (looking-at "{")
+                                     (save-excursion (cperl-block-declaration-p)))
 				(memq (preceding-char)
 				      (append (if is-block " ;{" " ,;{") '(nil)))
 				(and (eq (preceding-char) ?\})
 				     (cperl-after-block-and-statement-beg
 				      containing-sexp))
+                                (and (cperl-declaration-header-p indent-point)
+                                     (not (cperl-declaration-header-p char-after-pos)))
 				(get-text-property (point) 'first-format-line)))
 		       ;; This line is continuation of preceding line's statement;
 		       ;; indent  `cperl-continued-statement-offset'  more than the
@@ -2913,10 +2991,17 @@ Will not look before LIM."
 			(forward-char 1)
 			(let ((colon-line-end 0))
 			  (while
-			      (progn (skip-chars-forward " \t\n")
-				     ;; s: foo : bar :x is NOT label
-				     (and (looking-at "#\\|\\([a-zA-Z0-9_$]+\\):[^:]\\|=[a-zA-Z]")
-					  (not (looking-at "[sym]:\\|tr:"))))
+			      (progn
+                                (skip-chars-forward " \t\n")
+				;; s: foo : bar :x is NOT label
+                                (and (looking-at
+                                      (rx
+                                       (or "#"
+                                           (sequence (eval cperl--label-rx)
+                                                     (not (in ":")))
+                                           (sequence "=" (in "a-zA-Z")))))
+				     (not (looking-at
+                                           (rx (eval cperl--false-label-rx))))))
 			    ;; Skip over comments and labels following openbrace.
 			    (cond ((= (following-char) ?\#)
 				   (forward-line 1))
@@ -2926,7 +3011,7 @@ Will not look before LIM."
 					(point-max)))) ; do not loop if no syntaxification
 				  ;; label:
 				  (t
-				   (setq colon-line-end (point-at-eol))
+                                   (setq colon-line-end (line-end-position))
 				   (search-forward ":"))))
 			  ;; We are at beginning of code (NOT label or comment)
 			  ;; First, the following code counts
@@ -2960,15 +3045,15 @@ Will not look before LIM."
 			;; first thing on the line, say in the case of
 			;; anonymous sub in a hash.
 			(if (and;; Is it a sub in group starting on this line?
-			     (cond ((get-text-property (point) 'attrib-group)
-				    (goto-char (cperl-beginning-of-property
-						(point) 'attrib-group)))
-				   ((eq (preceding-char) ?b)
-				    (forward-sexp -1)
-				    (looking-at "sub\\>")))
+                             cperl-indent-subs-specially
+			     (cond
+                              ((cperl-declaration-header-p (point))
+                               (goto-char
+                                (cperl-beginning-of-property (point)
+                                                             'syntax-type))))
 			     (setq p (nth 1 ; start of innermost containing list
 					  (parse-partial-sexp
-					   (point-at-bol)
+                                           (line-beginning-position)
 					   (point)))))
 			    (progn
 			      (goto-char (1+ p)) ; enclosing block on the same line
@@ -2999,7 +3084,10 @@ Will not look before LIM."
   "Alist of indentation rules for CPerl mode.
 The values mean:
   nil: do not indent;
-  number: add this amount of indentation.")
+  FUNCTION: a function to compute the indentation to use.
+    Takes a single argument which provides the currently computed indentation
+    context, and should return the column to which to indent.
+  NUMBER: add this amount of indentation.")
 
 (defun cperl-calculate-indent (&optional parse-data) ; was parse-start
   "Return appropriate indentation for current line as Perl code.
@@ -3018,17 +3106,22 @@ and closing parentheses and brackets."
        ((vectorp i)
 	(setq what (assoc (elt i 0) cperl-indent-rules-alist))
 	(cond
-	 (what (cadr what))		; Load from table
+         (what
+          (let ((action (cadr what)))
+            (cond ((functionp action) (apply action (list i parse-data)))
+                  ((numberp action) (+ action (current-indentation)))
+                  (t action))))
 	 ;;
 	 ;; Indenters for regular expressions with //x and qw()
 	 ;;
 	 ((eq 'REx-part2 (elt i 0)) ;; [self start] start of /REP in s//REP/x
 	  (goto-char (elt i 1))
-	  (condition-case nil	; Use indentation of the 1st part
-	      (forward-sexp -1))
+          (condition-case nil
+	      (forward-sexp -1) 	; Use indentation of the 1st part
+            (error nil))
 	  (current-column))
 	 ((eq 'indentable (elt i 0))	; Indenter for REGEXP qw() etc
-	  (cond		       ;;; [indentable terminator start-pos is-block]
+	  (cond		       ; [indentable terminator start-pos is-block]
 	   ((eq 'terminator (elt i 1)) ; Lone terminator of "indentable string"
 	    (goto-char (elt i 2))	; After opening parens
 	    (1- (current-column)))
@@ -3101,6 +3194,9 @@ and closing parentheses and brackets."
 	  (goto-char (elt i 1))		; statement-start
 	  (+ (if (or (memq (elt i 2) (append "}])" nil)) ; char-after
                      (eq 'continuation ; do not stagger continuations
+                         ;; FIXME: This clobbers the syntax state in parse-data
+                         ;; for the *following* lines and makes the state
+                         ;; useless for indent-region -- haj 2023-06-30
                          (elt (cperl-sniff-for-indent parse-data) 0)))
 		 0 ; Closing parenthesis or continuation of a continuation
 	       cperl-continued-statement-offset)
@@ -3111,7 +3207,8 @@ and closing parentheses and brackets."
 	       ;; Now it is a hash reference
 	       (+ cperl-indent-level cperl-close-paren-offset))
 	     ;; Labels do not take :: ...
-	     (if (looking-at "\\(\\w\\|_\\)+[ \t]*:")
+	     (if (and (looking-at "\\(\\w\\|_\\)+[ \t]*:[^:]")
+                      (not (looking-at (rx (eval cperl--false-label-rx)))))
 		 (if (> (current-indentation) cperl-min-label-indent)
 		     (- (current-indentation) cperl-label-offset)
 		   ;; Do not move `parse-data', this should
@@ -3167,7 +3264,10 @@ and closing parentheses and brackets."
 		 ;; If line starts with label, calculate label indentation
 		 (if (save-excursion
 		       (beginning-of-line)
-		       (looking-at "[ \t]*[a-zA-Z_][a-zA-Z_0-9]*:[^:]"))
+                       (looking-at (rx
+                                    (sequence (0+ space)
+                                              (eval cperl--label-rx)
+                                              (not (in ":"))))))
 		     (if (> (current-indentation) cperl-min-label-indent)
 			 (- (current-indentation) cperl-label-offset)
 		       ;; Do not move `parse-data', this should
@@ -3180,9 +3280,10 @@ and closing parentheses and brackets."
 	(error "Got strange value of indent: %s" i))))))
 
 (defun cperl-calculate-indent-within-comment ()
-  "Return the indentation amount for line, assuming that
-the current line is to be regarded as part of a block comment."
-  (let (end star-start)
+  "Return the indentation amount for line.
+Assume that the current line is to be regarded as part of a block
+comment."
+  (let (end)
     (save-excursion
       (beginning-of-line)
       (skip-chars-forward " \t")
@@ -3200,9 +3301,9 @@ the current line is to be regarded as part of a block comment."
 Returns true if comment is found.  In POD will not move the point."
   ;; If the line is inside other syntax groups (qq-style strings, HERE-docs)
   ;; then looks for literal # or end-of-line.
-  (let (state stop-in cpoint (lim (point-at-eol)) pr e)
+  (let (state stop-in cpoint (lim (line-end-position)) pr e)
     (or cperl-font-locking
-	(cperl-update-syntaxification lim lim))
+	(cperl-update-syntaxification lim))
     (beginning-of-line)
     (if (setq pr (get-text-property (point) 'syntax-type))
 	(setq e (next-single-property-change (point) 'syntax-type nil (point-max))))
@@ -3228,12 +3329,12 @@ Returns true if comment is found.  In POD will not move the point."
 		  (cond
 		   ((looking-at "\\(s\\|tr\\)\\>")
 		    (or (re-search-forward
-			 "\\=\\w+[ \t]*#\\([^\n\\\\#]\\|\\\\[\\\\#]\\)*#\\([^\n\\\\#]\\|\\\\[\\\\#]\\)*"
+			 "\\=\\w+[ \t]*#\\([^\n\\#]\\|\\\\[\\#]\\)*#\\([^\n\\#]\\|\\\\[\\#]\\)*"
 			 lim 'move)
 			(setq stop-in t)))
 		   ((looking-at "\\(m\\|q\\([qxwr]\\)?\\)\\>")
 		    (or (re-search-forward
-			 "\\=\\w+[ \t]*#\\([^\n\\\\#]\\|\\\\[\\\\#]\\)*#"
+			 "\\=\\w+[ \t]*#\\([^\n\\#]\\|\\\\[\\#]\\)*#"
 			 lim 'move)
 			(setq stop-in t)))
 		   (t			; It was fair comment
@@ -3257,31 +3358,357 @@ Returns true if comment is found.  In POD will not move the point."
     (while (re-search-forward "^\\s(" e 'to-end)
       (put-text-property (1- (point)) (point) 'syntax-table cperl-st-punct))))
 
-(defun cperl-commentify (bb e string &optional noface)
-  (if cperl-use-syntax-table-text-property
-      (if (eq noface 'n)		; Only immediate
-	  nil
-	;; We suppose that e is _after_ the end of construction, as after eol.
-	(setq string (if string cperl-st-sfence cperl-st-cfence))
-	(if (> bb (- e 2))
+(defun cperl-commentify (begin end string)
+  "Mark text from BEGIN to END as generic string or comment.
+Mark as generic string if STRING, as generic comment otherwise.
+A single character is marked as punctuation and directly
+fontified.  Do nothing if BEGIN and END are equal.  If
+`cperl-use-syntax-table-text-property' is nil, just fontify."
+  (if (and cperl-use-syntax-table-text-property
+           (> end begin))
+      (progn
+        (setq string (if string cperl-st-sfence cperl-st-cfence))
+        (if (> begin (- end 2))
 	    ;; one-char string/comment?!
-	    (cperl-modify-syntax-type bb cperl-st-punct)
-	  (cperl-modify-syntax-type bb string)
-	  (cperl-modify-syntax-type (1- e) string))
-	(if (and (eq string cperl-st-sfence) (> (- e 2) bb))
-	    (put-text-property (1+ bb) (1- e)
+	    (cperl-modify-syntax-type begin cperl-st-punct)
+          (cperl-modify-syntax-type begin string)
+          (cperl-modify-syntax-type (1- end) string))
+        (if (and (eq string cperl-st-sfence) (> (- end 2) begin))
+	    (put-text-property (1+ begin) (1- end)
 			       'syntax-table cperl-string-syntax-table))
-	(cperl-protect-defun-start bb e))
+        (cperl-protect-defun-start begin end))
     ;; Fontify
-    (or noface
-	(not cperl-pod-here-fontify)
-	(put-text-property bb e 'face (if string 'font-lock-string-face
-					'font-lock-comment-face)))))
+    (when cperl-pod-here-fontify
+      (put-text-property begin end 'face (if string 'font-lock-string-face
+				           'font-lock-comment-face)))))
 
-(defvar cperl-starters '(( ?\( . ?\) )
-			 ( ?\[ . ?\] )
-			 ( ?\{ . ?\} )
-			 ( ?\< . ?\> )))
+(defvar cperl--basic-paired-delimiters '(( ?\( . ?\) )
+			                 ( ?\[ . ?\] )
+			                 ( ?\{ . ?\} )
+			                 ( ?\< . ?\> )))
+;; -------- The following definition is generated code from  "perlop"
+;; https://metacpan.org/release/HAARG/perl-5.40.0/view/pod/perlop.pod
+(defvar cperl--extra-paired-delimiters '(( ?\N{U+0028} . ?\N{U+0029} )
+                                         ( ?\N{U+003C} . ?\N{U+003E} )
+                                         ( ?\N{U+005B} . ?\N{U+005D} )
+                                         ( ?\N{U+007B} . ?\N{U+007D} )
+                                         ( ?\N{U+00AB} . ?\N{U+00BB} )
+                                         ( ?\N{U+00BB} . ?\N{U+00AB} )
+                                         ( ?\N{U+0F3A} . ?\N{U+0F3B} )
+                                         ( ?\N{U+0F3C} . ?\N{U+0F3D} )
+                                         ( ?\N{U+169B} . ?\N{U+169C} )
+                                         ( ?\N{U+2018} . ?\N{U+2019} )
+                                         ( ?\N{U+2019} . ?\N{U+2018} )
+                                         ( ?\N{U+201C} . ?\N{U+201D} )
+                                         ( ?\N{U+201D} . ?\N{U+201C} )
+                                         ( ?\N{U+2035} . ?\N{U+2032} )
+                                         ( ?\N{U+2036} . ?\N{U+2033} )
+                                         ( ?\N{U+2037} . ?\N{U+2034} )
+                                         ( ?\N{U+2039} . ?\N{U+203A} )
+                                         ( ?\N{U+203A} . ?\N{U+2039} )
+                                         ( ?\N{U+2045} . ?\N{U+2046} )
+                                         ( ?\N{U+204D} . ?\N{U+204C} )
+                                         ( ?\N{U+207D} . ?\N{U+207E} )
+                                         ( ?\N{U+208D} . ?\N{U+208E} )
+                                         ( ?\N{U+2192} . ?\N{U+2190} )
+                                         ( ?\N{U+219B} . ?\N{U+219A} )
+                                         ( ?\N{U+219D} . ?\N{U+219C} )
+                                         ( ?\N{U+21A0} . ?\N{U+219E} )
+                                         ( ?\N{U+21A3} . ?\N{U+21A2} )
+                                         ( ?\N{U+21A6} . ?\N{U+21A4} )
+                                         ( ?\N{U+21AA} . ?\N{U+21A9} )
+                                         ( ?\N{U+21AC} . ?\N{U+21AB} )
+                                         ( ?\N{U+21B1} . ?\N{U+21B0} )
+                                         ( ?\N{U+21B3} . ?\N{U+21B2} )
+                                         ( ?\N{U+21C0} . ?\N{U+21BC} )
+                                         ( ?\N{U+21C1} . ?\N{U+21BD} )
+                                         ( ?\N{U+21C9} . ?\N{U+21C7} )
+                                         ( ?\N{U+21CF} . ?\N{U+21CD} )
+                                         ( ?\N{U+21D2} . ?\N{U+21D0} )
+                                         ( ?\N{U+21DB} . ?\N{U+21DA} )
+                                         ( ?\N{U+21DD} . ?\N{U+21DC} )
+                                         ( ?\N{U+21E2} . ?\N{U+21E0} )
+                                         ( ?\N{U+21E5} . ?\N{U+21E4} )
+                                         ( ?\N{U+21E8} . ?\N{U+21E6} )
+                                         ( ?\N{U+21F4} . ?\N{U+2B30} )
+                                         ( ?\N{U+21F6} . ?\N{U+2B31} )
+                                         ( ?\N{U+21F8} . ?\N{U+21F7} )
+                                         ( ?\N{U+21FB} . ?\N{U+21FA} )
+                                         ( ?\N{U+21FE} . ?\N{U+21FD} )
+                                         ( ?\N{U+2208} . ?\N{U+220B} )
+                                         ( ?\N{U+2209} . ?\N{U+220C} )
+                                         ( ?\N{U+220A} . ?\N{U+220D} )
+                                         ( ?\N{U+2264} . ?\N{U+2265} )
+                                         ( ?\N{U+2266} . ?\N{U+2267} )
+                                         ( ?\N{U+2268} . ?\N{U+2269} )
+                                         ( ?\N{U+226A} . ?\N{U+226B} )
+                                         ( ?\N{U+226E} . ?\N{U+226F} )
+                                         ( ?\N{U+2270} . ?\N{U+2271} )
+                                         ( ?\N{U+2272} . ?\N{U+2273} )
+                                         ( ?\N{U+2274} . ?\N{U+2275} )
+                                         ( ?\N{U+227A} . ?\N{U+227B} )
+                                         ( ?\N{U+227C} . ?\N{U+227D} )
+                                         ( ?\N{U+227E} . ?\N{U+227F} )
+                                         ( ?\N{U+2280} . ?\N{U+2281} )
+                                         ( ?\N{U+2282} . ?\N{U+2283} )
+                                         ( ?\N{U+2284} . ?\N{U+2285} )
+                                         ( ?\N{U+2286} . ?\N{U+2287} )
+                                         ( ?\N{U+2288} . ?\N{U+2289} )
+                                         ( ?\N{U+228A} . ?\N{U+228B} )
+                                         ( ?\N{U+22A3} . ?\N{U+22A2} )
+                                         ( ?\N{U+22A6} . ?\N{U+2ADE} )
+                                         ( ?\N{U+22A8} . ?\N{U+2AE4} )
+                                         ( ?\N{U+22A9} . ?\N{U+2AE3} )
+                                         ( ?\N{U+22B0} . ?\N{U+22B1} )
+                                         ( ?\N{U+22D0} . ?\N{U+22D1} )
+                                         ( ?\N{U+22D6} . ?\N{U+22D7} )
+                                         ( ?\N{U+22D8} . ?\N{U+22D9} )
+                                         ( ?\N{U+22DC} . ?\N{U+22DD} )
+                                         ( ?\N{U+22DE} . ?\N{U+22DF} )
+                                         ( ?\N{U+22E0} . ?\N{U+22E1} )
+                                         ( ?\N{U+22E6} . ?\N{U+22E7} )
+                                         ( ?\N{U+22E8} . ?\N{U+22E9} )
+                                         ( ?\N{U+22F2} . ?\N{U+22FA} )
+                                         ( ?\N{U+22F3} . ?\N{U+22FB} )
+                                         ( ?\N{U+22F4} . ?\N{U+22FC} )
+                                         ( ?\N{U+22F6} . ?\N{U+22FD} )
+                                         ( ?\N{U+22F7} . ?\N{U+22FE} )
+                                         ( ?\N{U+2308} . ?\N{U+2309} )
+                                         ( ?\N{U+230A} . ?\N{U+230B} )
+                                         ( ?\N{U+2326} . ?\N{U+232B} )
+                                         ( ?\N{U+2348} . ?\N{U+2347} )
+                                         ( ?\N{U+23ED} . ?\N{U+23EE} )
+                                         ( ?\N{U+261B} . ?\N{U+261A} )
+                                         ( ?\N{U+261E} . ?\N{U+261C} )
+                                         ( ?\N{U+269E} . ?\N{U+269F} )
+                                         ( ?\N{U+2768} . ?\N{U+2769} )
+                                         ( ?\N{U+276A} . ?\N{U+276B} )
+                                         ( ?\N{U+276C} . ?\N{U+276D} )
+                                         ( ?\N{U+276E} . ?\N{U+276F} )
+                                         ( ?\N{U+2770} . ?\N{U+2771} )
+                                         ( ?\N{U+2772} . ?\N{U+2773} )
+                                         ( ?\N{U+2774} . ?\N{U+2775} )
+                                         ( ?\N{U+27C3} . ?\N{U+27C4} )
+                                         ( ?\N{U+27C5} . ?\N{U+27C6} )
+                                         ( ?\N{U+27C8} . ?\N{U+27C9} )
+                                         ( ?\N{U+27DE} . ?\N{U+27DD} )
+                                         ( ?\N{U+27E6} . ?\N{U+27E7} )
+                                         ( ?\N{U+27E8} . ?\N{U+27E9} )
+                                         ( ?\N{U+27EA} . ?\N{U+27EB} )
+                                         ( ?\N{U+27EC} . ?\N{U+27ED} )
+                                         ( ?\N{U+27EE} . ?\N{U+27EF} )
+                                         ( ?\N{U+27F4} . ?\N{U+2B32} )
+                                         ( ?\N{U+27F6} . ?\N{U+27F5} )
+                                         ( ?\N{U+27F9} . ?\N{U+27F8} )
+                                         ( ?\N{U+27FC} . ?\N{U+27FB} )
+                                         ( ?\N{U+27FE} . ?\N{U+27FD} )
+                                         ( ?\N{U+27FF} . ?\N{U+2B33} )
+                                         ( ?\N{U+2900} . ?\N{U+2B34} )
+                                         ( ?\N{U+2901} . ?\N{U+2B35} )
+                                         ( ?\N{U+2903} . ?\N{U+2902} )
+                                         ( ?\N{U+2905} . ?\N{U+2B36} )
+                                         ( ?\N{U+2907} . ?\N{U+2906} )
+                                         ( ?\N{U+290D} . ?\N{U+290C} )
+                                         ( ?\N{U+290F} . ?\N{U+290E} )
+                                         ( ?\N{U+2910} . ?\N{U+2B37} )
+                                         ( ?\N{U+2911} . ?\N{U+2B38} )
+                                         ( ?\N{U+2914} . ?\N{U+2B39} )
+                                         ( ?\N{U+2915} . ?\N{U+2B3A} )
+                                         ( ?\N{U+2916} . ?\N{U+2B3B} )
+                                         ( ?\N{U+2917} . ?\N{U+2B3C} )
+                                         ( ?\N{U+2918} . ?\N{U+2B3D} )
+                                         ( ?\N{U+291A} . ?\N{U+2919} )
+                                         ( ?\N{U+291C} . ?\N{U+291B} )
+                                         ( ?\N{U+291E} . ?\N{U+291D} )
+                                         ( ?\N{U+2920} . ?\N{U+291F} )
+                                         ( ?\N{U+2933} . ?\N{U+2B3F} )
+                                         ( ?\N{U+2937} . ?\N{U+2936} )
+                                         ( ?\N{U+2945} . ?\N{U+2946} )
+                                         ( ?\N{U+2947} . ?\N{U+2B3E} )
+                                         ( ?\N{U+2953} . ?\N{U+2952} )
+                                         ( ?\N{U+2957} . ?\N{U+2956} )
+                                         ( ?\N{U+295B} . ?\N{U+295A} )
+                                         ( ?\N{U+295F} . ?\N{U+295E} )
+                                         ( ?\N{U+2964} . ?\N{U+2962} )
+                                         ( ?\N{U+296C} . ?\N{U+296A} )
+                                         ( ?\N{U+296D} . ?\N{U+296B} )
+                                         ( ?\N{U+2971} . ?\N{U+2B40} )
+                                         ( ?\N{U+2972} . ?\N{U+2B41} )
+                                         ( ?\N{U+2974} . ?\N{U+2B4B} )
+                                         ( ?\N{U+2975} . ?\N{U+2B42} )
+                                         ( ?\N{U+2979} . ?\N{U+297B} )
+                                         ( ?\N{U+2983} . ?\N{U+2984} )
+                                         ( ?\N{U+2985} . ?\N{U+2986} )
+                                         ( ?\N{U+2987} . ?\N{U+2988} )
+                                         ( ?\N{U+2989} . ?\N{U+298A} )
+                                         ( ?\N{U+298B} . ?\N{U+298C} )
+                                         ( ?\N{U+298D} . ?\N{U+2990} )
+                                         ( ?\N{U+298F} . ?\N{U+298E} )
+                                         ( ?\N{U+2991} . ?\N{U+2992} )
+                                         ( ?\N{U+2993} . ?\N{U+2994} )
+                                         ( ?\N{U+2995} . ?\N{U+2996} )
+                                         ( ?\N{U+2997} . ?\N{U+2998} )
+                                         ( ?\N{U+29A8} . ?\N{U+29A9} )
+                                         ( ?\N{U+29AA} . ?\N{U+29AB} )
+                                         ( ?\N{U+29B3} . ?\N{U+29B4} )
+                                         ( ?\N{U+29C0} . ?\N{U+29C1} )
+                                         ( ?\N{U+29D8} . ?\N{U+29D9} )
+                                         ( ?\N{U+29DA} . ?\N{U+29DB} )
+                                         ( ?\N{U+29FC} . ?\N{U+29FD} )
+                                         ( ?\N{U+2A79} . ?\N{U+2A7A} )
+                                         ( ?\N{U+2A7B} . ?\N{U+2A7C} )
+                                         ( ?\N{U+2A7D} . ?\N{U+2A7E} )
+                                         ( ?\N{U+2A7F} . ?\N{U+2A80} )
+                                         ( ?\N{U+2A81} . ?\N{U+2A82} )
+                                         ( ?\N{U+2A83} . ?\N{U+2A84} )
+                                         ( ?\N{U+2A85} . ?\N{U+2A86} )
+                                         ( ?\N{U+2A87} . ?\N{U+2A88} )
+                                         ( ?\N{U+2A89} . ?\N{U+2A8A} )
+                                         ( ?\N{U+2A8D} . ?\N{U+2A8E} )
+                                         ( ?\N{U+2A95} . ?\N{U+2A96} )
+                                         ( ?\N{U+2A97} . ?\N{U+2A98} )
+                                         ( ?\N{U+2A99} . ?\N{U+2A9A} )
+                                         ( ?\N{U+2A9B} . ?\N{U+2A9C} )
+                                         ( ?\N{U+2A9D} . ?\N{U+2A9E} )
+                                         ( ?\N{U+2A9F} . ?\N{U+2AA0} )
+                                         ( ?\N{U+2AA1} . ?\N{U+2AA2} )
+                                         ( ?\N{U+2AA6} . ?\N{U+2AA7} )
+                                         ( ?\N{U+2AA8} . ?\N{U+2AA9} )
+                                         ( ?\N{U+2AAA} . ?\N{U+2AAB} )
+                                         ( ?\N{U+2AAC} . ?\N{U+2AAD} )
+                                         ( ?\N{U+2AAF} . ?\N{U+2AB0} )
+                                         ( ?\N{U+2AB1} . ?\N{U+2AB2} )
+                                         ( ?\N{U+2AB3} . ?\N{U+2AB4} )
+                                         ( ?\N{U+2AB5} . ?\N{U+2AB6} )
+                                         ( ?\N{U+2AB7} . ?\N{U+2AB8} )
+                                         ( ?\N{U+2AB9} . ?\N{U+2ABA} )
+                                         ( ?\N{U+2ABB} . ?\N{U+2ABC} )
+                                         ( ?\N{U+2ABD} . ?\N{U+2ABE} )
+                                         ( ?\N{U+2ABF} . ?\N{U+2AC0} )
+                                         ( ?\N{U+2AC1} . ?\N{U+2AC2} )
+                                         ( ?\N{U+2AC3} . ?\N{U+2AC4} )
+                                         ( ?\N{U+2AC5} . ?\N{U+2AC6} )
+                                         ( ?\N{U+2AC7} . ?\N{U+2AC8} )
+                                         ( ?\N{U+2AC9} . ?\N{U+2ACA} )
+                                         ( ?\N{U+2ACB} . ?\N{U+2ACC} )
+                                         ( ?\N{U+2ACF} . ?\N{U+2AD0} )
+                                         ( ?\N{U+2AD1} . ?\N{U+2AD2} )
+                                         ( ?\N{U+2AD5} . ?\N{U+2AD6} )
+                                         ( ?\N{U+2AE5} . ?\N{U+22AB} )
+                                         ( ?\N{U+2AF7} . ?\N{U+2AF8} )
+                                         ( ?\N{U+2AF9} . ?\N{U+2AFA} )
+                                         ( ?\N{U+2B46} . ?\N{U+2B45} )
+                                         ( ?\N{U+2B47} . ?\N{U+2B49} )
+                                         ( ?\N{U+2B48} . ?\N{U+2B4A} )
+                                         ( ?\N{U+2B4C} . ?\N{U+2973} )
+                                         ( ?\N{U+2B62} . ?\N{U+2B60} )
+                                         ( ?\N{U+2B6C} . ?\N{U+2B6A} )
+                                         ( ?\N{U+2B72} . ?\N{U+2B70} )
+                                         ( ?\N{U+2B7C} . ?\N{U+2B7A} )
+                                         ( ?\N{U+2B86} . ?\N{U+2B84} )
+                                         ( ?\N{U+2B8A} . ?\N{U+2B88} )
+                                         ( ?\N{U+2B95} . ?\N{U+2B05} )
+                                         ( ?\N{U+2B9A} . ?\N{U+2B98} )
+                                         ( ?\N{U+2B9E} . ?\N{U+2B9C} )
+                                         ( ?\N{U+2BA1} . ?\N{U+2BA0} )
+                                         ( ?\N{U+2BA3} . ?\N{U+2BA2} )
+                                         ( ?\N{U+2BA9} . ?\N{U+2BA8} )
+                                         ( ?\N{U+2BAB} . ?\N{U+2BAA} )
+                                         ( ?\N{U+2BB1} . ?\N{U+2BB0} )
+                                         ( ?\N{U+2BB3} . ?\N{U+2BB2} )
+                                         ( ?\N{U+2BEE} . ?\N{U+2BEC} )
+                                         ( ?\N{U+2E02} . ?\N{U+2E03} )
+                                         ( ?\N{U+2E03} . ?\N{U+2E02} )
+                                         ( ?\N{U+2E04} . ?\N{U+2E05} )
+                                         ( ?\N{U+2E05} . ?\N{U+2E04} )
+                                         ( ?\N{U+2E09} . ?\N{U+2E0A} )
+                                         ( ?\N{U+2E0A} . ?\N{U+2E09} )
+                                         ( ?\N{U+2E0C} . ?\N{U+2E0D} )
+                                         ( ?\N{U+2E0D} . ?\N{U+2E0C} )
+                                         ( ?\N{U+2E11} . ?\N{U+2E10} )
+                                         ( ?\N{U+2E1C} . ?\N{U+2E1D} )
+                                         ( ?\N{U+2E1D} . ?\N{U+2E1C} )
+                                         ( ?\N{U+2E20} . ?\N{U+2E21} )
+                                         ( ?\N{U+2E21} . ?\N{U+2E20} )
+                                         ( ?\N{U+2E22} . ?\N{U+2E23} )
+                                         ( ?\N{U+2E24} . ?\N{U+2E25} )
+                                         ( ?\N{U+2E26} . ?\N{U+2E27} )
+                                         ( ?\N{U+2E28} . ?\N{U+2E29} )
+                                         ( ?\N{U+2E36} . ?\N{U+2E37} )
+                                         ( ?\N{U+2E42} . ?\N{U+201E} )
+                                         ( ?\N{U+2E55} . ?\N{U+2E56} )
+                                         ( ?\N{U+2E57} . ?\N{U+2E58} )
+                                         ( ?\N{U+2E59} . ?\N{U+2E5A} )
+                                         ( ?\N{U+2E5B} . ?\N{U+2E5C} )
+                                         ( ?\N{U+A9C1} . ?\N{U+A9C2} )
+                                         ( ?\N{U+FD3E} . ?\N{U+FD3F} )
+                                         ( ?\N{U+FF62} . ?\N{U+FF63} )
+                                         ( ?\N{U+FFEB} . ?\N{U+FFE9} )
+                                         ( ?\N{U+1D103} . ?\N{U+1D102} )
+                                         ( ?\N{U+1D106} . ?\N{U+1D107} )
+                                         ( ?\N{U+1F57B} . ?\N{U+1F57D} )
+                                         ( ?\N{U+1F599} . ?\N{U+1F598} )
+                                         ( ?\N{U+1F59B} . ?\N{U+1F59A} )
+                                         ( ?\N{U+1F59D} . ?\N{U+1F59C} )
+                                         ( ?\N{U+1F5E6} . ?\N{U+1F5E7} )
+                                         ( ?\N{U+1F802} . ?\N{U+1F800} )
+                                         ( ?\N{U+1F806} . ?\N{U+1F804} )
+                                         ( ?\N{U+1F80A} . ?\N{U+1F808} )
+                                         ( ?\N{U+1F812} . ?\N{U+1F810} )
+                                         ( ?\N{U+1F816} . ?\N{U+1F814} )
+                                         ( ?\N{U+1F81A} . ?\N{U+1F818} )
+                                         ( ?\N{U+1F81E} . ?\N{U+1F81C} )
+                                         ( ?\N{U+1F822} . ?\N{U+1F820} )
+                                         ( ?\N{U+1F826} . ?\N{U+1F824} )
+                                         ( ?\N{U+1F82A} . ?\N{U+1F828} )
+                                         ( ?\N{U+1F82E} . ?\N{U+1F82C} )
+                                         ( ?\N{U+1F832} . ?\N{U+1F830} )
+                                         ( ?\N{U+1F836} . ?\N{U+1F834} )
+                                         ( ?\N{U+1F83A} . ?\N{U+1F838} )
+                                         ( ?\N{U+1F83E} . ?\N{U+1F83C} )
+                                         ( ?\N{U+1F842} . ?\N{U+1F840} )
+                                         ( ?\N{U+1F846} . ?\N{U+1F844} )
+                                         ( ?\N{U+1F852} . ?\N{U+1F850} )
+                                         ( ?\N{U+1F862} . ?\N{U+1F860} )
+                                         ( ?\N{U+1F86A} . ?\N{U+1F868} )
+                                         ( ?\N{U+1F872} . ?\N{U+1F870} )
+                                         ( ?\N{U+1F87A} . ?\N{U+1F878} )
+                                         ( ?\N{U+1F882} . ?\N{U+1F880} )
+                                         ( ?\N{U+1F892} . ?\N{U+1F890} )
+                                         ( ?\N{U+1F896} . ?\N{U+1F894} )
+                                         ( ?\N{U+1F89A} . ?\N{U+1F898} )
+                                         ( ?\N{U+1F8A1} . ?\N{U+1F8A0} )
+                                         ( ?\N{U+1F8A3} . ?\N{U+1F8A2} )
+                                         ( ?\N{U+1F8A5} . ?\N{U+1F8A6} )
+                                         ( ?\N{U+1F8A7} . ?\N{U+1F8A4} )
+                                         ( ?\N{U+1F8A9} . ?\N{U+1F8A8} )
+                                         ( ?\N{U+1F8AB} . ?\N{U+1F8AA} ))
+  "Full list of paired delimiters for quote-like constructs.
+As an experimental feature, Perl uses these under \"feature
+\\='extra_paired_delimiters\\='\" or in feature bundles of Perl 5.40 or
+newer.  To activate the extra delimiters, switch on the minor mode
+`cperl-extra-paired-delimiters-mode'.  This is also available from the
+\"Perl\" menu in section \"Toggle...\".
+The character pairs available are:
+(), <>, [], {}, «», »«, ༺༻, ༼༽, ᚛᚜, \\=‘\\=’, \\=’\\=‘, \\=“\\=”, \\=”\\=“, \\=‵\\=′, \\=‶\\=″, \\=‷\\=‴, ‹›, ›‹, ⁅⁆,
+⁍⁌, ⁽⁾, ₍₎, →←, ↛↚, ↝↜, ↠↞, ↣↢, ↦↤, ↪↩, ↬↫, ↱↰, ↳↲, ⇀↼, ⇁↽, ⇉⇇, ⇏⇍, ⇒⇐, ⇛⇚,
+⇝⇜, ⇢⇠, ⇥⇤, ⇨⇦, ⇴⬰, ⇶⬱, ⇸⇷, ⇻⇺, ⇾⇽, ∈∋, ∉∌, ∊∍, ≤≥, ≦≧, ≨≩, ≪≫, ≮≯, ≰≱, ≲≳,
+≴≵, ≺≻, ≼≽, ≾≿, ⊀⊁, ⊂⊃, ⊄⊅, ⊆⊇, ⊈⊉, ⊊⊋, ⊣⊢, ⊦⫞, ⊨⫤, ⊩⫣, ⊰⊱, ⋐⋑, ⋖⋗, ⋘⋙, ⋜⋝,
+⋞⋟, ⋠⋡, ⋦⋧, ⋨⋩, ⋲⋺, ⋳⋻, ⋴⋼, ⋶⋽, ⋷⋾, ⌈⌉, ⌊⌋, ⌦⌫, ⍈⍇, ⏭⏮, ☛☚, ☞☜, ⚞⚟, ❨❩, ❪❫,
+❬❭, ❮❯, ❰❱, ❲❳, ❴❵, ⟃⟄, ⟅⟆, ⟈⟉, ⟞⟝, ⟦⟧, ⟨⟩, ⟪⟫, ⟬⟭, ⟮⟯, ⟴⬲, ⟶⟵, ⟹⟸, ⟼⟻, ⟾⟽,
+⟿⬳, ⤀⬴, ⤁⬵, ⤃⤂, ⤅⬶, ⤇⤆, ⤍⤌, ⤏⤎, ⤐⬷, ⤑⬸, ⤔⬹, ⤕⬺, ⤖⬻, ⤗⬼, ⤘⬽, ⤚⤙, ⤜⤛, ⤞⤝, ⤠⤟,
+⤳⬿, ⤷⤶, ⥅⥆, ⥇⬾, ⥓⥒, ⥗⥖, ⥛⥚, ⥟⥞, ⥤⥢, ⥬⥪, ⥭⥫, ⥱⭀, ⥲⭁, ⥴⭋, ⥵⭂, ⥹⥻, ⦃⦄, ⦅⦆, ⦇⦈,
+⦉⦊, ⦋⦌, ⦍⦐, ⦏⦎, ⦑⦒, ⦓⦔, ⦕⦖, ⦗⦘, ⦨⦩, ⦪⦫, ⦳⦴, ⧀⧁, ⧘⧙, ⧚⧛, ⧼⧽, ⩹⩺, ⩻⩼, ⩽⩾, ⩿⪀,
+⪁⪂, ⪃⪄, ⪅⪆, ⪇⪈, ⪉⪊, ⪍⪎, ⪕⪖, ⪗⪘, ⪙⪚, ⪛⪜, ⪝⪞, ⪟⪠, ⪡⪢, ⪦⪧, ⪨⪩, ⪪⪫, ⪬⪭, ⪯⪰, ⪱⪲,
+⪳⪴, ⪵⪶, ⪷⪸, ⪹⪺, ⪻⪼, ⪽⪾, ⪿⫀, ⫁⫂, ⫃⫄, ⫅⫆, ⫇⫈, ⫉⫊, ⫋⫌, ⫏⫐, ⫑⫒, ⫕⫖, ⫥⊫, ⫷⫸, ⫹⫺,
+⭆⭅, ⭇⭉, ⭈⭊, ⭌⥳, ⭢⭠, ⭬⭪, ⭲⭰, ⭼⭺, ⮆⮄, ⮊⮈, ⮕⬅, ⮚⮘, ⮞⮜, ⮡⮠, ⮣⮢, ⮩⮨, ⮫⮪, ⮱⮰, ⮳⮲,
+⯮⯬, ⸂⸃, ⸃⸂, ⸄⸅, ⸅⸄, ⸉⸊, ⸊⸉, ⸌⸍, ⸍⸌, ⸑⸐, ⸜⸝, ⸝⸜, ⸠⸡, ⸡⸠, ⸢⸣, ⸤⸥, ⸦⸧, ⸨⸩, ⸶⸷,
+⹂„, ⹕⹖, ⹗⹘, ⹙⹚, ⹛⹜, ꧁꧂, ﴾﴿, ｢｣, ￫￩, 𝄃𝄂, 𝄆𝄇, 🕻🕽, 🖙🖘, 🖛🖚, 🖝🖜, 🗦🗧, 🠂🠀, 🠆🠄, 🠊🠈,
+🠒🠐, 🠖🠔, 🠚🠘, 🠞🠜, 🠢🠠, 🠦🠤, 🠪🠨, 🠮🠬, 🠲🠰, 🠶🠴, 🠺🠸, 🠾🠼, 🡂🡀, 🡆🡄, 🡒🡐, 🡢🡠, 🡪🡨, 🡲🡰, 🡺🡸,
+🢂🢀, 🢒🢐, 🢖🢔, 🢚🢘, 🢡🢠, 🢣🢢, 🢥🢦, 🢧🢤, 🢩🢨, 🢫🢪")
+
+;; --------End of generated code
+(defvar cperl-starters cperl--basic-paired-delimiters)
 
 (defun cperl-cached-syntax-table (st)
   "Get a syntax table cached in ST, or create and cache into ST a syntax table.
@@ -3410,8 +3837,8 @@ Return the error message (if any).  Does not work if delimiter is `)'.
 Works before syntax recognition is done."
   ;; Works *before* syntax recognition is done
   (or st-l (setq st-l (list nil)))	; Avoid overwriting '()
-  (let (st b reset-st)
-    (condition-case b
+  (let (st result reset-st)
+    (condition-case err
 	(progn
 	  (setq st (cperl-cached-syntax-table st-l))
 	  (modify-syntax-entry ?\( "()" st)
@@ -3419,8 +3846,7 @@ Works before syntax recognition is done."
 	  (setq reset-st (syntax-table))
 	  (set-syntax-table st)
 	  (forward-sexp 1))
-      (error (message
-	      "cperl-forward-group-in-re: error %s" b)))
+      (error (setq result err)))
     ;; now restore the initial state
     (if st
 	(progn
@@ -3428,27 +3854,26 @@ Works before syntax recognition is done."
 	  (modify-syntax-entry ?\) "." st)))
     (if reset-st
 	(set-syntax-table reset-st))
-    b))
+    result))
 
 
-(defvar font-lock-string-face)
-;;(defvar font-lock-reference-face)
-(defvar font-lock-constant-face)
 (defsubst cperl-postpone-fontification (b e type val &optional now)
   ;; Do after syntactic fontification?
   (if cperl-syntaxify-by-font-lock
       (or now (put-text-property b e 'cperl-postpone (cons type val)))
     (put-text-property b e type val)))
 
-;;; Here is how the global structures (those which cannot be
-;;; recognized locally) are marked:
+;; Here is how the global structures (those which cannot be
+;; recognized locally) are marked:
 ;;	a) PODs:
 ;;		Start-to-end is marked `in-pod' ==> t
 ;;		Each non-literal part is marked `syntax-type' ==> `pod'
 ;;		Each literal part is marked `syntax-type' ==> `in-pod'
 ;;	b) HEREs:
+;;              The point before start is marked `here-doc-start'
 ;;		Start-to-end is marked `here-doc-group' ==> t
 ;;		The body is marked `syntax-type' ==> `here-doc'
+;;                and is also marked as style 2 comment
 ;;		The delimiter is marked `syntax-type' ==> `here-doc-delim'
 ;;	c) FORMATs:
 ;;		First line (to =) marked `first-format-line' ==> t
@@ -3461,17 +3886,46 @@ Works before syntax recognition is done."
 ;;		(or 0 if declaration); up to `{' or ';': `syntax-type' => `sub-decl'.
 ;;      f) Multiline my/our declaration lists etc: `syntax-type' => `multiline'
 
-;;; In addition, some parts of RExes may be marked as `REx-interpolated'
-;;; (value: 0 in //o, 1 if "interpolated variable" is whole-REx, t otherwise).
+;; In addition, some parts of RExes may be marked as `REx-interpolated'
+;; (value: 0 in //o, 1 if "interpolated variable" is whole-REx, t otherwise).
 
 (defun cperl-unwind-to-safe (before &optional end)
-  ;; if BEFORE, go to the previous start-of-line on each step of unwinding
-  (let ((pos (point)) opos)
+  "Move point back to a safe place, back up one extra line if BEFORE.
+A place is \"safe\" if it is not within POD, a here-document, a
+format, a quote-like expression, a subroutine attribute list or a
+multiline declaration.  These places all have special syntactical
+rules and need to be parsed as a whole.  If END, return the
+position of the end of the unsafe construct."
+  (let ((pos (point))
+        (state (syntax-ppss)))
+    ;; Check edge cases for here-documents first
+    (when before                        ; we need a safe start for parsing
+      (cond
+       ((or (equal (get-text-property (cperl-1- (point)) 'syntax-type)
+                   'here-doc-start)
+            (equal (syntax-after (cperl-1- (point)))
+                   (string-to-syntax "> c")))
+        ;; point is either immediately after the start of a here-doc
+        ;; (which may consist of nothing but one newline) or
+        ;; immediately after the now-outdated end marker of the
+        ;; here-doc. In both cases we need to back up to the line
+        ;; where the here-doc delimiters are defined.
+        (forward-char -1)
+        (cperl-backward-to-noncomment (point-min))
+        (beginning-of-line))
+       ((eq 2 (nth 7 state))
+        ;; point is somewhere in a here-document.  Back up to the line
+        ;; where the here-doc delimiters are defined.
+        (goto-char (nth 8 state))      ; beginning of this here-doc
+        (cperl-backward-to-noncomment  ; skip back over more
+         (point-min))                  ;     here-documents (if any)
+        (beginning-of-line))           ; skip back over here-doc starters
+       ((nth 4 state)                  ; in a comment (or POD)
+        (goto-char (nth 8 state)))))   ; ...so go to its beginning
     (while (and pos (progn
 		      (beginning-of-line)
 		      (get-text-property (setq pos (point)) 'syntax-type)))
-      (setq opos pos
-	    pos (cperl-beginning-of-property pos 'syntax-type))
+      (setq pos (cperl-beginning-of-property pos 'syntax-type))
       (if (eq pos (point-min))
 	  (setq pos nil))
       (if pos
@@ -3500,22 +3954,12 @@ Works before syntax recognition is done."
 			   (setq end (point)))))
 	  (or end pos)))))
 
-;;; These are needed for byte-compile (at least with v19)
-(defvar cperl-nonoverridable-face)
-(defvar font-lock-variable-name-face)
-(defvar font-lock-function-name-face)
-(defvar font-lock-keyword-face)
-(defvar font-lock-builtin-face)
-(defvar font-lock-type-face)
-(defvar font-lock-comment-face)
-(defvar font-lock-warning-face)
-
-(defun cperl-find-sub-attrs (&optional st-l b-fname e-fname pos)
+(defun cperl-find-sub-attrs (&optional st-l _b-fname _e-fname pos)
   "Syntactically mark (and fontify) attributes of a subroutine.
 Should be called with the point before leading colon of an attribute."
   ;; Works *before* syntax recognition is done
   (or st-l (setq st-l (list nil)))	; Avoid overwriting '()
-  (let (st b p reset-st after-first (start (point)) start1 end1)
+  (let (st p reset-st after-first (start (point)) start1 end1)
     (condition-case b
 	(while (looking-at
 		(concat
@@ -3524,7 +3968,7 @@ Should be called with the point before leading colon of an attribute."
 		 "\\)"
 		 (if after-first "?" "")
 		 ;; No space between name and paren allowed...
-		 "\\(\\sw+\\)"		; 3=name
+		 (rx (group (eval cperl--basic-identifier-rx)))	; 3=name
 		 "\\((\\)?"))		; 4=optional paren
 	  (and (match-beginning 1)
 	       (cperl-postpone-fontification
@@ -3552,22 +3996,36 @@ Should be called with the point before leading colon of an attribute."
 	      "L%d: attribute `%s': %s"
 	      (count-lines (point-min) (point))
 	      (and start1 end1 (buffer-substring start1 end1)) b)
-	     (setq start nil)))
-    (and start
-	 (progn
-	   (put-text-property start (point)
-			      'attrib-group (if (looking-at "{") t 0))
-	   (and pos
-		(< 1 (count-lines (+ 3 pos) (point))) ; end of `sub'
-		;; Apparently, we do not need `multiline': faces added now
-		(put-text-property (+ 3 pos) (cperl-1+ (point))
-				   'syntax-type 'sub-decl))
-	   (and b-fname			; Fontify here: the following condition
-		(cperl-postpone-fontification ; is too hard to determine by
-		 b-fname e-fname 'face ; a REx, so do it here
-		(if (looking-at "{")
-		    font-lock-function-name-face
-		  font-lock-variable-name-face)))))
+	     ; (setq start nil) I'd like to keep trying -- haj 2023-06-26
+             ))
+    (cond
+     ;; Allow for a complete signature and trailing spaces here
+     ((search-forward-regexp (rx (sequence point
+                                           (eval cperl--ws*-rx)
+                                           (eval cperl--signature-rx)
+                                           (eval cperl--ws*-rx)))
+                             nil
+                             t)) ; NOERROR
+     ((looking-at (rx "("))
+      ;; We might be in the process of typing a prototype or
+      ;; signature.  These start with a left paren, so we want this to
+      ;; be included into the area marked as sub-decl.
+      nil)
+     ;; Else, we are in no mans land.  Just keep trying.
+     (t
+      ))
+    (when (looking-at (rx (in ";{")))
+      ;; A semicolon ends the declaration, an opening brace begins the
+      ;; BLOCK.  Neither is part of the declaration.
+      (backward-char))
+    (when start
+      (put-text-property start (point)
+                         'attrib-group (if (looking-at "{") t 0))
+        (and pos
+             (progn
+               ;; Apparently, we do not need `multiline': faces added now
+               (put-text-property (+ 3 pos) (cperl-1+ (point))
+		                  'syntax-type 'sub-decl))))
     ;; now restore the initial state
     (if st
 	(progn
@@ -3591,18 +4049,18 @@ Should be called with the point before leading colon of an attribute."
 (defsubst cperl-highlight-charclass (endbracket dashface bsface onec-space)
   (let ((l '(1 5 7)) ll lle lll
 	;; 2 groups, the first takes the whole match (include \[trnfabe])
-	(singleChar (concat "\\(" "[^\\\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([0-9a-fA-F][0-9a-fA-F]?\\|\\={[0-9a-fA-F]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)")))
+	(singleChar (concat "\\(" "[^\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([[:xdigit:]][[:xdigit:]]?\\|\\={[[:xdigit:]]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)")))
     (while				; look for unescaped - between non-classes
 	(re-search-forward
 	 ;; On 19.33, certain simplifications lead
 	 ;; to bugs (as in  [^a-z] \\| [trnfabe]  )
 	 (concat	       		; 1: SingleChar (include \[trnfabe])
 	  singleChar
-	  ;;"\\(" "[^\\\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([0-9a-fA-F][0-9a-fA-F]?\\|\\={[0-9a-fA-F]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)"
+	  ;;"\\(" "[^\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([[:xdigit:]][[:xdigit:]]?\\|\\={[[:xdigit:]]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)"
 	  "\\("				; 3: DASH SingleChar (match optionally)
 	    "\\(-\\)"			; 4: DASH
 	    singleChar			; 5: SingleChar
-	    ;;"\\(" "[^\\\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([0-9a-fA-F][0-9a-fA-F]?\\|\\={[0-9a-fA-F]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)"
+	    ;;"\\(" "[^\\]" "\\|" "\\\\[^cdg-mo-qsu-zA-Z0-9_]" "\\|" "\\\\c." "\\|" "\\\\x" "\\([[:xdigit:]][[:xdigit:]]?\\|\\={[[:xdigit:]]+}\\)" "\\|" "\\\\0?[0-7][0-7]?[0-7]?" "\\|" "\\\\N{[^{}]*}" "\\)"
 	  "\\)?"
 	  "\\|"
 	  "\\("				; 7: other escapes
@@ -3615,8 +4073,9 @@ Should be called with the point before leading colon of an attribute."
 	   (match-beginning 4) (match-end 4)
 	   'face dashface))
       ;; save match data (for looking-at)
-      (setq lll (mapcar (function (lambda (elt) (cons (match-beginning elt)
-						      (match-end elt)))) l))
+      (setq lll (mapcar (lambda (elt) (cons (match-beginning elt)
+                                       (match-end elt)))
+                        l))
       (while lll
 	(setq ll (car lll))
 	(setq lle (cdr ll)
@@ -3634,19 +4093,193 @@ Should be called with the point before leading colon of an attribute."
     (goto-char endbracket)		; just in case something misbehaves???
     t))
 
-;;; Debugging this may require (setq max-specpdl-size 2000)...
+(defvar cperl-here-doc-functions
+  (regexp-opt '("print" "printf" "say"  ; print $handle <<EOF
+                "system" "exec"         ; system $progname <<EOF
+                "sort")                 ; sort $subname <<EOF
+              'symbols)                 ; avoid false positives
+  "List of keywords after which `$var <<bareword' is a here-document.
+After any other token `$var <<bareword' is treated as the variable `$var'
+left-shifted by the return value of the function `bareword'.")
+
+(defun cperl-is-here-doc-p (start)
+  "Find out whether a \"<<\" construct starting at START is a here-document.
+The point is expected to be after the end of the delimiter.
+Quoted delimiters after \"<<\" are unambiguously starting
+here-documents and are not handled here.  This function does not
+move point but does change match data."
+  ;; not a here-doc | here-doc
+  ;; $foo << b;     | $f .= <<B;
+  ;; ($f+1) << b;   | a($f) . <<B;
+  ;; foo 1, <<B;    | $x{a} <<b;
+  ;; Limitations:
+  ;; foo <<bar is statically undecidable.  It could be either
+  ;; foo() << bar # left shifting the return value or
+  ;; foo(<<bar)   # passing a here-doc to foo().
+  ;; We treat it as here-document and kindly ask programmers to
+  ;; disambiguate by adding parens.
+  (null
+   (or (looking-at "[ \t]*(") ; << function_call()
+       (looking-at ">>")      ; <<>> operator
+       (save-excursion ; 1 << func_name, or $foo << 10
+	 (condition-case nil
+	     (progn
+	       (goto-char start)
+	       (forward-sexp -1) ;; examine the part before "<<"
+	       (save-match-data
+		 (cond
+		  ((looking-at "[0-9$({]")
+		   (forward-sexp 1)
+		   (and
+		    (looking-at "[ \t]*<<")
+		    (condition-case nil
+			;; print $foo <<EOF
+			(progn
+			  (forward-sexp -2)
+			  (not
+			   (looking-at cperl-here-doc-functions)))
+		      (error t)))))))
+	   (error nil)))))) ; func(<<EOF)
+
+(defun cperl-process-here-doc (min max end overshoot stop-point
+                                   end-of-here-doc err-l
+                                   indented-here-doc-p
+                                   matched-pos todo-pos
+                                   delim-begin delim-end)
+  "Process a here-document's delimiters and body.
+The parameters MIN, MAX, END, OVERSHOOT, STOP-POINT, ERR-L are
+used for recursive calls to `cperl-find-pods-heres' to handle the
+rest of the line which contains the delimiter.  MATCHED-POS and
+TODO-POS are initial values for this function's result.
+END-OF-HERE-DOC is the end of a previous here-doc in the same
+line, or nil if this is the first.  DELIM-BEGIN and DELIM-END are
+the positions where the here-document's delimiter has been found.
+This is part of `cperl-find-pods-heres' (below)."
+  (let* ((my-cperl-delimiters-face font-lock-constant-face)
+         (delimiter (buffer-substring-no-properties delim-begin delim-end))
+         (qtag (regexp-quote delimiter))
+         (use-syntax-state (and cperl-syntax-state
+			        (>= min (car cperl-syntax-state))))
+         (state-point (if use-syntax-state
+			  (car cperl-syntax-state)
+		        (point-min)))
+         (state (if use-syntax-state
+		    (cdr cperl-syntax-state)))
+         here-doc-start here-doc-end defs-eol
+         warning-message)
+    (when cperl-pod-here-fontify
+      ;; Highlight the starting delimiter
+      (cperl-postpone-fontification delim-begin delim-end
+                                    'face my-cperl-delimiters-face)
+      (cperl-put-do-not-fontify delim-begin delim-end t))
+    (forward-line)
+    (setq here-doc-start (point) ; first char of (first) here-doc
+          defs-eol (1- here-doc-start)) ; end of definitions line
+    (if end-of-here-doc
+        ;; skip to the end of the previous here-doc
+	(goto-char end-of-here-doc)
+      ;; otherwise treat the first (or only) here-doc: Check for
+      ;; special cases if the line containing the delimiter(s)
+      ;; ends in a regular comment or a solitary ?#
+      (let* ((eol-state (save-excursion (syntax-ppss defs-eol))))
+        (when (nth 4 eol-state) ; EOL is in a comment
+          (if (= (1- defs-eol) (nth 8 eol-state))
+              ;; line ends with a naked comment starter.
+              ;; We let it start the here-doc.
+              (progn
+                (put-text-property (1- defs-eol) defs-eol
+                                   'font-lock-face
+                                   'font-lock-comment-face)
+                (put-text-property (1- defs-eol) defs-eol
+                                   'syntax-type 'here-doc)
+                (put-text-property (1- defs-eol) defs-eol
+                                   'syntax-type 'here-doc)
+                (put-text-property (1- defs-eol) defs-eol
+                                   'syntax-table
+                                   (string-to-syntax "< c"))
+                )
+            ;; line ends with a "regular" comment: make
+            ;; the last character of the comment closing
+            ;; it so that we can use the line feed to
+            ;; start the here-doc
+            (put-text-property (1- defs-eol) defs-eol
+                               'syntax-table
+                               (string-to-syntax ">"))))))
+    (setq here-doc-start (point)) ; now points to current here-doc
+    ;; Find the terminating delimiter.
+    ;; We do not search to max, since we may be called from
+    ;; some hook of fontification, and max is random
+    (or (re-search-forward
+	 (concat "^" (when indented-here-doc-p "[ \t]*")
+		 qtag "$")
+	 stop-point 'toend)
+	(progn		; Pretend we matched at the end
+	  (goto-char (point-max))
+	  (re-search-forward "\\'")
+	  (setq warning-message
+                (format "End of here-document `%s' not found." delimiter))
+	  (or (car err-l) (setcar err-l here-doc-start))))
+    (when cperl-pod-here-fontify
+      ;; Highlight the ending delimiter
+      (cperl-postpone-fontification
+       (match-beginning 0) (match-end 0)
+       'face my-cperl-delimiters-face)
+      (cperl-put-do-not-fontify here-doc-start (match-end 0) t))
+    (setq here-doc-end (cperl-1+ (match-end 0))) ; eol after delim
+    (put-text-property here-doc-start (match-beginning 0)
+		       'syntax-type 'here-doc)
+    (put-text-property (match-beginning 0) here-doc-end
+		       'syntax-type 'here-doc-delim)
+    (put-text-property here-doc-start here-doc-end 'here-doc-group t)
+    ;; This makes insertion at the start of HERE-DOC update
+    ;; the whole construct:
+    (put-text-property here-doc-start (cperl-1+ here-doc-start) 'front-sticky '(syntax-type))
+    (cperl-commentify (match-beginning 0) (1- here-doc-end) nil)
+    (put-text-property (1- here-doc-start) here-doc-start
+                       'syntax-type 'here-doc-start)
+    (when (> (match-beginning 0) here-doc-start)
+      ;; here-document has non-zero length
+      (cperl-modify-syntax-type (1- here-doc-start) (string-to-syntax "< c"))
+      (cperl-modify-syntax-type (1- (match-beginning 0))
+                                (string-to-syntax "> c")))
+    (cperl-put-do-not-fontify here-doc-start (match-end 0) t)
+    ;; Cache the syntax info...
+    (setq cperl-syntax-state (cons state-point state))
+    ;; ... and process the rest of the line...
+    (setq overshoot
+	  (elt		; non-inter ignore-max
+	   (cperl-find-pods-heres todo-pos defs-eol
+                                  t end t here-doc-end)
+           1))
+    (if (and overshoot (> overshoot (point)))
+	(goto-char overshoot)
+      (setq overshoot here-doc-end))
+    (list (if (> here-doc-end max) matched-pos nil)
+          overshoot
+          warning-message)))
+
 (defun cperl-find-pods-heres (&optional min max non-inter end ignore-max end-of-here-doc)
-  "Scans the buffer for hard-to-parse Perl constructions.
-If `cperl-pod-here-fontify' is not-nil after evaluation, will fontify
-the sections using `cperl-pod-head-face', `cperl-pod-face',
-`cperl-here-face'."
+  "Scan the buffer for hard-to-parse Perl constructions.
+If `cperl-pod-here-fontify' is non-nil after evaluation,
+fontify the sections using `cperl-pod-head-face',
+`cperl-pod-face', `cperl-here-face'.  The optional parameters are
+for internal use: scan from MIN to MAX, or the whole buffer if
+these are nil.  If NON-INTER, don't write progress messages.  If
+IGNORE-MAX, scan to end of buffer.  If END, we are after a
+\"__END__\" or \"__DATA__\" token, so ignore unbalanced
+constructs.  END-OF-HERE-DOC points to the end of a here-document
+which has already been processed.
+Value is a two-element list of the position where an error
+occurred (if any) and the \"overshoot\", which is used for
+recursive calls in starting lines of here-documents."
   (interactive)
   (or min (setq min (point-min)
 		cperl-syntax-state nil
 		cperl-syntax-done-to min))
   (or max (setq max (point-max)))
-  (let* ((cperl-pod-here-fontify (eval cperl-pod-here-fontify)) go tmpend
-	 face head-face here-face b e bb tag qtag b1 e1 argument i c tail tb
+  (font-lock-flush min max)
+  (let* (go tmpend
+	 face head-face b e bb tag qtag b1 e1 argument i c tail tb
 	 is-REx is-x-REx REx-subgr-start REx-subgr-end was-subgr i2 hairy-RE
 	 (case-fold-search nil) (inhibit-read-only t) (buffer-undo-list t)
 	 (modified (buffer-modified-p)) overshoot is-o-REx name
@@ -3666,105 +4299,89 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 	 (font-lock-string-face (if (boundp 'font-lock-string-face)
 				    font-lock-string-face
 				  'font-lock-string-face))
-	 (my-cperl-delimiters-face (if (boundp 'font-lock-constant-face)
-				      font-lock-constant-face
-				    'font-lock-constant-face))
+	 (my-cperl-delimiters-face
+	  font-lock-constant-face)
 	 (my-cperl-REx-spec-char-face	; [] ^.$ and wrapper-of ({})
-	  (if (boundp 'font-lock-function-name-face)
-	      font-lock-function-name-face
-	    'font-lock-function-name-face))
-	 (font-lock-variable-name-face	; interpolated vars and ({})-code
-	  (if (boundp 'font-lock-variable-name-face)
-	      font-lock-variable-name-face
-	    'font-lock-variable-name-face))
-	 (font-lock-function-name-face	; used in `cperl-find-sub-attrs'
-	  (if (boundp 'font-lock-function-name-face)
-	      font-lock-function-name-face
-	    'font-lock-function-name-face))
-	 (font-lock-constant-face	; used in `cperl-find-sub-attrs'
-	  (if (boundp 'font-lock-constant-face)
-	      font-lock-constant-face
-	    'font-lock-constant-face))
+          font-lock-function-name-face)
 	 (my-cperl-REx-0length-face ; 0-length, (?:)etc, non-literal \
-	  (if (boundp 'font-lock-builtin-face)
-	      font-lock-builtin-face
-	    'font-lock-builtin-face))
-	 (font-lock-comment-face
-	  (if (boundp 'font-lock-comment-face)
-	      font-lock-comment-face
-	    'font-lock-comment-face))
-	 (font-lock-warning-face
-	  (if (boundp 'font-lock-warning-face)
-	      font-lock-warning-face
-	    'font-lock-warning-face))
+          font-lock-builtin-face)
 	 (my-cperl-REx-ctl-face		; (|)
-	  (if (boundp 'font-lock-keyword-face)
-	      font-lock-keyword-face
-	    'font-lock-keyword-face))
+          font-lock-keyword-face)
 	 (my-cperl-REx-modifiers-face	; //gims
-	  (if (boundp 'cperl-nonoverridable-face)
-	      cperl-nonoverridable-face
-	    'cperl-nonoverridable-face))
+	  'cperl-nonoverridable-face)
 	 (my-cperl-REx-length1-face	; length=1 escaped chars, POSIX classes
-	  (if (boundp 'font-lock-type-face)
-	      font-lock-type-face
-	    'font-lock-type-face))
+          font-lock-type-face)
 	 (stop-point (if ignore-max
 			 (point-max)
 		       max))
 	 (search
 	  (concat
-	   "\\(\\`\n?\\|^\n\\)="	; POD
+           ;; -------- POD using capture group 1
+	   "\\(\\`\n?\\|^\n\\)="
 	   "\\|"
+           ;; -------- HERE-document capture groups 2-7
 	   ;; One extra () before this:
-	   "<<~?"			; HERE-DOC
-	   "\\("			; 1 + 1
+	   "<<\\(~?\\)"		 ; HERE-DOC, indented-p = capture 2
+	   "\\("			; 2 + 1
 	   ;; First variant "BLAH" or just ``.
 	   "[ \t]*"			; Yes, whitespace is allowed!
-	   "\\([\"'`]\\)"		; 2 + 1 = 3
-	   "\\([^\"'`\n]*\\)"		; 3 + 1
-	   "\\3"
+	   "\\([\"'`]\\)"		; 3 + 1 = 4
+	   "\\([^\"'`\n]*\\)"		; 4 + 1
+	   "\\4"
 	   "\\|"
-	   ;; Second variant: Identifier or \ID (same as 'ID') or empty
-	   "\\\\?\\(\\([a-zA-Z_][a-zA-Z_0-9]*\\)?\\)" ; 4 + 1, 5 + 1
-	   ;; Do not have <<= or << 30 or <<30 or << $blah.
-	   ;; "\\([^= \t0-9$@%&]\\|[ \t]+[^ \t\n0-9$@%&]\\)" ; 6 + 1
-	   "\\(\\)"		; To preserve count of pars :-( 6 + 1
+	   ;; Second variant: Identifier or \ID (same as 'ID')
+	   "\\\\?\\(\\([a-zA-Z_][a-zA-Z_0-9]*\\)\\)" ; 5 + 1, 6 + 1
 	   "\\)"
 	   "\\|"
+           ;; -------- format capture groups 8-9
 	   ;; 1+6 extra () before this:
-	   "^[ \t]*\\(format\\)[ \t]*\\([a-zA-Z0-9_]+\\)?[ \t]*=[ \t]*$" ;FRMAT
+	   "^[ \t]*\\(format\\)[ \t]*\\([a-zA-Z0-9_]+\\)?[ \t]*=[ \t]*$"
 	   (if cperl-use-syntax-table-text-property
 	       (concat
 		"\\|"
+                ;; -------- quoted constructs and regexps, group 10
 		;; 1+6+2=9 extra () before this:
-		"\\<\\(q[wxqr]?\\|[msy]\\|tr\\)\\>" ; QUOTED CONSTRUCT
+		"\\<\\(q[wxqr]?\\|[msy]\\|tr\\)\\>"
 		"\\|"
+                ;; -------- "bare" regex or glob, group 11
 		;; 1+6+2+1=10 extra () before this:
-		"\\([?/<]\\)"	; /blah/ or ?blah? or <file*glob>
+		"\\([/<]\\)"	; /blah/ or <file*glob>
 		"\\|"
+                ;; -------- subroutine declarations, groups 12-17
 		;; 1+6+2+1+1=11 extra () before this
-		"\\<sub\\>"		;  sub with proto/attr
-		"\\("
-		   cperl-white-and-comment-rex
-		   "\\(::[a-zA-Z_:'0-9]*\\|[a-zA-Z_'][a-zA-Z_:'0-9]*\\)\\)?" ; name
-		"\\("
-		   cperl-maybe-white-and-comment-rex
-		   "\\(([^()]*)\\|:[^:]\\)\\)" ; prototype or attribute start
+		(rx (sequence
+                     word-start
+                     (group (regexp cperl-sub-regexp))                ; #12
+                     (eval cperl--ws+-rx)
+                     (opt (group (eval cperl--normal-identifier-rx))) ; #13
+                     (eval cperl--ws*-rx)
+                     (group (or (group (eval cperl--prototype-rx))    ; #14,#15
+                                (group (eval cperl--signature-rx))    ; #16
+                                ;; (group unmatchable) ; #16
+                                (group (or anything buffer-end)))))) ; #17
 		"\\|"
-		;; 1+6+2+1+1+6=17 extra () before this:
+                ;; -------- weird variables, capture group 18
+                ;; FIXME: We don't need that group -- haj 2023-06-21
+                ;; 1+6+2+1+1+6=17 extra () before this
 		"\\$\\(['{]\\)"		; $' or ${foo}
 		"\\|"
+                ;; -------- old-style ' as package separator, group 19
 		;; 1+6+2+1+1+6+1=18 extra () before this (old pack'var syntax;
 		;; we do not support intervening comments...):
-		"\\(\\<sub[ \t\n\f]+\\|[&*$@%]\\)[a-zA-Z0-9_]*'"
-		;; 1+6+2+1+1+6+1+1=19 extra () before this:
+		"\\(\\<" cperl-sub-regexp "[ \t\n\f]+\\|[&*$@%]\\)[a-zA-Z0-9_]*'"
 		"\\|"
+                ;; -------- __END__ and __DATA__ tokens, group 20
+		;; 1+6+2+1+1+6+1+1=19 extra () before this:
 		"__\\(END\\|DATA\\)__"	; __END__ or __DATA__
 		;; 1+6+2+1+1+6+1+1+1=20 extra () before this:
 		"\\|"
-		"\\\\\\(['`\"($]\\)")	; BACKWACKED something-hairy
-	     ""))))
+                ;; -------- backslash-escaped stuff, don't interpret it
+		"\\\\\\(['`\"($]\\)"	; BACKWACKED something-hairy
+                "\\|"
+                ;; -------- $\ is a variable in code, but not in a string
+                "\\(\\$\\\\\\)")
+	     "")))
+         warning-message)
     (unwind-protect
 	(progn
 	  (save-excursion
@@ -3774,30 +4391,22 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 	    (and cperl-pod-here-fontify
 		 ;; We had evals here, do not know why...
 		 (setq face cperl-pod-face
-		       head-face cperl-pod-head-face
-		       here-face cperl-here-face))
-	    (remove-text-properties min max
-				    '(syntax-type t in-pod t syntax-table t
-						  attrib-group t
-						  REx-interpolated t
-						  cperl-postpone t
-						  syntax-subtype t
-						  rear-nonsticky t
-						  front-sticky t
-						  here-doc-group t
-						  first-format-line t
-						  REx-part2 t
-						  indentable t))
+		       head-face cperl-pod-head-face))
+            (unless end-of-here-doc
+	      (remove-text-properties min max
+				      '(syntax-type t in-pod t syntax-table t
+						    attrib-group t
+						    REx-interpolated t
+						    cperl-postpone t
+						    syntax-subtype t
+						    rear-nonsticky t
+						    front-sticky t
+						    here-doc-group t
+						    first-format-line t
+						    REx-part2 t
+						    indentable t)))
 	    ;; Need to remove face as well...
 	    (goto-char min)
-	    ;; 'emx not supported by Emacs since at least 21.1.
-	    (and (featurep 'xemacs) (eq system-type 'emx)
-		 (eq (point) 1)
-		 (let ((case-fold-search t))
-		   (looking-at "extproc[ \t]")) ; Analogue of #!
-		 (cperl-commentify min
-				   (point-at-eol)
-				   nil))
 	    (while (and
 		    (< (point) max)
 		    (re-search-forward search max t))
@@ -3824,7 +4433,12 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 		  (cperl-modify-syntax-type bb cperl-st-punct)))
 	       ;; No processing in strings/comments beyond this point:
 	       ((or (nth 3 state) (nth 4 state))
-		t)			; Do nothing in comment/string
+                ;; Edge case: In a double-quoted string, $\ is not the
+                ;; punctuation variable, $ must not quote \ here.  We
+                ;; generally make $ a punctuation character in strings
+                ;; and comments (Bug#69604).
+                (when (match-beginning 22)
+                  (cperl-modify-syntax-type (match-beginning 22) cperl-st-punct)))
 	       ((match-beginning 1)	; POD section
 		;;  "\\(\\`\n?\\|^\n\\)="
 		(setq b (match-beginning 0)
@@ -3832,10 +4446,10 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			     state-point b nil nil state)
 		      state-point b)
 		(if (or (nth 3 state) (nth 4 state)
-			(looking-at "cut\\>"))
+			(looking-at "\\(cut\\|end\\)\\>"))
 		    (if (or (nth 3 state) (nth 4 state) ignore-max)
 			nil		; Doing a chunk only
-		      (message "=cut is not preceded by a POD section")
+		      (setq warning-message "=cut is not preceded by a POD section")
 		      (or (car err-l) (setcar err-l (point))))
 		  (beginning-of-line)
 
@@ -3845,12 +4459,12 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			b1 nil)		; error condition
 		  ;; We do not search to max, since we may be called from
 		  ;; some hook of fontification, and max is random
-		  (or (re-search-forward "^\n=cut\\>" stop-point 'toend)
+		  (or (re-search-forward "^\n=\\(cut\\|end\\)\\>" stop-point 'toend)
 		      (progn
 			(goto-char b)
-			(if (re-search-forward "\n=cut\\>" stop-point 'toend)
+			(if (re-search-forward "\n=\\(cut\\|end\\)\\>" stop-point 'toend)
 			    (progn
-			      (message "=cut is not preceded by an empty line")
+			      (setq warning-message "=cut is not preceded by an empty line")
 			      (setq b1 t)
 			      (or (car err-l) (setcar err-l b))))))
 		  (beginning-of-line 2)	; An empty line after =cut is not POD!
@@ -3912,130 +4526,38 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 	       ;; Here document
 	       ;; We can do many here-per-line;
 	       ;; but multiline quote on the same line as <<HERE confuses us...
-               ;; ;; One extra () before this:
-	       ;;"<<"
-	       ;;  "\\("			; 1 + 1
-	       ;;  ;; First variant "BLAH" or just ``.
-	       ;;     "[ \t]*"			; Yes, whitespace is allowed!
-	       ;;     "\\([\"'`]\\)"	; 2 + 1
-	       ;;     "\\([^\"'`\n]*\\)"	; 3 + 1
-	       ;;     "\\3"
-	       ;;  "\\|"
-	       ;;  ;; Second variant: Identifier or \ID or empty
-	       ;;    "\\\\?\\(\\([a-zA-Z_][a-zA-Z_0-9]*\\)?\\)" ; 4 + 1, 5 + 1
-	       ;;    ;; Do not have <<= or << 30 or <<30 or << $blah.
-	       ;;    ;; "\\([^= \t0-9$@%&]\\|[ \t]+[^ \t\n0-9$@%&]\\)" ; 6 + 1
-	       ;;    "\\(\\)"		; To preserve count of pars :-( 6 + 1
-	       ;;  "\\)"
-	       ((match-beginning 2)	; 1 + 1
-		(setq b (point)
-		      tb (match-beginning 0)
-		      c (and		; not HERE-DOC
-			 (match-beginning 5)
-			 (save-match-data
-			   (or (looking-at "[ \t]*(") ; << function_call()
-			       (save-excursion ; 1 << func_name, or $foo << 10
-				 (condition-case nil
-				     (progn
-				       (goto-char tb)
-	       ;;; XXX What to do: foo <<bar ???
-	       ;;; XXX Need to support print {a} <<B ???
-				       (forward-sexp -1)
-				       (save-match-data
-					; $foo << b; $f .= <<B;
-					; ($f+1) << b; a($f) . <<B;
-					; foo 1, <<B; $x{a} <<b;
-					 (cond
-					  ((looking-at "[0-9$({]")
-					   (forward-sexp 1)
-					   (and
-					    (looking-at "[ \t]*<<")
-					    (condition-case nil
-						;; print $foo <<EOF
-						(progn
-						  (forward-sexp -2)
-						  (not
-						   (looking-at "\\(printf?\\|system\\|exec\\|sort\\)\\>")))
-						(error t)))))))
-				   (error nil))) ; func(<<EOF)
-			       (and (not (match-beginning 6)) ; Empty
-				    (looking-at
-				     "[ \t]*[=0-9$@%&(]"))))))
-		(if c			; Not here-doc
-		    nil			; Skip it.
-		  (setq c (match-end 2)) ; 1 + 1
-		  (if (match-beginning 5) ;4 + 1
-		      (setq b1 (match-beginning 5) ; 4 + 1
-			    e1 (match-end 5)) ; 4 + 1
-		    (setq b1 (match-beginning 4) ; 3 + 1
-			  e1 (match-end 4))) ; 3 + 1
-		  (setq tag (buffer-substring b1 e1)
-			qtag (regexp-quote tag))
-		  (cond (cperl-pod-here-fontify
-			 ;; Highlight the starting delimiter
-			 (cperl-postpone-fontification
-			  b1 e1 'face my-cperl-delimiters-face)
-			 (cperl-put-do-not-fontify b1 e1 t)))
-		  (forward-line)
-		  (setq i (point))
-		  (if end-of-here-doc
-		      (goto-char end-of-here-doc))
-		  (setq b (point))
-		  ;; We do not search to max, since we may be called from
-		  ;; some hook of fontification, and max is random
-		  (or (and (re-search-forward (concat "^[ \t]*" qtag "$")
-					      stop-point 'toend)
-			   ;;;(eq (following-char) ?\n) ; XXXX WHY???
-			   )
-		    (progn		; Pretend we matched at the end
-		      (goto-char (point-max))
-		      (re-search-forward "\\'")
-		      (message "End of here-document `%s' not found." tag)
-		      (or (car err-l) (setcar err-l b))))
-		  (if cperl-pod-here-fontify
-		      (progn
-			;; Highlight the ending delimiter
-			(cperl-postpone-fontification
-			 (match-beginning 0) (match-end 0)
-			 'face my-cperl-delimiters-face)
-			(cperl-put-do-not-fontify b (match-end 0) t)
-			;; Highlight the HERE-DOC
-			(cperl-postpone-fontification b (match-beginning 0)
-						      'face here-face)))
-		  (setq e1 (cperl-1+ (match-end 0)))
-		  (put-text-property b (match-beginning 0)
-				     'syntax-type 'here-doc)
-		  (put-text-property (match-beginning 0) e1
-				     'syntax-type 'here-doc-delim)
-		  (put-text-property b e1 'here-doc-group t)
-		  ;; This makes insertion at the start of HERE-DOC update
-		  ;; the whole construct:
-		  (put-text-property b (cperl-1+ b) 'front-sticky '(syntax-type))
-		  (cperl-commentify b e1 nil)
-		  (cperl-put-do-not-fontify b (match-end 0) t)
-		  ;; Cache the syntax info...
-		  (setq cperl-syntax-state (cons state-point state))
-		  ;; ... and process the rest of the line...
-		  (setq overshoot
-			(elt		; non-inter ignore-max
-			 (cperl-find-pods-heres c i t end t e1) 1))
-		  (if (and overshoot (> overshoot (point)))
-		      (goto-char overshoot)
-		    (setq overshoot e1))
-		  (if (> e1 max)
-		      (setq tmpend tb))))
-	       ;; format
+               ;; One extra () before this:
+	       ;;  "<<\\(~?\\)"		 ; HERE-DOC, indented-p = capture 2
+	       ;; First variant "BLAH" or just ``:  capture groups 4 and 5
+	       ;; Second variant: Identifier or \ID: capture group 6 and 7
+               ((match-beginning 3)     ; 2 + 1: found "<<", detect its type
+                (let* ((matched-pos (match-beginning 0))
+                       (quoted-delim-p (if (match-beginning 6) nil t))
+                       (delim-capture (if quoted-delim-p 5 6)))
+                  (when (cperl-is-here-doc-p matched-pos)
+                    (let ((here-doc-results
+                           (cperl-process-here-doc
+                            min max end overshoot stop-point ; for recursion
+                            end-of-here-doc err-l            ; for recursion
+                            (equal (match-string 2) "~")     ; indented here-doc?
+                            matched-pos                      ; for recovery (?)
+                            (match-end 3)                    ; todo from here
+                            (match-beginning delim-capture)  ; starting delimiter
+                            (match-end delim-capture))))     ;   boundaries
+                      (setq tmpend (nth 0 here-doc-results)
+                            overshoot (nth 1 here-doc-results))
+                      (and (nth 2 here-doc-results)
+                           (setq warning-message (nth 2 here-doc-results)))))))
+	       ;; format capture groups 8-9
 	       ((match-beginning 8)
-		;; 1+6=7 extra () before this:
-		;;"^[ \t]*\\(format\\)[ \t]*\\([a-zA-Z0-9_]+\\)?[ \t]*=[ \t]*$"
 		(setq b (point)
-		      name (if (match-beginning 8) ; 7 + 1
-			       (buffer-substring (match-beginning 8) ; 7 + 1
-						 (match-end 8)) ; 7 + 1
+		      name (if (match-beginning 9) ; 7 + 2
+                               (match-string-no-properties 9)        ; 7 + 2
 			     "")
 		      tb (match-beginning 0))
 		(setq argument nil)
-		(put-text-property (point-at-bol) b 'first-format-line 't)
+                (put-text-property (line-beginning-position)
+                                   b 'first-format-line 't)
 		(if cperl-pod-here-fontify
 		    (while (and (eq (forward-line) 0)
 				(not (looking-at "^[.;]$")))
@@ -4063,22 +4585,20 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 		(if (looking-at "^\\.$") ; ";" is not supported yet
 		    (progn
 		      ;; Highlight the ending delimiter
-		      (cperl-postpone-fontification (point) (+ (point) 2)
+		      (cperl-postpone-fontification (point) (+ (point) 1)
 						    'face font-lock-string-face)
-		      (cperl-commentify (point) (+ (point) 2) nil)
-		      (cperl-put-do-not-fontify (point) (+ (point) 2) t))
-		  (message "End of format `%s' not found." name)
+		      (cperl-commentify (point) (+ (point) 1) nil)
+		      (cperl-put-do-not-fontify (point) (+ (point) 1) t))
+		  (setq warning-message
+                        (format "End of format `%s' not found." name))
 		  (or (car err-l) (setcar err-l b)))
 		(forward-line)
 		(if (> (point) max)
 		    (setq tmpend tb))
 		(put-text-property b (point) 'syntax-type 'format))
-	       ;; qq-like String or Regexp:
+	       ;; quotelike operator or regexp: capture groups 10 or 11
+               ;; matches some false positives, to be eliminated here
 	       ((or (match-beginning 10) (match-beginning 11))
-		;; 1+6+2=9 extra () before this:
-		;; "\\<\\(q[wxqr]?\\|[msy]\\|tr\\)\\>"
-		;; "\\|"
-		;; "\\([?/<]\\)"	; /blah/ or ?blah? or <file*glob>
 		(setq b1 (if (match-beginning 10) 10 11)
 		      argument (buffer-substring
 				(match-beginning b1) (match-end b1))
@@ -4088,32 +4608,37 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 		      bb (char-after (1- (match-beginning b1))) ; tmp holder
 		      ;; bb == "Not a stringy"
 		      bb (if (eq b1 10) ; user variables/whatever
-			     (and (memq bb (append "$@%*#_:-&>" nil)) ; $#y)
-				  (cond ((eq bb ?-) (eq c ?s)) ; -s file test
-					((eq bb ?\:) ; $opt::s
-					 (eq (char-after
-					      (- (match-beginning b1) 2))
-					     ?\:))
-					((eq bb ?\>) ; $foo->s
-					 (eq (char-after
-					      (- (match-beginning b1) 2))
-					     ?\-))
-					((eq bb ?\&)
-					 (not (eq (char-after ; &&m/blah/
-						   (- (match-beginning b1) 2))
-						  ?\&)))
-					(t t)))
+                             (or
+                              ; false positive: "y_" has no word boundary
+                              (save-match-data (looking-at "_"))
+			      (and (memq bb (append "$@%*#_:-&>" nil)) ; $#y)
+				   (cond ((eq bb ?-) (eq c ?s)) ; -s file test
+					 ((eq bb ?\:) ; $opt::s
+					  (eq (char-after
+					       (- (match-beginning b1) 2))
+					      ?\:))
+					 ((eq bb ?\>) ; $foo->s
+					  (eq (char-after
+					       (- (match-beginning b1) 2))
+					      ?\-))
+					 ((eq bb ?\&)
+					  (not (eq (char-after ; &&m/blah/
+						    (- (match-beginning b1) 2))
+						   ?\&)))
+					 (t t))))
 			   ;; <file> or <$file>
 			   (and (eq c ?\<)
-				;; Do not stringify <FH>, <$fh> :
+                                ;; Stringify what looks like a glob, but
+				;; do not stringify file handles <FH>, <$fh> :
 				(save-match-data
 				  (looking-at
-				   "\\$?\\([_a-zA-Z:][_a-zA-Z0-9:]*\\)?>"))))
+                                   (rx (sequence (opt "$")
+                                                 (eval cperl--normal-identifier-rx)))))))
 		      tb (match-beginning 0))
 		(goto-char (match-beginning b1))
 		(cperl-backward-to-noncomment (point-min))
 		(or bb
-		    (if (eq b1 11)	; bare /blah/ or ?blah? or <foo>
+		    (if (eq b1 11)	; bare /blah/ or <foo>
 			(setq argument ""
 			      b1 nil
 			      bb	; Not a regexp?
@@ -4121,28 +4646,38 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			       ;; What is below: regexp-p?
 			       (and
 				(or (memq (preceding-char)
-					  (append (if (memq c '(?\? ?\<))
+					  (append (if (char-equal c ?\<)
 						      ;; $a++ ? 1 : 2
 						      "~{(=|&*!,;:["
 						    "~{(=|&+-*!,;:[") nil))
 				    (and (eq (preceding-char) ?\})
 					 (cperl-after-block-p (point-min)))
 				    (and (eq (char-syntax (preceding-char)) ?w)
-					 (progn
+					 (save-excursion
 					   (forward-sexp -1)
-;; After these keywords `/' starts a RE.  One should add all the
-;; functions/builtins which expect an argument, but ...
-					   (if (eq (preceding-char) ?-)
-					       ;; -d ?foo? is a RE
-					       (looking-at "[a-zA-Z]\\>")
+                                           ;; After these keywords `/'
+                                           ;; starts a RE.  One should
+                                           ;; add all the
+                                           ;; functions/builtins which
+                                           ;; expect an argument, but
+                                           ;; ...
 					     (and
 					      (not (memq (preceding-char)
 							 '(?$ ?@ ?& ?%)))
 					      (looking-at
-					       "\\(while\\|if\\|unless\\|until\\|and\\|or\\|not\\|xor\\|split\\|grep\\|map\\|print\\)\\>")))))
+                                               (regexp-opt
+                                                '("while" "if" "unless"
+                                                  "until" "for" "foreach"
+                                                  "and" "or" "not"
+					          "xor" "split" "grep" "map"
+                                                  "print" "say" "return")
+                                                'symbols)))))
 				    (and (eq (preceding-char) ?.)
 					 (eq (char-after (- (point) 2)) ?.))
 				    (bobp))
+				;; { $a++ / $b } doesn't start a regex, nor does $a--
+				(not (and (memq (preceding-char) '(?+ ?-))
+					  (eq (preceding-char) (char-before (1- (point))))))
 				;;  m|blah| ? foo : bar;
 				(not
 				 (and (eq c ?\?)
@@ -4178,7 +4713,16 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 				 (error nil)))
 			     (if (or bb
 				     (looking-at ; $foo -> {s}
-				      "[$@]\\$*\\([a-zA-Z0-9_:]+\\|[^{]\\)\\([ \t\n]*->\\)?[ \t\n]*{")
+                                      (rx
+                                       (sequence
+                                        (in "$@") (0+ "$")
+                                        (or
+                                         (eval cperl--normal-identifier-rx)
+                                         (not (in "{")))
+                                        (opt (sequence (eval cperl--ws*-rx))
+                                             "->")
+                                        (eval cperl--ws*-rx)
+                                        "{")))
 				     (and ; $foo[12] -> {s}
 				      (memq (following-char) '(?\{ ?\[))
 				      (progn
@@ -4193,7 +4737,12 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			     (setq bb t))
 			    ((and (eq (following-char) ?:)
 				  (eq b1 ?\{) ; Check for $ { s::bar }
-				  (looking-at "::[a-zA-Z0-9_:]*[ \t\n\f]*}")
+				  ;;  (looking-at "::[a-zA-Z0-9_:]*[ \t\n\f]*}")
+                                  (looking-at
+                                   (rx (sequence "::"
+                                                 (eval cperl--normal-identifier-rx)
+                                                 (eval cperl--ws*-rx)
+                                                 "}")))
 				  (progn
 				    (goto-char (1- go))
 				    (skip-chars-backward " \t\n\f")
@@ -4322,12 +4871,13 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			   (1- e) e 'face my-cperl-delimiters-face)))
 		    (if (and is-REx cperl-regexp-scan)
 			;; Process RExen: embedded comments, charclasses and ]
-;;;/\3333\xFg\x{FFF}a\ppp\PPP\qqq\C\99f(?{  foo  })(??{  foo  })/;
-;;;/a\.b[^a[:ff:]b]x$ab->$[|$,$ab->[cd]->[ef]|$ab[xy].|^${a,b}{c,d}/;
-;;;/(?<=foo)(?<!bar)(x)(?:$ab|\$\/)$|\\\b\x888\776\[\:$/xxx;
-;;;m?(\?\?{b,a})? + m/(??{aa})(?(?=xx)aa|bb)(?#aac)/;
-;;;m$(^ab[c]\$)$ + m+(^ab[c]\$\+)+ + m](^ab[c\]$|.+)] + m)(^ab[c]$|.+\));
-;;;m^a[\^b]c^ + m.a[^b]\.c.;
+                        ;; Examples:
+                        ;;/\3333\xFg\x{FFF}a\ppp\PPP\qqq\C\99f(?{  foo  })(??{  foo  })/;
+                        ;;/a\.b[^a[:ff:]b]x$ab->$[|$,$ab->[cd]->[ef]|$ab[xy].|^${a,b}{c,d}/;
+                        ;;/(?<=foo)(?<!bar)(x)(?:$ab|\$\/)$|\\\b\x888\776\[\:$/xxx;
+                        ;;m?(\?\?{b,a})? + m/(??{aa})(?(?=xx)aa|bb)(?#aac)/;
+                        ;;m$(^ab[c]\$)$ + m+(^ab[c]\$\+)+ + m](^ab[c\]$|.+)] + m)(^ab[c]$|.+\));
+                        ;;m^a[\^b]c^ + m.a[^b]\.c.;
 			(save-excursion
 			  (goto-char (1+ b))
 			  ;; First
@@ -4358,7 +4908,7 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 				    "\\(" ;; XXXX 1-char variables, exc. |()\s
 				       "[$@]"
 				       "\\("
-				          "[_a-zA-Z:][_a-zA-Z0-9:]*"
+                                          (rx (eval cperl--normal-identifier-rx))
 				       "\\|"
 				          "{[^{}]*}" ; only one-level allowed
 				       "\\|"
@@ -4391,8 +4941,6 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 				          "\\?([0-9]+)"	; (?(1)foo|bar)
 				       "\\|"
 					  "\\?<[=!]"
-				       ;;;"\\|"
-				       ;;;   "\\?"
 				       "\\)?"
 				    "\\)"
 				 "\\|"
@@ -4503,7 +5051,7 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 					    "\\=[0123456789]*" (1- e) 'to-end))
 				      (and (eq qtag ?x)
 					   (re-search-forward
-					    "\\=[0-9a-fA-F][0-9a-fA-F]?\\|\\={[0-9a-fA-F]+}"
+					    "\\=[[:xdigit:]][[:xdigit:]]?\\|\\={[[:xdigit:]]+}"
 					    (1- e) 'to-end))
 				      (and (memq qtag (append "pPN" nil))
 					   (re-search-forward "\\={[^{}]+}\\|."
@@ -4537,14 +5085,14 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 			      (setq REx-subgr-end qtag)	;End smart-highlighted
 			      ;; Apparently, I can't put \] into a charclass
 			      ;; in m]]: m][\\\]\]] produces [\\]]
-;;; POSIX?  [:word:] [:^word:] only inside []
-;;;	       "\\=\\(\\\\.\\|[^][\\\\]\\|\\[:\\^?\sw+:]\\|\\[[^:]\\)*]")
+                              ;; POSIX?  [:word:] [:^word:] only inside []
+                              ;; "\\=\\(\\\\.\\|[^][\\]\\|\\[:\\^?\sw+:]\\|\\[[^:]\\)*]")
 			      (while	; look for unescaped ]
 				  (and argument
 				       (re-search-forward
 					(if (eq (char-after b) ?\] )
-					    "\\=\\(\\\\[^]]\\|[^]\\\\]\\)*\\\\]"
-					  "\\=\\(\\\\.\\|[^]\\\\]\\)*]")
+					    "\\=\\(\\\\[^]]\\|[^]\\]\\)*\\\\]"
+					  "\\=\\(\\\\.\\|[^]\\]\\)*]")
 					(1- e) 'toend))
 				;; Is this ] an end of POSIX class?
 				(if (save-excursion
@@ -4581,8 +5129,9 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 					  REx-subgr-end argument) ; continue
 				  (setq argument nil)))
 			      (and argument
-				   (message "Couldn't find end of charclass in a REx, pos=%s"
-					    REx-subgr-start))
+				   (setq warning-message
+                                         (format "Couldn't find end of charclass in a REx, pos=%s"
+					         REx-subgr-start)))
 			      (setq argument (1- (point)))
 			      (goto-char REx-subgr-end)
 			      (cperl-highlight-charclass
@@ -4638,7 +5187,8 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 					   (setq qtag "Can't find })")))
 				  (progn
 				    (goto-char (1- e))
-				    (message "%s" qtag))
+				    (setq warning-message
+                                          (format "%s" qtag)))
 				(cperl-postpone-fontification
 				 (1- tag) (1- (point))
 				 'face font-lock-variable-name-face)
@@ -4659,17 +5209,17 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 				       'syntax-table cperl-st-cfence))))
 			      (setq was-subgr nil))
 			     (t		; (?#)-comment
-			      ;; Inside "(" and "\" arn't special in any way
+			      ;; Inside "(" and "\" aren't special in any way
 			      ;; Works also if the outside delimiters are ().
 			      (or;;(if (eq (char-after b) ?\) )
 			       ;;(re-search-forward
-			       ;; "[^\\\\]\\(\\\\\\\\\\)*\\\\)"
+			       ;; "[^\\]\\(\\\\\\\\\\)*\\\\)"
 			       ;; (1- e) 'toend)
 			       (search-forward ")" (1- e) 'toend)
 			       ;;)
-			       (message
-				"Couldn't find end of (?#...)-comment in a REx, pos=%s"
-				REx-subgr-start))))
+			       (setq warning-message
+				     (format "Couldn't find end of (?#...)-comment in a REx, pos=%s"
+				             REx-subgr-start)))))
 			    (if (>= (point) e)
 				(goto-char (1- e)))
 			    (cond
@@ -4696,42 +5246,51 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 					   'REx-part2 t)))))
 		  (if (> (point) max)
 		      (setq tmpend tb))))
-	       ((match-beginning 17)	; sub with prototype or attribute
+	       ((match-beginning 14)	; sub with prototype or attribute
 		;; 1+6+2+1+1=11 extra () before this (sub with proto/attr):
-		;;"\\<sub\\>\\("			;12
-		;;   cperl-white-and-comment-rex	;13
-		;;   "\\([a-zA-Z_:'0-9]+\\)\\)?" ; name	;14
-		;;"\\(" cperl-maybe-white-and-comment-rex	;15,16
-		;;   "\\(([^()]*)\\|:[^:]\\)\\)" ; 17:proto or attribute start
-		(setq b1 (match-beginning 14) e1 (match-end 14))
+		;; match-string 12: Keyword "sub" or "method"
+		;; match-string 13: Name of the subroutine (optional)
+                ;; match-string 14: Indicator for proto/attr/signature
+                ;; match-string 15: Prototype
+                ;; match-string 16: Subroutine signature
+                ;; match-string 17: Distinguish declaration/definition
+                (setq b1 (match-beginning 13) e1 (match-end 13))
 		(if (memq (char-after (1- b))
 			  '(?\$ ?\@ ?\% ?\& ?\*))
-		    nil
+		    nil ;; we found $sub or @method etc
 		  (goto-char b)
-		  (if (eq (char-after (match-beginning 17)) ?\( )
+		  (if (match-beginning 15) ; a complete prototype
 		      (progn
 			(cperl-commentify ; Prototypes; mark as string
-			 (match-beginning 17) (match-end 17) t)
+			 (match-beginning 15) (match-end 15) t)
 			(goto-char (match-end 0))
 			;; Now look for attributes after prototype:
 			(forward-comment (buffer-size))
-			(and (looking-at ":[^:]")
-			     (cperl-find-sub-attrs st-l b1 e1 b)))
-		    ;; treat attributes without prototype
-		    (goto-char (match-beginning 17))
-		    (cperl-find-sub-attrs st-l b1 e1 b))))
-	       ;; 1+6+2+1+1+6+1=18 extra () before this:
+			(cperl-find-sub-attrs st-l b1 e1 b))
+		    ;; treat attributes without prototype and incomplete stuff
+                    (if (match-beginning 16) ; a complete subroutine signature
+                        ;; A signature ending in "$)" must not be
+                        ;; mistaken as the punctuation variable $) which
+                        ;; messes up balance of parens (Bug#74245).
+                        (progn
+                          (when (= (char-after (- (match-end 16) 2)) ?$)
+                            (put-text-property (- (match-end 16) 2) (1- (match-end 16))
+                                               'syntax-table cperl-st-punct))
+                          (goto-char (match-end 16)))
+		      (goto-char (match-beginning 17))
+		      (cperl-find-sub-attrs st-l b1 e1 b)))))
+	        ;; 1+6+2+1+1+6+1=18 extra () before this:
 	       ;;    "\\(\\<sub[ \t\n\f]+\\|[&*$@%]\\)[a-zA-Z0-9_]*'")
 	       ((match-beginning 19)	; old $abc'efg syntax
 		(setq bb (match-end 0))
-		;;;(if (nth 3 state) nil	; in string
 		(put-text-property (1- bb) bb 'syntax-table cperl-st-word)
 		(goto-char bb))
 	       ;; 1+6+2+1+1+6+1+1=19 extra () before this:
 	       ;; "__\\(END\\|DATA\\)__"
 	       ((match-beginning 20)	; __END__, __DATA__
-		(setq bb (match-end 0))
-		;; (put-text-property b (1+ bb) 'syntax-type 'pod) ; Cheat
+                (if (eq cperl-fontify-trailer 'perl-code)
+		    (setq bb (match-end 0))
+                  (setq bb (point-max)))
 		(cperl-commentify b bb nil)
 		(setq end t))
 	       ;; "\\\\\\(['`\"($]\\)"
@@ -4740,15 +5299,15 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 		(setq bb (match-end 0))
 		(goto-char b)
 		(skip-chars-backward "\\\\")
-		;;;(setq i2 (= (% (skip-chars-backward "\\\\") 2) -1))
+		;; (setq i2 (= (% (skip-chars-backward "\\\\") 2) -1))
 		(cperl-modify-syntax-type b cperl-st-punct)
 		(goto-char bb))
 	       (t (error "Error in regexp of the sniffer")))
 	      (if (> (point) stop-point)
 		  (progn
 		    (if end
-			(message "Garbage after __END__/__DATA__ ignored")
-		      (message "Unbalanced syntax found while scanning")
+			(setq warning-message "Garbage after __END__/__DATA__ ignored")
+		      (setq warning-message "Unbalanced syntax found while scanning")
 		      (or (car err-l) (setcar err-l b)))
 		    (goto-char stop-point))))
 	    (setq cperl-syntax-state (cons state-point state)
@@ -4767,6 +5326,7 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
       ;; cperl-mode-syntax-table.
       ;; (set-syntax-table cperl-mode-syntax-table)
       )
+    (when warning-message (message warning-message))
     (list (car err-l) overshoot)))
 
 (defun cperl-find-pods-heres-region (min max)
@@ -4794,19 +5354,24 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 	    (if (< p (point)) (goto-char p))
 	    (setq stop t))))))
 
-;; Used only in `cperl-calculate-indent'...
-(defun cperl-block-p ()		   ; Do not C-M-q !  One string contains ";" !
-  ;; Positions is before ?\{.  Checks whether it starts a block.
+;; Used only in `cperl-sniff-for-indent'...
+(defun cperl-block-p ()
+  "Point is before ?\\{.  Return true if it starts a block."
   ;; No save-excursion!  This is more a distinguisher of a block/hash ref...
   (cperl-backward-to-noncomment (point-min))
   (or (memq (preceding-char) (append ";){}$@&%\C-@" nil)) ; Or label!  \C-@ at bobp
 					; Label may be mixed up with `$blah :'
       (save-excursion (cperl-after-label))
+      ;; text with the 'attrib-group property is also covered by the
+      ;; next clause.  We keep it because it is faster (for
+      ;; subroutines with attributes).
       (get-text-property (cperl-1- (point)) 'attrib-group)
+      (save-excursion (cperl-block-declaration-p))
       (and (memq (char-syntax (preceding-char)) '(?w ?_))
 	   (progn
 	     (backward-sexp)
 	     ;; sub {BLK}, print {BLK} $data, but NOT `bless', `return', `tr', `constant'
+             ;; a-zA-Z is fine here, these are Perl keywords
 	     (or (and (looking-at "[a-zA-Z0-9_:]+[ \t\n\f]*[{#]") ; Method call syntax
 		      (not (looking-at "\\(bless\\|return\\|q[wqrx]?\\|tr\\|[smy]\\|constant\\)\\>")))
 		 ;; sub bless::foo {}
@@ -4815,16 +5380,16 @@ the sections using `cperl-pod-head-face', `cperl-pod-face',
 		   (and (eq (preceding-char) ?b)
 			(progn
 			  (forward-sexp -1)
-			  (looking-at "sub[ \t\n\f#]")))))))))
+			  (looking-at (concat cperl-sub-regexp "[ \t\n\f#]"))))))))))
 
-;;; What is the difference of (cperl-after-block-p lim t) and (cperl-block-p)?
-;;; No save-excursion; condition-case ...  In (cperl-block-p) the block
-;;; may be a part of an in-statement construct, such as
-;;;   ${something()}, print {FH} $data.
-;;; Moreover, one takes positive approach (looks for else,grep etc)
-;;; another negative (looks for bless,tr etc)
+;; What is the difference of (cperl-after-block-p lim t) and (cperl-block-p)?
+;; No save-excursion; condition-case ...  In (cperl-block-p) the block
+;; may be a part of an in-statement construct, such as
+;;   ${something()}, print {FH} $data.
+;; Moreover, one takes positive approach (looks for else,grep etc)
+;; another negative (looks for bless,tr etc)
 (defun cperl-after-block-p (lim &optional pre-block)
-  "Return true if the preceding } (if PRE-BLOCK, following {) delimits a block.
+  "Return non-nil if the preceding } (if PRE-BLOCK, following {) delimits a block.
 Would not look before LIM.  Assumes that LIM is a good place to begin a
 statement.  The kind of block we treat here is one after which a new
 statement would start; thus the block in ${func()} does not count."
@@ -4840,31 +5405,37 @@ statement would start; thus the block in ${func()} does not count."
 	      (save-excursion (cperl-after-label))
 	      ;; sub :attr {}
 	      (get-text-property (cperl-1- (point)) 'attrib-group)
+              (save-excursion (cperl-block-declaration-p))
 	      (if (memq (char-syntax (preceding-char)) '(?w ?_)) ; else {}
 		  (save-excursion
 		    (forward-sexp -1)
 		    ;; else {}     but not    else::func {}
-		    (or (and (looking-at "\\(else\\|continue\\|grep\\|map\\|BEGIN\\|END\\|CHECK\\|INIT\\)\\>")
+		    (or (and (looking-at (rx (or "else" "catch" "try"
+                                                 "finally" "defer"
+                                                 "continue" "grep" "map"
+                                                 "ADJUST" "BEGIN" "CHECK" "END"
+                                                 "INIT" "UNITCHECK")))
 			     (not (looking-at "\\(\\sw\\|_\\)+::")))
 			;; sub f {}
 			(progn
 			  (cperl-backward-to-noncomment lim)
-			  (and (eq (preceding-char) ?b)
+			  (and (cperl-char-ends-sub-keyword-p (preceding-char))
 			       (progn
 				 (forward-sexp -1)
-				 (looking-at "sub[ \t\n\f#]"))))))
+				 (looking-at
+                                  (concat cperl-sub-regexp "[ \t\n\f#]")))))))
 		;; What precedes is not word...  XXXX Last statement in sub???
 		(cperl-after-expr-p lim))))
       (error nil))))
 
 (defun cperl-after-expr-p (&optional lim chars test)
-  "Return true if the position is good for start of expression.
+  "Return non-nil if the position is good for start of expression.
 TEST is the expression to evaluate at the found position.  If absent,
 CHARS is a string that contains good characters to have before us (however,
 `}' is treated \"smartly\" if it is not in the list)."
   (let ((lim (or lim (point-min)))
-	stop p pr)
-    (cperl-update-syntaxification (point) (point))
+	stop p)
+    (cperl-update-syntaxification (point))
     (save-excursion
       (while (and (not stop) (> (point) lim))
 	(skip-chars-backward " \t\n\f" lim)
@@ -4938,7 +5509,6 @@ CHARS is a string that contains good characters to have before us (however,
 	(error t))))
 
 (defun cperl-forward-to-end-of-expr (&optional lim)
-  (let ((p (point))))
   (condition-case nil
       (progn
 	(while (and (< (point) (or lim (point-max)))
@@ -4955,7 +5525,8 @@ CHARS is a string that contains good characters to have before us (however,
   (skip-chars-forward " \t"))
 
 (defun cperl-after-block-and-statement-beg (lim)
-  ;; We assume that we are after ?\}
+  "Return non-nil if the preceding ?} ends the statement."
+  ;;  We assume that we are after ?\}
   (and
    (cperl-after-block-p lim)
    (save-excursion
@@ -4968,7 +5539,7 @@ CHARS is a string that contains good characters to have before us (however,
 	   (forward-sexp -1)
 	   (not
 	    (looking-at
-	     "\\(map\\|grep\\|printf?\\|system\\|exec\\|tr\\|s\\)\\>")))))))
+	     "\\(map\\|grep\\|say\\|printf?\\|system\\|exec\\|tr\\|s\\)\\_>")))))))
 
 
 (defun cperl-indent-exp ()
@@ -4981,7 +5552,7 @@ If `cperl-indent-region-fix-constructs', will improve spacing on
 conditional/loop constructs."
   (interactive)
   (save-excursion
-    (let ((tmp-end (point-at-eol)) top done)
+    (let ((tmp-end (line-end-position)) top done)
       (save-excursion
 	(beginning-of-line)
 	(while (null done)
@@ -4993,9 +5564,10 @@ conditional/loop constructs."
 	  (while (< (point) tmp-end)
 	    (parse-partial-sexp (point) tmp-end nil t) ; To start-sexp or eol
 	    (or (eolp) (forward-sexp 1)))
-	  (if (> (point) tmp-end)	; Yes, there an unfinished block
+	  (if (> (point) tmp-end)	; Check for an unfinished block
 	      nil
 	    (if (eq ?\) (preceding-char))
+		;; closing parens can be preceded by up to three sexps
 		(progn ;; Plan B: find by REGEXP block followup this line
 		  (setq top (point))
 		  (condition-case nil
@@ -5004,19 +5576,23 @@ conditional/loop constructs."
 			(if (eq (following-char) ?$ ) ; for my $var (list)
 			    (progn
 			      (forward-sexp -1)
-			      (if (looking-at "\\(my\\|local\\|our\\)\\>")
+			      (if (looking-at "\\(state\\|my\\|local\\|our\\|field\\)\\>")
 				  (forward-sexp -1))))
 			(if (looking-at
-			     (concat "\\(\\elsif\\|if\\|unless\\|while\\|until"
+			     (concat "\\(elsif\\|if\\|unless\\|while\\|until"
+                                     "\\|try\\|catch\\|finally\\|defer"
 				     "\\|for\\(each\\)?\\>\\(\\("
 				     cperl-maybe-white-and-comment-rex
-				     "\\(my\\|local\\|our\\)\\)?"
+				     "\\(state\\|my\\|local\\|our\\|field\\)\\)?"
 				     cperl-maybe-white-and-comment-rex
-				     "\\$[_a-zA-Z0-9]+\\)?\\)\\>"))
+                                     (rx (eval cperl--basic-variable-rx))
+				     "\\)?\\)\\>"))
 			    (progn
 			      (goto-char top)
 			      (forward-sexp 1)
-			      (setq top (point)))))
+			      (setq top (point)))
+			  ;; no block to be processed: expression ends here
+			  (setq done t)))
 		    (error (setq done t)))
 		  (goto-char top))
 	      (if (looking-at		; Try Plan C: continuation block
@@ -5024,9 +5600,9 @@ conditional/loop constructs."
 			   "\\<\\(else\\|elsif\\|continue\\)\\>"))
 		  (progn
 		    (goto-char (match-end 0))
-		    (setq tmp-end (point-at-eol)))
+                    (setq tmp-end (line-end-position)))
 		(setq done t))))
-	  (setq tmp-end (point-at-eol)))
+          (setq tmp-end (line-end-position)))
 	(goto-char tmp-end)
 	(setq tmp-end (point-marker)))
       (if cperl-indent-region-fix-constructs
@@ -5039,7 +5615,7 @@ Returns some position at the last line."
   (interactive)
   (or end
       (setq end (point-max)))
-  (let ((ee (point-at-eol))
+  (let ((ee (line-end-position))
 	(cperl-indent-region-fix-constructs
 	 (or cperl-indent-region-fix-constructs 1))
 	p pp ml have-brace ret)
@@ -5049,7 +5625,7 @@ Returns some position at the last line."
       ;;  }? continue
       ;;  blah; }
       (if (not
-	   (or (looking-at "[ \t]*\\(els\\(e\\|if\\)\\|continue\\|if\\|while\\|for\\(each\\)?\\|until\\)")
+	   (or (looking-at "[ \t]*\\(els\\(e\\|if\\)\\|continue\\|if\\|while\\|for\\(each\\)?\\|unless\\|until\\)\\_>")
 	       (setq have-brace (save-excursion (search-forward "}" ee t)))))
 	  nil				; Do not need to do anything
 	;; Looking at:
@@ -5057,7 +5633,7 @@ Returns some position at the last line."
 	;; else
 	(if cperl-merge-trailing-else
 	    (if (looking-at
-		 "[ \t]*}[ \t]*\n[ \t\n]*\\(els\\(e\\|if\\)\\|continue\\)\\>")
+		 "[ \t]*}[ \t]*\n[ \t\n]*\\(els\\(e\\|if\\)\\|continue\\)\\_>")
 		(progn
 		  (search-forward "}")
 		  (setq p (point))
@@ -5065,7 +5641,7 @@ Returns some position at the last line."
 		  (delete-region p (point))
 	      (insert (make-string cperl-indent-region-fix-constructs ?\s))
 		  (beginning-of-line)))
-	  (if (looking-at "[ \t]*}[ \t]*\\(els\\(e\\|if\\)\\|continue\\)\\>")
+	  (if (looking-at "[ \t]*}[ \t]*\\(els\\(e\\|if\\)\\|continue\\)\\_>")
 	      (save-excursion
 		  (search-forward "}")
 		  (delete-horizontal-space)
@@ -5077,7 +5653,7 @@ Returns some position at the last line."
 			(setq ret (point)))))))
 	;; Looking at:
 	;; }     else
-	(if (looking-at "[ \t]*}\\(\t*\\|[ \t][ \t]+\\)\\<\\(els\\(e\\|if\\)\\|continue\\)\\>")
+	(if (looking-at "[ \t]*}\\(\t*\\|[ \t][ \t]+\\)\\<\\(els\\(e\\|if\\)\\|continue\\)\\_>")
 	    (progn
 	      (search-forward "}")
 	      (delete-horizontal-space)
@@ -5086,7 +5662,7 @@ Returns some position at the last line."
 	;; Looking at:
 	;; else   {
 	(if (looking-at
-	     "[ \t]*}?[ \t]*\\<\\(\\els\\(e\\|if\\)\\|continue\\|unless\\|if\\|while\\|for\\(each\\)?\\|until\\)\\>\\(\t*\\|[ \t][ \t]+\\)[^ \t\n#]")
+	     "[ \t]*}?[ \t]*\\<\\(els\\(e\\|if\\)\\|continue\\|unless\\|if\\|while\\|for\\(each\\)?\\|until\\)\\>\\(\t*\\|[ \t][ \t]+\\)[^ \t\n#]")
 	    (progn
 	      (forward-word-strictly 1)
 	      (delete-horizontal-space)
@@ -5095,7 +5671,7 @@ Returns some position at the last line."
 	;; Looking at:
 	;; foreach my    $var
 	(if (looking-at
-	     "[ \t]*\\<for\\(each\\)?[ \t]+\\(my\\|local\\|our\\)\\(\t*\\|[ \t][ \t]+\\)[^ \t\n]")
+	     "[ \t]*\\<for\\(each\\)?[ \t]+\\(state\\|my\\|local\\|our\\)\\(\t*\\|[ \t][ \t]+\\)[^ \t\n]")
 	    (progn
 	      (forward-word-strictly 2)
 	      (delete-horizontal-space)
@@ -5104,7 +5680,14 @@ Returns some position at the last line."
 	;; Looking at:
 	;; foreach my $var     (
 	(if (looking-at
-	     "[ \t]*\\<for\\(each\\)?[ \t]+\\(my\\|local\\|our\\)[ \t]*\\$[_a-zA-Z0-9]+\\(\t*\\|[ \t][ \t]+\\)[^ \t\n#]")
+             (rx (sequence (0+ blank) symbol-start
+                           "for" (opt "each")
+                           (1+ blank)
+                           (or "state" "my" "local" "our")
+                           (0+ blank)
+                           "$" (eval cperl--basic-identifier-rx)
+                           (1+ blank)
+                           (not (in " \t\n#")))))
 	    (progn
 	      (forward-sexp 3)
 	      (delete-horizontal-space)
@@ -5114,9 +5697,26 @@ Returns some position at the last line."
 	;; Looking at (with or without "}" at start, ending after "({"):
 	;; } foreach my $var ()         OR   {
 	(if (looking-at
-	     "[ \t]*\\(}[ \t]*\\)?\\<\\(\\els\\(e\\|if\\)\\|continue\\|if\\|unless\\|while\\|for\\(each\\)?\\(\\([ \t]+\\(my\\|local\\|our\\)\\)?[ \t]*\\$[_a-zA-Z0-9]+\\)?\\|until\\)\\>\\([ \t]*(\\|[ \t\n]*{\\)\\|[ \t]*{")
+             (rx (sequence
+                  (0+ blank)
+                  (opt (sequence "}" (0+ blank) ))
+                  symbol-start
+                  (or "else" "elsif" "continue" "if" "unless" "while" "until"
+                      "try" "catch" "finally" "defer"
+                      (sequence (or "for" "foreach")
+                                (opt
+                                 (opt (sequence (1+ blank)
+                                                (or "state" "my" "local" "our")))
+                                 (0+ blank)
+                                 "$" (eval cperl--basic-identifier-rx))))
+                  symbol-end
+                  (group-n 1
+                           (or
+                            (or (sequence (0+ blank) "(")
+                                (sequence (eval cperl--ws*-rx) "{"))
+                            (sequence (0+ blank) "{"))))))
 	    (progn
-	      (setq ml (match-beginning 8)) ; "(" or "{" after control word
+	      (setq ml (match-beginning 1)) ; "(" or "{" after control word
 	      (re-search-forward "[({]")
 	      (forward-char -1)
 	      (setq p (point))
@@ -5192,7 +5792,7 @@ Returns some position at the last line."
 				(if (cperl-indent-line parse-data)
 				    (setq ret (cperl-fix-line-spacing end parse-data)))))))))))
 	(beginning-of-line)
-	(setq p (point) pp (point-at-eol)) ; May be different from ee.
+        (setq p (point) pp (line-end-position)) ; May be different from ee.
 	;; Now check whether there is a hanging `}'
 	;; Looking at:
 	;; } blah
@@ -5235,7 +5835,7 @@ Returns some position at the last line."
 
 (defvar cperl-update-start)		; Do not need to make them local
 (defvar cperl-update-end)
-(defun cperl-delay-update-hook (beg end old-len)
+(defun cperl-delay-update-hook (beg end _old-len)
   (setq cperl-update-start (min beg (or cperl-update-start (point-max))))
   (setq cperl-update-end (max end (or cperl-update-end (point-min)))))
 
@@ -5249,16 +5849,14 @@ inclusive.
 If `cperl-indent-region-fix-constructs', will improve spacing on
 conditional/loop constructs."
   (interactive "r")
-  (cperl-update-syntaxification end end)
+  (cperl-update-syntaxification end)
   (save-excursion
     (let (cperl-update-start cperl-update-end (h-a-c after-change-functions))
-      (let ((indent-info (if cperl-emacs-can-parse
-			     (list nil nil nil)	; Cannot use '(), since will modify
-			   nil))
-	    (pm 0)
+      (let ((indent-info (list nil nil nil)	; Cannot use '(), since will modify
+			 )
 	    after-change-functions	; Speed it up!
-	    st comm old-comm-indent new-comm-indent p pp i empty)
-	(if h-a-c (add-hook 'after-change-functions 'cperl-delay-update-hook))
+	    comm old-comm-indent new-comm-indent i empty)
+	(if h-a-c (add-hook 'after-change-functions #'cperl-delay-update-hook))
 	(goto-char start)
 	(setq old-comm-indent (and (cperl-to-comment-or-eol)
 				   (current-column))
@@ -5267,7 +5865,6 @@ conditional/loop constructs."
 	(setq end (set-marker (make-marker) end)) ; indentation changes pos
 	(or (bolp) (beginning-of-line 2))
 	(while (and (<= (point) end) (not (eobp))) ; bol to check start
-	  (setq st (point))
 	  (if (or
 	       (setq empty (looking-at "[ \t]*\n"))
 	       (and (setq comm (looking-at "[ \t]*#"))
@@ -5283,6 +5880,10 @@ conditional/loop constructs."
 		  (let ((comment-column new-comm-indent))
 		    (indent-for-comment)))
 	    (progn
+              ;; FIXME: It would be nice to keep indent-info, but this
+              ;; doesn not work if the region contains continuation
+              ;; lines (see `cperl-calculate-indent') -- haj 2023-06-30
+              (setq indent-info (list nil nil nil))
 	      (setq i (cperl-indent-line indent-info))
 	      (or comm
 		  (not i)
@@ -5431,117 +6032,89 @@ indentation and initial hashes.  Behaves usually outside of comment."
 	  ;; Previous space could have gone:
 	  (or (memq (preceding-char) '(?\s ?\t)) (insert " "))))))
 
-(defun cperl-imenu-addback (lst &optional isback name)
-  ;; We suppose that the lst is a DAG, unless the first element only
-  ;; loops back, and ISBACK is set.  Thus this function cannot be
-  ;; applied twice without ISBACK set.
-  (cond ((not cperl-imenu-addback) lst)
-	(t
-	 (or name
-	     (setq name "+++BACK+++"))
-	 (mapc (lambda (elt)
-		 (if (and (listp elt) (listp (cdr elt)))
-		     (progn
-		       ;; In the other order it goes up
-		       ;; one level only ;-(
-		       (setcdr elt (cons (cons name lst)
-					 (cdr elt)))
-		       (cperl-imenu-addback (cdr elt) t name))))
-	       (if isback (cdr lst) lst))
-	 lst)))
+;; The following lists are used for categorizing the entries found by
+;; `cperl-imenu--create-perl-index'.
+(defvar cperl-imenu-package-keywords '("package" "class" "role"))
+(defvar cperl-imenu-sub-keywords '("sub" "method" "function" "fun"
+                                   "reader")) ;; for autogenerated
+(defvar cperl-imenu-pod-keywords '("=head"))
 
-(defun cperl-imenu--create-perl-index (&optional regexp)
-  (require 'imenu)			; May be called from TAGS creator
-  (let ((index-alist '()) (index-pack-alist '()) (index-pod-alist '())
-	(index-unsorted-alist '()) (i-s-f (default-value 'imenu-sort-function))
-	(index-meth-alist '()) meth
-	packages ends-ranges p marker is-proto
-	(prev-pos 0) is-pack index index1 name (end-range 0) package)
-    (goto-char (point-min))
-    (cperl-update-syntaxification (point-max) (point-max))
-    ;; Search for the function
-    (progn ;;save-match-data
-      (while (re-search-forward
-	      (or regexp cperl-imenu--function-name-regexp-perl)
-	      nil t)
-	;; 2=package-group, 5=package-name 8=sub-name
+(defun cperl-imenu--create-perl-index ()
+  "Implement `imenu-create-index-function' for CPerl mode.
+This function relies on syntaxification to exclude lines which
+look like declarations but actually are part of a string, a
+comment, or POD."
+  (interactive) ; We'll remove that at some point
+  (goto-char (point-min))
+  (cperl-update-syntaxification (point-max))
+  (let ((case-fold-search nil)
+	(index-alist '())
+	(index-package-alist '())
+	(index-pod-alist '())
+	(index-sub-alist '())
+	(index-unsorted-alist '())
+	(namespace-stack '())           ; for package NAME BLOCK
+	(current-namespace "(main)")
+	(current-namespace-end (point-max))) ; end of package scope
+    ;; collect index entries
+    (while (re-search-forward (rx (eval cperl--imenu-entries-rx)) nil t)
+      ;; First, check whether we have left the scope of previously
+      ;; recorded packages, and if so, eliminate them from the stack.
+      (while (< current-namespace-end (point))
+	(setq current-namespace (pop namespace-stack))
+	(setq current-namespace-end (pop namespace-stack)))
+      (let ((state (syntax-ppss))
+            (entry-type (match-string 1))
+	    name marker) ; for the "current" entry
 	(cond
-	 ((and				; Skip some noise if building tags
-	   (match-beginning 5)		; package name
-	   ;;(eq (char-after (match-beginning 2)) ?p) ; package
-	   (not (save-match-data
-		  (looking-at "[ \t\n]*;")))) ; Plain text word 'package'
-	  nil)
-	 ((and
-	   (or (match-beginning 2)
-	       (match-beginning 8))		; package or sub
-	   ;; Skip if quoted (will not skip multi-line ''-strings :-():
-	   (null (get-text-property (match-beginning 1) 'syntax-table))
-	   (null (get-text-property (match-beginning 1) 'syntax-type))
-	   (null (get-text-property (match-beginning 1) 'in-pod)))
-	  (setq is-pack (match-beginning 2))
-	  ;; (if (looking-at "([^()]*)[ \t\n\f]*")
-	  ;;    (goto-char (match-end 0)))	; Messes what follows
-	  (setq meth nil
-		p (point))
-	  (while (and ends-ranges (>= p (car ends-ranges)))
-	    ;; delete obsolete entries
-	    (setq ends-ranges (cdr ends-ranges) packages (cdr packages)))
-	  (setq package (or (car packages) "")
-		end-range (or (car ends-ranges) 0))
-	  (if is-pack			; doing "package"
-	      (progn
-		(if (match-beginning 5)	; named package
-		    (setq name (buffer-substring (match-beginning 5)
-						 (match-end 5))
-			  name (progn
-				 (set-text-properties 0 (length name) nil name)
-				 name)
-			  package (concat name "::")
-			  name (concat "package " name))
-		  ;; Support nameless packages
-		  (setq name "package;" package ""))
-		(setq end-range
-		      (save-excursion
-			(parse-partial-sexp (point) (point-max) -1) (point))
-		      ends-ranges (cons end-range ends-ranges)
-		      packages (cons package packages)))
-	    (setq is-proto
-		  (or (eq (following-char) ?\;)
-		      (eq 0 (get-text-property (point) 'attrib-group)))))
-	  ;; Skip this function name if it is a prototype declaration.
-	  (if (and is-proto (not is-pack)) nil
-	    (or is-pack
-		(setq name
-		      (buffer-substring (match-beginning 8) (match-end 8)))
-		(set-text-properties 0 (length name) nil name))
-	    (setq marker (make-marker))
-	    (set-marker marker (match-end (if is-pack 2 8)))
-	    (cond (is-pack nil)
-		  ((string-match "[:']" name)
-		   (setq meth t))
-		  ((> p end-range) nil)
-		  (t
-		   (setq name (concat package name) meth t)))
-	    (setq index (cons name marker))
-	    (if is-pack
-		(push index index-pack-alist)
-	      (push index index-alist))
-	    (if meth (push index index-meth-alist))
-	    (push index index-unsorted-alist)))
-	 ((match-beginning 16)		; POD section
-	  (setq name (buffer-substring (match-beginning 17) (match-end 17))
-		marker (make-marker))
-	  (set-marker marker (match-beginning 17))
-	  (set-text-properties 0 (length name) nil name)
-	  (setq name (concat (make-string
-			      (* 3 (- (char-after (match-beginning 16)) ?1))
-			      ?\ )
-			     name)
-		index (cons name marker))
-	  (setq index1 (cons (concat "=" name) (cdr index)))
-	  (push index index-pod-alist)
-	  (push index1 index-unsorted-alist)))))
+	 ((nth 3 state) nil)            ; matched in a string, so skip
+         ((member entry-type cperl-imenu-package-keywords) ; package or class
+	  (unless (nth 4 state)         ; skip if in a comment
+	    (setq name (match-string-no-properties 2)
+		  marker (copy-marker (match-end 2)))
+	    (if  (string= (match-string 3) ";")
+		(setq current-namespace name)  ; package NAME;
+	      ;; No semicolon, therefore we have: package NAME BLOCK.
+	      ;; Stash the current package, because we need to restore
+	      ;; it after the end of BLOCK.
+	      (push current-namespace-end namespace-stack)
+	      (push current-namespace namespace-stack)
+	      ;; record the current name and its scope
+	      (setq current-namespace name)
+	      (setq current-namespace-end (save-excursion
+					  (goto-char (match-beginning 3))
+					  (forward-sexp)
+					  (point))))
+	    (push (cons name marker) index-package-alist)
+	    (push (cons (concat entry-type " " name) marker) index-unsorted-alist)))
+	 ((or (member entry-type cperl-imenu-sub-keywords) ; sub or method
+              (string-equal entry-type ""))                ; named blocks
+	  (unless (nth 4 state)         ; skip if in a comment
+	    (setq name (match-string-no-properties 2)
+		  marker (copy-marker (match-end 2)))
+	    ;; Qualify the sub name with the namespace if it doesn't
+	    ;; already have one, and if it isn't lexically scoped.
+	    ;; "my" and "state" subs are lexically scoped, but "our"
+	    ;; are just lexical aliases to package subs.
+	    (if (and (null (string-match "::" name))
+		     (or (null (match-string 3))
+			 (string-equal (match-string 3) "our")))
+	      (setq name (concat current-namespace "::" name)))
+	    (let ((index (cons name marker)))
+	      (push index index-alist)
+	      (push index index-sub-alist)
+	      (push index index-unsorted-alist))))
+	 ((member entry-type cperl-imenu-pod-keywords)  ; POD heading
+	  (when (get-text-property (match-beginning 2) 'in-pod)
+	    (setq name (concat (make-string
+				(* 3 (- (char-after (match-beginning 3)) ?1))
+				?\ )
+			       (match-string-no-properties 2))
+		  marker (copy-marker (match-beginning 2)))
+	    (push (cons name marker) index-pod-alist)
+	    (push (cons (concat "=" name) marker) index-unsorted-alist)))
+	 (t (error "Unidentified match: %s" (match-string 0))))))
+    ;; Now format the collected stuff
     (setq index-alist
 	  (if (default-value 'imenu-sort-function)
 	      (sort index-alist (default-value 'imenu-sort-function))
@@ -5550,17 +6123,21 @@ indentation and initial hashes.  Behaves usually outside of comment."
 	 (push (cons "+POD headers+..."
 		     (nreverse index-pod-alist))
 	       index-alist))
-    (and (or index-pack-alist index-meth-alist)
-	 (let ((lst index-pack-alist) hier-list pack elt group name)
-	   ;; Remove "package ", reverse and uniquify.
+    (and (or index-package-alist index-sub-alist)
+	 (let ((lst index-package-alist) hier-list pack elt group name)
+	   ;; reverse and uniquify.
 	   (while lst
-	     (setq elt (car lst) lst (cdr lst) name (substring (car elt) 8))
+	     (setq elt (car lst) lst (cdr lst) name (car elt))
 	     (if (assoc name hier-list) nil
 	       (setq hier-list (cons (cons name (cdr elt)) hier-list))))
-	   (setq lst index-meth-alist)
+	   (setq lst index-sub-alist)
 	   (while lst
 	     (setq elt (car lst) lst (cdr lst))
-	     (cond ((string-match "\\(::\\|'\\)[_a-zA-Z0-9]+$" (car elt))
+	     (cond ((string-match
+                     (rx (sequence (or "::" "'")
+                                   (eval cperl--basic-identifier-rx)
+                                   string-end))
+                     (car elt))
 		    (setq pack (substring (car elt) 0 (match-beginning 0)))
 		    (if (setq group (assoc pack hier-list))
 			(if (listp (cdr group))
@@ -5585,24 +6162,25 @@ indentation and initial hashes.  Behaves usually outside of comment."
 	   (push (cons "+Hierarchy+..."
 		       hier-list)
 		 index-alist)))
-    (and index-pack-alist
-	 (push (cons "+Packages+..."
-		     (nreverse index-pack-alist))
+    (and index-package-alist
+	 (push (cons "+Classes,Packages+..."
+		     (nreverse index-package-alist))
 	       index-alist))
-    (and (or index-pack-alist index-pod-alist
+    (and (or index-package-alist index-pod-alist
 	     (default-value 'imenu-sort-function))
 	 index-unsorted-alist
 	 (push (cons "+Unsorted List+..."
 		     (nreverse index-unsorted-alist))
 	       index-alist))
-    (cperl-imenu-addback index-alist)))
+    ;; Finally, return the whole collection
+    index-alist))
 
 
 ;; Suggested by Mark A. Hershberger
 (defun cperl-outline-level ()
   (looking-at outline-regexp)
   (cond ((not (match-beginning 1)) 0)	; beginning-of-file
-;;;; 2=package-group, 5=package-name 8=sub-name 16=head-level
+        ;; 2=package-group, 5=package-name 8=sub-name 16=head-level
 	((match-beginning 2) 0)		; package
 	((match-beginning 8) 1)		; sub
 	((match-beginning 16)
@@ -5615,27 +6193,23 @@ indentation and initial hashes.  Behaves usually outside of comment."
   (cond ((featurep 'ps-print)
 	 (or cperl-faces-init
 	     (progn
-	       (and (boundp 'font-lock-multiline)
-		    (setq cperl-font-lock-multiline t))
 	       (cperl-init-faces))))
 	((not cperl-faces-init)
 	 (add-hook 'font-lock-mode-hook
-		   (function
-		    (lambda ()
-		      (if (memq major-mode '(perl-mode cperl-mode))
-			  (progn
-			    (or cperl-faces-init (cperl-init-faces)))))))
-	 (if (fboundp 'eval-after-load)
-	     (eval-after-load
-		 "ps-print"
-	       '(or cperl-faces-init (cperl-init-faces)))))))
+                   (lambda ()
+                     (if (memq major-mode '(perl-mode cperl-mode))
+                         (progn
+                           (or cperl-faces-init (cperl-init-faces))))))
+	 (eval-after-load
+	     "ps-print"
+	   '(or cperl-faces-init (cperl-init-faces))))))
 
 (defvar cperl-font-lock-keywords-1 nil
   "Additional expressions to highlight in Perl mode.  Minimal set.")
 (defvar cperl-font-lock-keywords nil
   "Additional expressions to highlight in Perl mode.  Default set.")
 (defvar cperl-font-lock-keywords-2 nil
-  "Additional expressions to highlight in Perl mode.  Maximal set")
+  "Additional expressions to highlight in Perl mode.  Maximal set.")
 
 (defun cperl-load-font-lock-keywords ()
   (or cperl-faces-init (cperl-init-faces))
@@ -5649,301 +6223,426 @@ indentation and initial hashes.  Behaves usually outside of comment."
   (or cperl-faces-init (cperl-init-faces))
   cperl-font-lock-keywords-2)
 
-(defun cperl-init-faces-weak ()
-  ;; Allow `cperl-find-pods-heres' to run.
-  (or (boundp 'font-lock-constant-face)
-      (cperl-force-face font-lock-constant-face
-                        "Face for constant and label names"))
-  (or (boundp 'font-lock-warning-face)
-      (cperl-force-face font-lock-warning-face
-			"Face for things which should stand out"))
-  ;;(setq font-lock-constant-face 'font-lock-constant-face)
-  )
+(defun cperl-font-lock-syntactic-face-function (state)
+  "Apply faces according to their syntax type.
+In CPerl mode, this is used for here-documents which have been
+marked as c-style comments.  For everything else, delegate to the
+default function."
+  (cond
+   ;; A c-style comment is a HERE-document.  Fontify if requested.
+   ((and (eq 2 (nth 7 state))
+         cperl-pod-here-fontify)
+    cperl-here-face)
+   (t (funcall (default-value 'font-lock-syntactic-face-function) state))))
+
+(defface cperl-method-call
+  '((t (:inherit default )))
+  "Font Lock mode face for method calls.
+Usually, method calls are not fontified.
+We use this face to prevent calls to methods which look like
+builtin functions to be fontified like, well, builtin
+functions (which they are not).  Inherits from `default'.")
 
 (defun cperl-init-faces ()
   (condition-case errs
       (progn
-	(require 'font-lock)
-	(and (fboundp 'font-lock-fontify-anchored-keywords)
-	     (featurep 'font-lock-extra)
-	     (message "You have an obsolete package `font-lock-extra'.  Install `choose-color'."))
-	(let (t-font-lock-keywords t-font-lock-keywords-1 font-lock-anchored)
-	  (if (fboundp 'font-lock-fontify-anchored-keywords)
-	      (setq font-lock-anchored t))
+	(let (t-font-lock-keywords t-font-lock-keywords-1)
 	  (setq
 	   t-font-lock-keywords
 	   (list
-	    `("[ \t]+$" 0 ',cperl-invalid-face t)
-	    (cons
-	     (concat
-	      "\\(^\\|[^$@%&\\]\\)\\<\\("
-	      (mapconcat
-	       'identity
-	       '("if" "until" "while" "elsif" "else" "unless" "for"
-		 "foreach" "continue" "exit" "die" "last" "goto" "next"
-		 "redo" "return" "local" "exec" "sub" "do" "dump" "use" "our"
-		 "require" "package" "eval" "my" "BEGIN" "END" "CHECK" "INIT")
-	       "\\|")			; Flow control
-	      "\\)\\>") 2)		; was "\\)[ \n\t;():,|&]"
-					; In what follows we use `type' style
-					; for overwritable builtins
-	    (list
-	     (concat
-	      "\\(^\\|[^$@%&\\]\\)\\<\\("
-	      ;; "CORE" "__FILE__" "__LINE__" "abs" "accept" "alarm"
-	      ;; "and" "atan2" "bind" "binmode" "bless" "caller"
-	      ;; "chdir" "chmod" "chown" "chr" "chroot" "close"
-	      ;; "closedir" "cmp" "connect" "continue" "cos" "crypt"
-	      ;; "dbmclose" "dbmopen" "die" "dump" "endgrent"
-	      ;; "endhostent" "endnetent" "endprotoent" "endpwent"
-	      ;; "endservent" "eof" "eq" "exec" "exit" "exp" "fcntl"
-	      ;; "fileno" "flock" "fork" "formline" "ge" "getc"
-	      ;; "getgrent" "getgrgid" "getgrnam" "gethostbyaddr"
-	      ;; "gethostbyname" "gethostent" "getlogin"
-	      ;; "getnetbyaddr" "getnetbyname" "getnetent"
-	      ;; "getpeername" "getpgrp" "getppid" "getpriority"
-	      ;; "getprotobyname" "getprotobynumber" "getprotoent"
-	      ;; "getpwent" "getpwnam" "getpwuid" "getservbyname"
-	      ;; "getservbyport" "getservent" "getsockname"
-	      ;; "getsockopt" "glob" "gmtime" "gt" "hex" "index" "int"
-	      ;; "ioctl" "join" "kill" "lc" "lcfirst" "le" "length"
-	      ;; "link" "listen" "localtime" "lock" "log" "lstat" "lt"
-	      ;; "mkdir" "msgctl" "msgget" "msgrcv" "msgsnd" "ne"
-	      ;; "not" "oct" "open" "opendir" "or" "ord" "pack" "pipe"
-	      ;; "quotemeta" "rand" "read" "readdir" "readline"
-	      ;; "readlink" "readpipe" "recv" "ref" "rename" "require"
-	      ;; "reset" "reverse" "rewinddir" "rindex" "rmdir" "seek"
-	      ;; "seekdir" "select" "semctl" "semget" "semop" "send"
-	      ;; "setgrent" "sethostent" "setnetent" "setpgrp"
-	      ;; "setpriority" "setprotoent" "setpwent" "setservent"
-	      ;; "setsockopt" "shmctl" "shmget" "shmread" "shmwrite"
-	      ;; "shutdown" "sin" "sleep" "socket" "socketpair"
-	      ;; "sprintf" "sqrt" "srand" "stat" "substr" "symlink"
-	      ;; "syscall" "sysopen" "sysread" "system" "syswrite" "tell"
-	      ;; "telldir" "time" "times" "truncate" "uc" "ucfirst"
-	      ;; "umask" "unlink" "unpack" "utime" "values" "vec"
-	      ;; "wait" "waitpid" "wantarray" "warn" "write" "x" "xor"
-	      "a\\(bs\\|ccept\\|tan2\\|larm\\|nd\\)\\|"
-	      "b\\(in\\(d\\|mode\\)\\|less\\)\\|"
-	      "c\\(h\\(r\\(\\|oot\\)\\|dir\\|mod\\|own\\)\\|aller\\|rypt\\|"
-	      "lose\\(\\|dir\\)\\|mp\\|o\\(s\\|n\\(tinue\\|nect\\)\\)\\)\\|"
-	      "CORE\\|d\\(ie\\|bm\\(close\\|open\\)\\|ump\\)\\|"
-	      "e\\(x\\(p\\|it\\|ec\\)\\|q\\|nd\\(p\\(rotoent\\|went\\)\\|"
-	      "hostent\\|servent\\|netent\\|grent\\)\\|of\\)\\|"
-	      "f\\(ileno\\|cntl\\|lock\\|or\\(k\\|mline\\)\\)\\|"
-	      "g\\(t\\|lob\\|mtime\\|e\\(\\|t\\(p\\(pid\\|r\\(iority\\|"
-	      "oto\\(byn\\(ame\\|umber\\)\\|ent\\)\\)\\|eername\\|w"
-	      "\\(uid\\|ent\\|nam\\)\\|grp\\)\\|host\\(by\\(addr\\|name\\)\\|"
-	      "ent\\)\\|s\\(erv\\(by\\(port\\|name\\)\\|ent\\)\\|"
-	      "ock\\(name\\|opt\\)\\)\\|c\\|login\\|net\\(by\\(addr\\|name\\)\\|"
-	      "ent\\)\\|gr\\(ent\\|nam\\|gid\\)\\)\\)\\)\\|"
-	      "hex\\|i\\(n\\(t\\|dex\\)\\|octl\\)\\|join\\|kill\\|"
-	      "l\\(i\\(sten\\|nk\\)\\|stat\\|c\\(\\|first\\)\\|t\\|e"
-	      "\\(\\|ngth\\)\\|o\\(c\\(altime\\|k\\)\\|g\\)\\)\\|m\\(sg\\(rcv\\|snd\\|"
-	      "ctl\\|get\\)\\|kdir\\)\\|n\\(e\\|ot\\)\\|o\\(pen\\(\\|dir\\)\\|"
-	      "r\\(\\|d\\)\\|ct\\)\\|p\\(ipe\\|ack\\)\\|quotemeta\\|"
-	      "r\\(index\\|and\\|mdir\\|e\\(quire\\|ad\\(pipe\\|\\|lin"
-	      "\\(k\\|e\\)\\|dir\\)\\|set\\|cv\\|verse\\|f\\|winddir\\|name"
-	      "\\)\\)\\|s\\(printf\\|qrt\\|rand\\|tat\\|ubstr\\|e\\(t\\(p\\(r"
-	      "\\(iority\\|otoent\\)\\|went\\|grp\\)\\|hostent\\|s\\(ervent\\|"
-	      "ockopt\\)\\|netent\\|grent\\)\\|ek\\(\\|dir\\)\\|lect\\|"
-	      "m\\(ctl\\|op\\|get\\)\\|nd\\)\\|h\\(utdown\\|m\\(read\\|ctl\\|"
-	      "write\\|get\\)\\)\\|y\\(s\\(read\\|call\\|open\\|tem\\|write\\)\\|"
-	      "mlink\\)\\|in\\|leep\\|ocket\\(pair\\|\\)\\)\\|t\\(runcate\\|"
-	      "ell\\(\\|dir\\)\\|ime\\(\\|s\\)\\)\\|u\\(c\\(\\|first\\)\\|"
-	      "time\\|mask\\|n\\(pack\\|link\\)\\)\\|v\\(alues\\|ec\\)\\|"
-	      "w\\(a\\(rn\\|it\\(pid\\|\\)\\|ntarray\\)\\|rite\\)\\|"
-	      "x\\(\\|or\\)\\|__\\(FILE__\\|LINE__\\|PACKAGE__\\)"
-	      "\\)\\>") 2 'font-lock-type-face)
-	    ;; In what follows we use `other' style
-	    ;; for nonoverwritable builtins
-	    ;; Somehow 's', 'm' are not auto-generated???
-	    (list
-	     (concat
-	      "\\(^\\|[^$@%&\\]\\)\\<\\("
-	      ;; "AUTOLOAD" "BEGIN" "CHECK" "DESTROY" "END" "INIT" "__END__" "chomp"
-	      ;; "chop" "defined" "delete" "do" "each" "else" "elsif"
-	      ;; "eval" "exists" "for" "foreach" "format" "goto"
-	      ;; "grep" "if" "keys" "last" "local" "map" "my" "next"
-	      ;; "no" "our" "package" "pop" "pos" "print" "printf" "push"
-	      ;; "q" "qq" "qw" "qx" "redo" "return" "scalar" "shift"
-	      ;; "sort" "splice" "split" "study" "sub" "tie" "tr"
-	      ;; "undef" "unless" "unshift" "untie" "until" "use"
-	      ;; "while" "y"
-	      "AUTOLOAD\\|BEGIN\\|CHECK\\|cho\\(p\\|mp\\)\\|d\\(e\\(fined\\|lete\\)\\|"
-	      "o\\)\\|DESTROY\\|e\\(ach\\|val\\|xists\\|ls\\(e\\|if\\)\\)\\|"
-	      "END\\|for\\(\\|each\\|mat\\)\\|g\\(rep\\|oto\\)\\|INIT\\|if\\|keys\\|"
-	      "l\\(ast\\|ocal\\)\\|m\\(ap\\|y\\)\\|n\\(ext\\|o\\)\\|our\\|"
-	      "p\\(ackage\\|rint\\(\\|f\\)\\|ush\\|o\\(p\\|s\\)\\)\\|"
-	      "q\\(\\|q\\|w\\|x\\|r\\)\\|re\\(turn\\|do\\)\\|s\\(pli\\(ce\\|t\\)\\|"
-	      "calar\\|tudy\\|ub\\|hift\\|ort\\)\\|t\\(r\\|ie\\)\\|"
-	      "u\\(se\\|n\\(shift\\|ti\\(l\\|e\\)\\|def\\|less\\)\\)\\|"
-	      "while\\|y\\|__\\(END\\|DATA\\)__" ;__DATA__ added manually
-	      "\\|[sm]"			; Added manually
-	      "\\)\\>") 2 'cperl-nonoverridable-face)
-	    ;;		(mapconcat 'identity
-	    ;;			   '("#endif" "#else" "#ifdef" "#ifndef" "#if"
-	    ;;			     "#include" "#define" "#undef")
-	    ;;			   "\\|")
-	    '("-[rwxoRWXOezsfdlpSbctugkTBMAC]\\>\\([ \t]+_\\>\\)?" 0
-	      font-lock-function-name-face keep) ; Not very good, triggers at "[a-z]"
+            ;; -------- function definition _and_ declaration
+            ;; (matcher (subexp facespec))
+            ;; facespec is evaluated depending on whether the
+            ;; statement ends in a "{" (definition) or ";"
+            ;; (declaration without body)
+	    (list (concat "\\<" cperl-sub-regexp
+                          ;; group 1: optional subroutine name
+                          (rx
+                           (sequence (eval cperl--ws+-rx)
+                                     (group (optional
+                                             (eval cperl--normal-identifier-rx)))))
+                          ;; "fontified" elsewhere: Prototype
+                          (rx (optional
+                               (sequence (eval cperl--ws*-rx)
+                                         (eval cperl--prototype-rx))))
+                          ;; fontified elsewhere: Attributes
+                          (rx (optional (sequence (eval cperl--ws*-rx)
+                                                  (eval cperl--attribute-list-rx))))
+                          (rx (eval cperl--ws*-rx))
+                          ;; group 2: Identifies the start of the anchor
+                          (rx (group
+                               (or (group-n 3 ";") ; Either a declaration...
+                                   "{"             ; ... or a code block
+                                   ;; ... or a complete signature
+                                   (sequence (eval cperl--signature-rx)
+                                             (eval cperl--ws*-rx))
+                                   ;; ... or the start of a "sloppy" signature
+                                   (sequence (eval cperl--sloppy-signature-rx)
+                                             ;; arbitrarily continue "a few lines"
+                                             (repeat 0 200 (not (in "{"))))
+                                   ;; make sure we have a reasonably
+                                   ;; short match for an incomplete sub
+                                   (not (in ";{("))
+                                   buffer-end))))
+		  '(1 (if (match-beginning 3)
+			  'font-lock-variable-name-face
+		        'font-lock-function-name-face)
+                      nil ; override
+                      t)  ; laxmatch in case of anonymous subroutines
+                  ;; -------- anchored: Signature
+                  `(,(rx (sequence (in "(,")
+                                   (eval cperl--ws*-rx)
+                                   (group (eval cperl--basic-variable-rx))))
+                    (progn
+                      (goto-char (match-beginning 2)) ; pre-match: Back to sig
+                      (match-end 2))
+                    nil
+                    (1 font-lock-variable-name-face)))
+            ;; -------- flow control
+            ;; (matcher . subexp) font-lock-keyword-face by default
 	    ;; This highlights declarations and definitions differently.
 	    ;; We do not try to highlight in the case of attributes:
 	    ;; it is already done by `cperl-find-pods-heres'
-	    (list (concat "\\<sub"
-			  cperl-white-and-comment-rex ; whitespace/comments
-			  "\\([^ \n\t{;()]+\\)" ; 2=name (assume non-anonymous)
-			  "\\("
-			    cperl-maybe-white-and-comment-rex ;whitespace/comments?
-			    "([^()]*)\\)?" ; prototype
-			  cperl-maybe-white-and-comment-rex ; whitespace/comments?
-			  "[{;]")
-		  2 (if cperl-font-lock-multiline
-			'(if (eq (char-after (cperl-1- (match-end 0))) ?\{ )
-			     'font-lock-function-name-face
-			   'font-lock-variable-name-face)
-		      ;; need to manually set 'multiline' for older font-locks
-		      '(progn
-			 (if (< 1 (count-lines (match-beginning 0)
-					       (match-end 0)))
-			     (put-text-property
-			      (+ 3 (match-beginning 0)) (match-end 0)
-			      'syntax-type 'multiline))
-			 (if (eq (char-after (cperl-1- (match-end 0))) ?\{ )
-			     'font-lock-function-name-face
-			   'font-lock-variable-name-face))))
-	    '("\\<\\(package\\|require\\|use\\|import\\|no\\|bootstrap\\)[ \t]+\\([a-zA-z_][a-zA-z_0-9:]*\\)[ \t;]" ; require A if B;
-	      2 font-lock-function-name-face)
-	    '("^[ \t]*format[ \t]+\\([a-zA-z_][a-zA-z_0-9:]*\\)[ \t]*=[ \t]*$"
+	    (cons
+	     (concat
+	      "\\(^\\|[^$@%&\\]\\)\\<\\("
+              (regexp-opt
+	       (append
+                cperl-sub-keywords
+                '("if" "until" "while" "elsif" "else"
+                  "given" "when" "default" "break"
+                  "unless" "for"
+                  "try" "catch" "defer" "finally"
+                  "foreach" "continue" "exit" "die" "last" "goto" "next"
+                  "redo" "return" "local" "exec"
+                  "do" "dump"
+                  "use" "our"
+                  "require" "package" "eval" "evalbytes" "my" "state"
+                  "class" "field" "method"
+                  "ADJUST" "BEGIN" "CHECK"
+                  "END" "INIT" "UNITCHECK"
+                  ;; not in core, but per popular request
+                  "async" "await")))    ; Flow control
+	      "\\)\\>") 2)		; was "\\)[ \n\t;():,|&]"
+					; In what follows we use `type' style
+					; for overwritable builtins
+            ;; -------- avoid method calls being fontified as keywords
+            ;; (matcher (subexp facespec))
+            (list
+             (rx "->" (* space) (group-n 1(eval cperl--basic-identifier-rx)))
+             1 ''cperl-method-call)
+            ;; -------- builtin functions
+            ;; (matcher subexp facespec)
+	    (list
+	     (concat
+	      "\\(^\\|[^$@%&\\]\\)\\<\\("
+              (regexp-opt
+               '("CORE" "__FILE__" "__LINE__" "__SUB__" "__PACKAGE__" "__CLASS__"
+                 "abs" "accept" "alarm" "and" "atan2"
+                 "bind" "binmode" "bless" "caller"
+                 "chdir" "chmod" "chown" "chr" "chroot" "close"
+                 "closedir" "cmp" "connect" "continue" "cos" "crypt"
+                 "dbmclose" "dbmopen" "die" "dump" "endgrent"
+                 "endhostent" "endnetent" "endprotoent" "endpwent"
+                 "endservent" "eof" "eq" "exec" "exit" "exp" "fc" "fcntl"
+                 "fileno" "flock" "fork" "formline" "ge" "getc"
+                 "getgrent" "getgrgid" "getgrnam" "gethostbyaddr"
+                 "gethostbyname" "gethostent" "getlogin"
+                 "getnetbyaddr" "getnetbyname" "getnetent"
+                 "getpeername" "getpgrp" "getppid" "getpriority"
+                 "getprotobyname" "getprotobynumber" "getprotoent"
+                 "getpwent" "getpwnam" "getpwuid" "getservbyname"
+                 "getservbyport" "getservent" "getsockname"
+                 "getsockopt" "glob" "gmtime" "gt" "hex" "index" "int"
+                 "ioctl" "join" "kill" "lc" "lcfirst" "le" "length"
+                 "link" "listen" "localtime" "lock" "log" "lstat" "lt"
+                 "mkdir" "msgctl" "msgget" "msgrcv" "msgsnd" "ne"
+                 "not" "oct" "open" "opendir" "or" "ord" "pack" "pipe"
+                 "quotemeta" "rand" "read" "readdir" "readline"
+                 "readlink" "readpipe" "recv" "ref" "rename" "require"
+                 "reset" "reverse" "rewinddir" "rindex" "rmdir" "seek"
+                 "seekdir" "select" "semctl" "semget" "semop" "send"
+                 "setgrent" "sethostent" "setnetent" "setpgrp"
+                 "setpriority" "setprotoent" "setpwent" "setservent"
+                 "setsockopt" "shmctl" "shmget" "shmread" "shmwrite"
+                 "shutdown" "sin" "sleep" "socket" "socketpair"
+                 "sprintf" "sqrt" "srand" "stat" "substr" "symlink"
+                 "syscall" "sysopen" "sysread" "sysseek" "system" "syswrite" "tell"
+                 "telldir" "time" "times" "truncate" "uc" "ucfirst"
+                 "umask" "unlink" "unpack" "utime" "values" "vec"
+                 "wait" "waitpid" "wantarray" "warn" "write" "x" "xor"))
+              "\\)\\>")
+             2 'font-lock-type-face)
+	    ;; In what follows we use `other' style
+	    ;; for nonoverwritable builtins
+            ;; This is a bit shaky because the status
+            ;; "nonoverwritable" can change between Perl versions.
+            ;; -------- "non overridable" functions
+            ;; (matcher subexp facespec)
+	    (list
+	     (concat
+	      "\\(^\\|[^$@%&\\]\\)\\<\\("
+              (regexp-opt
+               '("AUTOLOAD" "BEGIN" "CHECK" "DESTROY" "END" "INIT" "UNITCHECK"
+                 "__END__" "__DATA__" "break" "catch" "chomp" "chop" "default"
+                 "defined" "delete" "do" "each" "else" "elsif" "eval"
+                 "evalbytes" "exists" "finally" "for" "foreach" "format" "given"
+                 "goto" "grep" "if" "keys" "last" "local" "m" "map" "my" "next"
+                 "no" "our" "package" "pop" "pos" "print" "printf" "prototype"
+                 "push" "q" "qq" "qr" "qw" "qx" "redo" "return" "s" "say" "scalar"
+                 "shift" "sort" "splice" "split" "state" "study" "sub" "tie"
+                 "tied" "tr" "try" "undef" "unless" "unshift" "untie" "until"
+                 "use" "when" "while" "y"))
+              "\\)\\>")
+	     2 ''cperl-nonoverridable-face) ; unbound as var, so: doubly quoted
+	    ;;		(mapconcat #'identity
+	    ;;			   '("#endif" "#else" "#ifdef" "#ifndef" "#if"
+	    ;;			     "#include" "#define" "#undef")
+	    ;;			   "\\|")
+            ;; -------- -X file tests
+            ;; (matcher subexp facespec)
+	    '("-[rwxoRWXOezsfdlpSbctugkTBMAC]\\>\\([ \t]+_\\>\\)?" 0
+	      font-lock-function-name-face keep) ; Not very good, triggers at "[a-z]"
+            ;; -------- various stuff calling for a package name
+            ;; (matcher (subexp facespec) (subexp facespec))
+            `(,(rx (sequence
+                    (or (sequence (or line-start space "{" )
+                                  (or "package" "require" "use" "import"
+                                      "no" "bootstrap" "class")
+                                  (eval cperl--ws+-rx))
+                        (sequence (group-n 2 (sequence ":"
+                                                       (eval cperl--ws*-rx)
+                                                       "isa"))
+                                  "("
+                                  (eval cperl--ws*-rx)))
+                    (group-n 1 (eval cperl--normal-identifier-rx))
+                    (any " \t\n;)"))) ; require A if B;
+	      (1 font-lock-function-name-face)
+              (2 font-lock-constant-face t t))
+            ;; -------- formats
+            ;; (matcher subexp facespec)
+	    '("^[ \t]*format[ \t]+\\([a-zA-Z_][a-zA-Z_0-9:]*\\)[ \t]*=[ \t]*$"
 	      1 font-lock-function-name-face)
-	    (cond ((featurep 'font-lock-extra)
-		   '("\\([]}\\\\%@>*&]\\|\\$[a-zA-Z0-9_:]*\\)[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
-		     (2 font-lock-string-face t)
-		     (0 '(restart 2 t)))) ; To highlight $a{bc}{ef}
-		  (font-lock-anchored
-		   '("\\([]}\\\\%@>*&]\\|\\$[a-zA-Z0-9_:]*\\)[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
-		     (2 font-lock-string-face t)
-		     ("\\=[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
-		      nil nil
-		      (1 font-lock-string-face t))))
-		  (t '("\\([]}\\\\%@>*&]\\|\\$[a-zA-Z0-9_:]*\\)[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
-		       2 font-lock-string-face t)))
-	    '("[[ \t{,(]\\(-?[a-zA-Z0-9_:]+\\)[ \t]*=>" 1
-	      font-lock-string-face t)
-	    '("^[ \t]*\\([a-zA-Z0-9_]+[ \t]*:\\)[ \t]*\\($\\|{\\|\\<\\(until\\|while\\|for\\(each\\)?\\|do\\)\\>\\)" 1
-	      font-lock-constant-face)	; labels
-	    '("\\<\\(continue\\|next\\|last\\|redo\\|goto\\)\\>[ \t]+\\([a-zA-Z0-9_:]+\\)" ; labels as targets
-	      2 font-lock-constant-face)
+            ;; -------- labels
+            ;; (matcher subexp facespec)
+            `(,(rx
+                (sequence
+                 (0+ space)
+                 (group (eval cperl--label-rx))
+                 (0+ space)
+                 (or line-end "#" "{"
+                     (sequence word-start
+                               (or "until" "while" "for" "foreach" "do")
+                               word-end))))
+              1 font-lock-constant-face)
+            ;; -------- labels as targets (no trailing colon!)
+            ;; (matcher subexp facespec)
+            `(,(rx
+                (sequence
+                 symbol-start
+                 (or "continue" "next" "last" "redo" "break" "goto")
+                 (1+ space)
+                 (group (eval cperl--basic-identifier-rx))))
+              1 font-lock-constant-face)
 	    ;; Uncomment to get perl-mode-like vars
-            ;;; '("[$*]{?\\(\\sw+\\)" 1 font-lock-variable-name-face)
-            ;;; '("\\([@%]\\|\\$#\\)\\(\\sw+\\)"
-            ;;;  (2 (cons font-lock-variable-name-face '(underline))))
-	    (cond ((featurep 'font-lock-extra)
-		   '("^[ \t]*\\(my\\|local\\|our\\)[ \t]*\\(([ \t]*\\)?\\([$@%*][a-zA-Z0-9_:]+\\)\\([ \t]*,\\)?"
-		     (3 font-lock-variable-name-face)
-		     (4 '(another 4 nil
-				  ("\\=[ \t]*,[ \t]*\\([$@%*][a-zA-Z0-9_:]+\\)\\([ \t]*,\\)?"
-				   (1 font-lock-variable-name-face)
-				   (2 '(restart 2 nil) nil t)))
-			nil t)))	; local variables, multiple
-		  (font-lock-anchored
-		   ;; 1=my_etc, 2=white? 3=(+white? 4=white? 5=var
-		   `(,(concat "\\<\\(my\\|local\\|our\\)"
-				  cperl-maybe-white-and-comment-rex
-				  "\\(("
-				     cperl-maybe-white-and-comment-rex
-				  "\\)?\\([$@%*]\\([a-zA-Z0-9_:]+\\|[^a-zA-Z0-9_]\\)\\)")
-		       (5 ,(if cperl-font-lock-multiline
-				 'font-lock-variable-name-face
-			       '(progn  (setq cperl-font-lock-multiline-start
-					      (match-beginning 0))
-					'font-lock-variable-name-face)))
-		       (,(concat "\\="
-				   cperl-maybe-white-and-comment-rex
-				   ","
-				   cperl-maybe-white-and-comment-rex
-				   "\\([$@%*]\\([a-zA-Z0-9_:]+\\|[^a-zA-Z0-9_]\\)\\)")
-			;; Bug in font-lock: limit is used not only to limit
-			;; searches, but to set the "extend window for
-			;; facification" property.  Thus we need to minimize.
-			,(if cperl-font-lock-multiline
-			     '(if (match-beginning 3)
-				  (save-excursion
-				    (goto-char (match-beginning 3))
-				    (condition-case nil
-					(forward-sexp 1)
-				      (error
-				       (condition-case nil
-					   (forward-char 200)
-					 (error nil)))) ; typeahead
-				    (1- (point))) ; report limit
-				(forward-char -2)) ; disable continued expr
-			     '(if (match-beginning 3)
-				  (point-max) ; No limit for continuation
-				(forward-char -2))) ; disable continued expr
-			,(if cperl-font-lock-multiline
-			       nil
-			     '(progn	; Do at end
-				;; "my" may be already fontified (POD),
-				;; so cperl-font-lock-multiline-start is nil
-				(if (or (not cperl-font-lock-multiline-start)
-					(> 2 (count-lines
-					      cperl-font-lock-multiline-start
-					      (point))))
-				    nil
-				  (put-text-property
-				   (1+ cperl-font-lock-multiline-start) (point)
-				   'syntax-type 'multiline))
-				(setq cperl-font-lock-multiline-start nil)))
-			(3 font-lock-variable-name-face))))
-		  (t '("^[ \t{}]*\\(my\\|local\\|our\\)[ \t]*\\(([ \t]*\\)?\\([$@%*][a-zA-Z0-9_:]+\\)"
-		       3 font-lock-variable-name-face)))
-	    '("\\<for\\(each\\)?\\([ \t]+\\(my\\|local\\|our\\)\\)?[ \t]*\\(\\$[a-zA-Z_][a-zA-Z_0-9]*\\)[ \t]*("
-	      4 font-lock-variable-name-face)
+            ;; '("[$*]{?\\(\\sw+\\)" 1 font-lock-variable-name-face)
+            ;; '("\\([@%]\\|\\$#\\)\\(\\sw+\\)"
+            ;;  (2 (cons font-lock-variable-name-face '(underline))))
+	    ;; 1=my_etc, 2=white? 3=(+white? 4=white? 5=var
+            ;; -------- variable declarations
+            ;; (matcher (subexp facespec) ...
+	    `(,(rx (sequence (or "state" "my" "local" "our"))
+                   (eval cperl--ws*-rx)
+                   (opt (group (sequence "(" (eval cperl--ws*-rx))))
+                   (group
+                    (in "$@%*")
+                    (or
+                     (eval cperl--normal-identifier-rx)
+                     (eval cperl--special-identifier-rx))
+                    )
+                   )
+              ;; (concat "\\<\\(state\\|my\\|local\\|our\\)"
+	      ;;          cperl-maybe-white-and-comment-rex
+	      ;;          "\\(("
+	      ;;          cperl-maybe-white-and-comment-rex
+	      ;;          "\\)?\\([$@%*]\\([a-zA-Z0-9_:]+\\|[^a-zA-Z0-9_]\\)\\)")
+	      (2 font-lock-variable-name-face)
+              ;; ... (anchored-matcher pre-form post-form subex-highlighters)
+	      (,(rx (sequence point
+                              (eval cperl--ws*-rx)
+                              ","
+                              (eval cperl--ws*-rx)
+                              (group
+                               (in "$@%*")
+                               (or
+                                (eval cperl--normal-identifier-rx)
+                                (eval cperl--special-identifier-rx))
+                               )
+                              )
+                    )
+               ;; ,(concat "\\="
+	       ;;  	cperl-maybe-white-and-comment-rex
+	       ;;  	","
+	       ;;  	cperl-maybe-white-and-comment-rex
+	       ;;  	"\\([$@%*]\\([a-zA-Z0-9_:]+\\|[^a-zA-Z0-9_]\\)\\)")
+	       ;; Bug in font-lock: limit is used not only to limit
+	       ;; searches, but to set the "extend window for
+	       ;; facification" property.  Thus we need to minimize.
+	       (if (match-beginning 1)  ; list declaration
+		    (save-excursion
+		      (goto-char (match-beginning 1))
+		      (condition-case nil
+			  (forward-sexp 1)
+			(error
+			 (condition-case nil
+			     (forward-char 200)
+			   (error nil)))) ; typeahead
+		      (1- (point))) ; report limit
+		  (forward-char -2)) ; disable continued expr
+	       nil
+	       (1 font-lock-variable-name-face)))
+            ;; -------- builtin constants with and without package prefix
+            ;; (matcher subexp facespec)
+            `(,(rx (or space (in "=<>-"))
+                   (group (optional "&")
+                          (optional "builtin::")
+                          (or "inf" "nan")
+                          symbol-end))
+              1 'font-lock-constant-face)
+            ;; -------- field declarations
+            `(,(rx "field"
+                   (eval cperl--ws+-rx)
+                   (group (eval cperl--basic-variable-rx))
+                   (optional (sequence
+                              (eval cperl--ws+-rx)
+                              (group (eval cperl--attribute-list-rx)))))
+              (1 font-lock-variable-name-face)
+              ;; -------- optional attributes
+              ;; (anchored-matcher pre-form post-form subex-highlighters)
+              (,(rx
+                 (group (optional ":" (eval cperl--ws*-rx))
+                        (eval cperl--basic-identifier-rx))
+                 (optional "("
+                           (group (eval cperl--basic-identifier-rx))
+                           ")"))
+               ;; pre-form: Define range for anchored matcher
+               (if (match-beginning 2)
+                   (progn
+                     (goto-char (match-beginning 2))
+                     (match-end 2))
+                 ;; If there's no attribute list in match 2, set a short
+                 ;; limit to the search for the anchored matcher,
+                 ;; otherwise it might interpret stuff from the
+                 ;; initializer expression as attribute.
+                 (1+ (point)))
+               nil
+               (1 font-lock-constant-face)
+               (2 font-lock-string-face nil t) ; lax match, value is optional
+              ))
+            ;; ----- foreach my $foo (
+            ;; (matcher subexp facespec)
+            `(,(rx symbol-start "for" (opt "each")
+                   (opt (sequence (1+ blank)
+                                  (or "state" "my" "local" "our")))
+                   (0+ blank)
+                   (group-n 1 (sequence "$"
+                                        (eval cperl--basic-identifier-rx)))
+                   (0+ blank) "(")
+;;	    '("\\<for\\(each\\)?\\([ \t]+\\(state\\|my\\|local\\|our\\)\\)?[ \t]*\\(\\$[a-zA-Z_][a-zA-Z_0-9]*\\)[ \t]*("
+	      1 font-lock-variable-name-face)
 	    ;; Avoid $!, and s!!, qq!! etc. when not fontifying syntactically
+            ;; -------- ! as a negation char like $false = !$true
+            ;; (matcher subexp facespec)
 	    '("\\(?:^\\|[^smywqrx$]\\)\\(!\\)" 1 font-lock-negation-char-face)
+            ;; -------- ^ as a negation char in character classes m/[^abc]/
+            ;; (matcher subexp facespec)
 	    '("\\[\\(\\^\\)" 1 font-lock-negation-char-face prepend)))
 	  (setq
 	   t-font-lock-keywords-1
-	   (and (fboundp 'turn-on-font-lock) ; Check for newer font-lock
-		;; not yet as of XEmacs 19.12, works with 21.1.11
-		(or
-		 (not (featurep 'xemacs))
-		 (string< "21.1.9" emacs-version)
-		 (and (string< "21.1.10" emacs-version)
-		      (string< emacs-version "21.1.2")))
-		'(
-		  ("\\(\\([@%]\\|\\$#\\)[a-zA-Z_:][a-zA-Z0-9_:]*\\)" 1
-		   (if (eq (char-after (match-beginning 2)) ?%)
-		       'cperl-hash-face
-		     'cperl-array-face)
-		   t)			; arrays and hashes
-		  ("\\(\\([$@]+\\)[a-zA-Z_:][a-zA-Z0-9_:]*\\)[ \t]*\\([[{]\\)"
-		   1
-		   (if (= (- (match-end 2) (match-beginning 2)) 1)
-		       (if (eq (char-after (match-beginning 3)) ?{)
-			   'cperl-hash-face
-			 'cperl-array-face) ; arrays and hashes
-		     font-lock-variable-name-face) ; Just to put something
-		   t)
-		  ("\\(@\\|\\$#\\)\\(\\$+\\([a-zA-Z_:][a-zA-Z0-9_:]*\\|[^ \t\n]\\)\\)"
-		   (1 cperl-array-face)
-		   (2 font-lock-variable-name-face))
-		  ("\\(%\\)\\(\\$+\\([a-zA-Z_:][a-zA-Z0-9_:]*\\|[^ \t\n]\\)\\)"
-		   (1 cperl-hash-face)
-		   (2 font-lock-variable-name-face))
-		  ;;("\\([smy]\\|tr\\)\\([^a-z_A-Z0-9]\\)\\(\\([^\n\\]*||\\)\\)\\2")
-		       ;;; Too much noise from \s* @s[ and friends
-		  ;;("\\(\\<\\([msy]\\|tr\\)[ \t]*\\([^ \t\na-zA-Z0-9_]\\)\\|\\(/\\)\\)"
-		  ;;(3 font-lock-function-name-face t t)
-		  ;;(4
-		  ;; (if (cperl-slash-is-regexp)
-		  ;;    font-lock-function-name-face 'default) nil t))
-		  )))
+	   `(
+            ;; -------- bareword hash key: $foo{bar}, $foo[1]{bar}
+            ;; (matcher (subexp facespec) ...
+            (,(rx (or (in "]}\\%@>*&")
+                       (sequence "$" (eval cperl--normal-identifier-rx)))
+                   (0+ blank) "{" (0+ blank)
+                   (group-n 1 (sequence (opt "-")
+                                        (eval cperl--basic-identifier-rx)))
+                   (0+ blank) "}")
+;;	    '("\\([]}\\%@>*&]\\|\\$[a-zA-Z0-9_:]*\\)[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
+	      (1 font-lock-string-face)
+              ;; -------- anchored bareword hash key: $foo{bar}{baz}
+              ;; ... (anchored-matcher pre-form post-form subex-highlighters)
+              (,(rx point
+                    (0+ blank) "{" (0+ blank)
+                    (group-n 1 (sequence (opt "-")
+                                         (eval cperl--basic-identifier-rx)))
+                    (0+ blank) "}")
+	       ;; ("\\=[ \t]*{[ \t]*\\(-?[a-zA-Z0-9_:]+\\)[ \t]*}"
+	       nil nil
+	       (1 font-lock-string-face)))
+            ;; -------- hash element assignments with bareword key => value
+            ;; (matcher subexp facespec)
+            (,(rx (in "[ \t{,()")
+                   (group-n 1 (sequence (opt "-")
+                                        (eval cperl--basic-identifier-rx)))
+                   (0+ blank) "=>")
+              1 font-lock-string-face)
+             ;; -------- @$ array dereferences, $#$ last array index
+             ;; (matcher (subexp facespec) (subexp facespec))
+             (,(rx (group-n 1 (or "@" "$#"))
+                   (group-n 2 (sequence "$"
+                                        (or (eval cperl--normal-identifier-rx)
+                                            (not (in " \t\n"))))))
+	     ;; ("\\(@\\|\\$#\\)\\(\\$+\\([a-zA-Z_:][a-zA-Z0-9_:]*\\|[^ \t\n]\\)\\)"
+	      (1 'cperl-array-face)
+	      (2 font-lock-variable-name-face))
+             ;; -------- %$ hash dereferences
+             ;; (matcher (subexp facespec) (subexp facespec))
+             (,(rx (group-n 1 "%")
+                   (group-n 2 (sequence "$"
+                                        (or (eval cperl--normal-identifier-rx)
+                                            (not (in " \t\n"))))))
+	     ;; ("\\(%\\)\\(\\$+\\([a-zA-Z_:][a-zA-Z0-9_:]*\\|[^ \t\n]\\)\\)"
+	      (1 'cperl-hash-face)
+	      (2 font-lock-variable-name-face))
+             ;; -------- access to array/hash elements
+             ;; (matcher subexp facespec)
+             ;; facespec is an expression to distinguish between arrays and hashes
+             (,(rx (group-n 1 (group-n 2 (in "$@%"))
+                            (eval cperl--normal-identifier-rx))
+                   (0+ blank)
+                   (group-n 3 (in "[{")))
+;;	     ("\\(\\([$@%]+\\)[a-zA-Z_:][a-zA-Z0-9_:]*\\)[ \t]*\\([[{]\\)"
+	      1
+	      (if (= (- (match-end 2) (match-beginning 2)) 1)
+		  (if (eq (char-after (match-beginning 3)) ?{)
+		      'cperl-hash-face
+		    'cperl-array-face)             ; arrays and hashes
+		font-lock-variable-name-face)      ; Just to put something
+	      nil)                                 ; do not override previous
+             ;; -------- "Pure" arrays and hashes.
+             ;; (matcher subexp facespec)
+             ;; facespec is an expression to distinguish between arrays and hashes
+             (,(rx (group-n 1 (group-n 2 (or (in "@%") "$#"))
+                            (eval cperl--normal-identifier-rx)))
+              1
+              ;; ("\\(\\([@%]\\|\\$#\\)[a-zA-Z_:][a-zA-Z0-9_:]*\\)" 1
+	      (if (eq (char-after (match-beginning 2)) ?%)
+		  'cperl-hash-face
+		'cperl-array-face)
+	      nil)
+             ;;("\\([smy]\\|tr\\)\\([^a-z_A-Z0-9]\\)\\(\\([^\n\\]*||\\)\\)\\2")
+             ;; Too much noise from \s* @s[ and friends
+	     ;;("\\(\\<\\([msy]\\|tr\\)[ \t]*\\([^ \t\na-zA-Z0-9_]\\)\\|\\(/\\)\\)"
+	     ;;(3 font-lock-function-name-face t t)
+	     ;;(4
+	     ;; (if (cperl-slash-is-regexp)
+	     ;;    font-lock-function-name-face 'default) nil t))
+	     ))
 	  (if cperl-highlight-variables-indiscriminately
 	      (setq t-font-lock-keywords-1
 		    (append t-font-lock-keywords-1
-			    (list '("\\([$*]{?\\sw+\\)" 1
+			    (list '("\\([$*]{?\\(?:\\sw+\\|::\\)+\\)" 1
 				    font-lock-variable-name-face)))))
 	  (setq cperl-font-lock-keywords-1
 		(if cperl-syntaxify-by-font-lock
@@ -5952,245 +6651,9 @@ indentation and initial hashes.  Behaves usually outside of comment."
 		  t-font-lock-keywords)
 		cperl-font-lock-keywords cperl-font-lock-keywords-1
 		cperl-font-lock-keywords-2 (append
-					   cperl-font-lock-keywords-1
-					   t-font-lock-keywords-1)))
-	(if (fboundp 'ps-print-buffer) (cperl-ps-print-init))
-	(if (or (featurep 'choose-color) (featurep 'font-lock-extra))
-	    (eval			; Avoid a warning
-	     '(font-lock-require-faces
-	       (list
-		;; Color-light    Color-dark      Gray-light      Gray-dark Mono
-		(list 'font-lock-comment-face
-		      ["Firebrick"	"OrangeRed" 	"DimGray"	"Gray80"]
-		      nil
-		      [nil		nil		t		t	t]
-		      [nil		nil		t		t	t]
-		      nil)
-		(list 'font-lock-string-face
-		      ["RosyBrown"	"LightSalmon" 	"Gray50"	"LightGray"]
-		      nil
-		      nil
-		      [nil		nil		t		t	t]
-		      nil)
-		(list 'font-lock-function-name-face
-		      (vector
-		       "Blue"		"LightSkyBlue"	"Gray50"	"LightGray"
-		       (cdr (assq 'background-color ; if mono
-				  (frame-parameters))))
-		      (vector
-		       nil		nil		nil		nil
-		       (cdr (assq 'foreground-color ; if mono
-				  (frame-parameters))))
-		      [nil		nil		t		t	t]
-		      nil
-		      nil)
-		(list 'font-lock-variable-name-face
-		      ["DarkGoldenrod"	"LightGoldenrod" "DimGray"	"Gray90"]
-		      nil
-		      [nil		nil		t		t	t]
-		      [nil		nil		t		t	t]
-		      nil)
-		(list 'font-lock-type-face
-		      ["DarkOliveGreen"	"PaleGreen" 	"DimGray"	"Gray80"]
-		      nil
-		      [nil		nil		t		t	t]
-		      nil
-		      [nil		nil		t		t	t])
-		(list 'font-lock-warning-face
-		      ["Pink"		"Red"		"Gray50"	"LightGray"]
-		      ["gray20"		"gray90"
-							"gray80"	"gray20"]
-		      [nil		nil		t		t	t]
-		      nil
-		      [nil		nil		t		t	t]
-		      )
-		(list 'font-lock-constant-face
-		      ["CadetBlue"	"Aquamarine" 	"Gray50"	"LightGray"]
-		      nil
-		      [nil		nil		t		t	t]
-		      nil
-		      [nil		nil		t		t	t])
-		(list 'cperl-nonoverridable-face
-		      ["chartreuse3"	("orchid1" "orange")
-		       nil		"Gray80"]
-		      [nil		nil		"gray90"]
-		      [nil		nil		nil		t	t]
-		      [nil		nil		t		t]
-		      [nil		nil		t		t	t])
-		(list 'cperl-array-face
-		      ["blue"		"yellow" 	nil		"Gray80"]
-		      ["lightyellow2"	("navy" "os2blue" "darkgreen")
-		       "gray90"]
-		      t
-		      nil
-		      nil)
-		(list 'cperl-hash-face
-		      ["red"		"red"	 	nil		"Gray80"]
-		      ["lightyellow2"	("navy" "os2blue" "darkgreen")
-		       "gray90"]
-		      t
-		      t
-		      nil))))
-	  ;; Do it the dull way, without choose-color
-	  (defvar cperl-guessed-background nil
-	    "Display characteristics as guessed by cperl.")
-	  ;;	  (or (fboundp 'x-color-defined-p)
-	  ;;	      (defalias 'x-color-defined-p
-	  ;;		(cond ((fboundp 'color-defined-p) 'color-defined-p)
-	  ;;		      ;; XEmacs >= 19.12
-	  ;;		      ((fboundp 'valid-color-name-p) 'valid-color-name-p)
-	  ;;		      ;; XEmacs 19.11
-	  ;;		      (t 'x-valid-color-name-p))))
-	  (cperl-force-face font-lock-constant-face
-			    "Face for constant and label names")
-	  (cperl-force-face font-lock-variable-name-face
-			    "Face for variable names")
-	  (cperl-force-face font-lock-type-face
-			    "Face for data types")
-	  (cperl-force-face cperl-nonoverridable-face
-			    "Face for data types from another group")
-	  (cperl-force-face font-lock-warning-face
-			    "Face for things which should stand out")
-	  (cperl-force-face font-lock-comment-face
-			    "Face for comments")
-	  (cperl-force-face font-lock-function-name-face
-			    "Face for function names")
-	  (cperl-force-face cperl-hash-face
-			    "Face for hashes")
-	  (cperl-force-face cperl-array-face
-			    "Face for arrays")
-	  ;;(defvar font-lock-constant-face 'font-lock-constant-face)
-	  ;;(defvar font-lock-variable-name-face 'font-lock-variable-name-face)
-	  ;;(or (boundp 'font-lock-type-face)
-	  ;;    (defconst font-lock-type-face
-	  ;;	'font-lock-type-face
-	  ;;	"Face to use for data types."))
-	  ;;(or (boundp 'cperl-nonoverridable-face)
-	  ;;    (defconst cperl-nonoverridable-face
-	  ;;	'cperl-nonoverridable-face
-	  ;;	"Face to use for data types from another group."))
-	  ;;(if (not (featurep 'xemacs)) nil
-	  ;;  (or (boundp 'font-lock-comment-face)
-	  ;;	(defconst font-lock-comment-face
-	  ;;	  'font-lock-comment-face
-	  ;;	  "Face to use for comments."))
-	  ;;  (or (boundp 'font-lock-keyword-face)
-	  ;;	(defconst font-lock-keyword-face
-	  ;;	  'font-lock-keyword-face
-	  ;;	  "Face to use for keywords."))
-	  ;;  (or (boundp 'font-lock-function-name-face)
-	  ;;	(defconst font-lock-function-name-face
-	  ;;	  'font-lock-function-name-face
-	  ;;	  "Face to use for function names.")))
-	  (if (and
-	       (not (cperl-is-face 'cperl-array-face))
-	       (cperl-is-face 'font-lock-emphasized-face))
-	      (copy-face 'font-lock-emphasized-face 'cperl-array-face))
-	  (if (and
-	       (not (cperl-is-face 'cperl-hash-face))
-	       (cperl-is-face 'font-lock-other-emphasized-face))
-	      (copy-face 'font-lock-other-emphasized-face 'cperl-hash-face))
-	  (if (and
-	       (not (cperl-is-face 'cperl-nonoverridable-face))
-	       (cperl-is-face 'font-lock-other-type-face))
-	      (copy-face 'font-lock-other-type-face 'cperl-nonoverridable-face))
-	  ;;(or (boundp 'cperl-hash-face)
-	  ;;    (defconst cperl-hash-face
-	  ;;	'cperl-hash-face
-	  ;;	"Face to use for hashes."))
-	  ;;(or (boundp 'cperl-array-face)
-	  ;;    (defconst cperl-array-face
-	  ;;	'cperl-array-face
-	  ;;	"Face to use for arrays."))
-	  ;; Here we try to guess background
-	  (let ((background
-		 (if (boundp 'font-lock-background-mode)
-		     font-lock-background-mode
-		   'light))
-		(face-list (and (fboundp 'face-list) (face-list))))
-;;;;	    (fset 'cperl-is-face
-;;;;		  (cond ((fboundp 'find-face)
-;;;;			 (symbol-function 'find-face))
-;;;;			(face-list
-;;;;			 (function (lambda (face) (member face face-list))))
-;;;;			(t
-;;;;			 (function (lambda (face) (boundp face))))))
-	    (defvar cperl-guessed-background
-	      (if (and (boundp 'font-lock-display-type)
-		       (eq font-lock-display-type 'grayscale))
-		  'gray
-		background)
-	      "Background as guessed by CPerl mode")
-	    (and (not (cperl-is-face 'font-lock-constant-face))
-		 (cperl-is-face 'font-lock-reference-face)
-		 (copy-face 'font-lock-reference-face 'font-lock-constant-face))
-	    (if (cperl-is-face 'font-lock-type-face) nil
-	      (copy-face 'default 'font-lock-type-face)
-	      (cond
-	       ((eq background 'light)
-		(set-face-foreground 'font-lock-type-face
-				     (if (x-color-defined-p "seagreen")
-					 "seagreen"
-				       "sea green")))
-	       ((eq background 'dark)
-		(set-face-foreground 'font-lock-type-face
-				     (if (x-color-defined-p "os2pink")
-					 "os2pink"
-				       "pink")))
-	       (t
-		(set-face-background 'font-lock-type-face "gray90"))))
-	    (if (cperl-is-face 'cperl-nonoverridable-face)
-		nil
-	      (copy-face 'font-lock-type-face 'cperl-nonoverridable-face)
-	      (cond
-	       ((eq background 'light)
-		(set-face-foreground 'cperl-nonoverridable-face
-				     (if (x-color-defined-p "chartreuse3")
-					 "chartreuse3"
-				       "chartreuse")))
-	       ((eq background 'dark)
-		(set-face-foreground 'cperl-nonoverridable-face
-				     (if (x-color-defined-p "orchid1")
-					 "orchid1"
-				       "orange")))))
-;;;	    (if (cperl-is-face 'font-lock-other-emphasized-face) nil
-;;;	      (copy-face 'bold-italic 'font-lock-other-emphasized-face)
-;;;	      (cond
-;;;	       ((eq background 'light)
-;;;		(set-face-background 'font-lock-other-emphasized-face
-;;;				     (if (x-color-defined-p "lightyellow2")
-;;;					 "lightyellow2"
-;;;				       (if (x-color-defined-p "lightyellow")
-;;;					   "lightyellow"
-;;;					 "light yellow"))))
-;;;	       ((eq background 'dark)
-;;;		(set-face-background 'font-lock-other-emphasized-face
-;;;				     (if (x-color-defined-p "navy")
-;;;					 "navy"
-;;;				       (if (x-color-defined-p "darkgreen")
-;;;					   "darkgreen"
-;;;					 "dark green"))))
-;;;	       (t (set-face-background 'font-lock-other-emphasized-face "gray90"))))
-;;;	    (if (cperl-is-face 'font-lock-emphasized-face) nil
-;;;	      (copy-face 'bold 'font-lock-emphasized-face)
-;;;	      (cond
-;;;	       ((eq background 'light)
-;;;		(set-face-background 'font-lock-emphasized-face
-;;;				     (if (x-color-defined-p "lightyellow2")
-;;;					 "lightyellow2"
-;;;				       "lightyellow")))
-;;;	       ((eq background 'dark)
-;;;		(set-face-background 'font-lock-emphasized-face
-;;;				     (if (x-color-defined-p "navy")
-;;;					 "navy"
-;;;				       (if (x-color-defined-p "darkgreen")
-;;;					   "darkgreen"
-;;;					 "dark green"))))
-;;;	       (t (set-face-background 'font-lock-emphasized-face "gray90"))))
-	    (if (cperl-is-face 'font-lock-variable-name-face) nil
-	      (copy-face 'italic 'font-lock-variable-name-face))
-	    (if (cperl-is-face 'font-lock-constant-face) nil
-	      (copy-face 'italic 'font-lock-constant-face))))
+					   t-font-lock-keywords-1
+					   cperl-font-lock-keywords-1)))
+        (cperl-ps-print-init)
 	(setq cperl-faces-init t))
     (error (message "cperl-init-faces (ignored): %s" errs))))
 
@@ -6235,43 +6698,10 @@ Style of printout regulated by the variable `cperl-ps-print-face-properties'."
   (require 'ps-print)			; To get ps-print-face-extension-alist
   (let ((ps-print-color-p t)
 	(ps-print-face-extension-alist ps-print-face-extension-alist))
-    (cperl-ps-extend-face-list cperl-ps-print-face-properties)
+    (ps-extend-face-list cperl-ps-print-face-properties)
     (ps-print-buffer-with-faces file)))
 
-;;; (defun cperl-ps-print-init ()
-;;;   "Initialization of `ps-print' components for faces used in CPerl."
-;;;   ;; Guard against old versions
-;;;   (defvar ps-underlined-faces nil)
-;;;   (defvar ps-bold-faces nil)
-;;;   (defvar ps-italic-faces nil)
-;;;   (setq ps-bold-faces
-;;; 	(append '(font-lock-emphasized-face
-;;; 		  cperl-array-face
-;;; 		  font-lock-keyword-face
-;;; 		  font-lock-variable-name-face
-;;; 		  font-lock-constant-face
-;;; 		  font-lock-reference-face
-;;; 		  font-lock-other-emphasized-face
-;;; 		  cperl-hash-face)
-;;; 		ps-bold-faces))
-;;;   (setq ps-italic-faces
-;;; 	(append '(cperl-nonoverridable-face
-;;; 		  font-lock-constant-face
-;;; 		  font-lock-reference-face
-;;; 		  font-lock-other-emphasized-face
-;;; 		  cperl-hash-face)
-;;; 		ps-italic-faces))
-;;;   (setq ps-underlined-faces
-;;; 	(append '(font-lock-emphasized-face
-;;; 		  cperl-array-face
-;;; 		  font-lock-other-emphasized-face
-;;; 		  cperl-hash-face
-;;; 		  cperl-nonoverridable-face font-lock-type-face)
-;;; 		ps-underlined-faces))
-;;;   (cons 'font-lock-type-face ps-underlined-faces))
-
-
-(if (cperl-enable-font-lock) (cperl-windowed-init))
+(cperl-windowed-init)
 
 (defconst cperl-styles-entries
   '(cperl-indent-level cperl-brace-offset cperl-continued-brace-offset
@@ -6300,7 +6730,19 @@ if (foo) {
   stop;
 }
 
-### PerlStyle	(=CPerl with 4 as indent)		4/0/0/-4/4/t/nil
+### PBP (=Perl Best Practices)				4/0/0/-4/4/nil/nil
+if (foo) {
+    bar
+	baz;
+  label:
+    {
+	boon;
+    }
+}
+else {
+    stop;
+}
+### PerlStyle	(=CPerl with 4 as indent)		4/0/0/-2/4/t/nil
 if (foo) {
     bar
 	baz;
@@ -6403,6 +6845,19 @@ else
      (cperl-extra-newline-before-brace-multiline .  nil)
      (cperl-merge-trailing-else	       .  t))
 
+    ("PBP"  ;; Perl Best Practices by Damian Conway
+     (cperl-indent-level               .  4)
+     (cperl-brace-offset               .  0)
+     (cperl-continued-brace-offset     .  0)
+     (cperl-label-offset               . -2)
+     (cperl-continued-statement-offset .  4)
+     (cperl-close-paren-offset         . -4)
+     (cperl-extra-newline-before-brace .  nil)
+     (cperl-extra-newline-before-brace-multiline .  nil)
+     (cperl-merge-trailing-else        .  nil)
+     (cperl-indent-parens-as-block     .  t)
+     (cperl-tab-always-indent          .  t))
+
     ("PerlStyle"			; CPerl with 4 as indent
      (cperl-indent-level               .  4)
      (cperl-brace-offset               .  0)
@@ -6466,15 +6921,20 @@ else
      )
     ("Current"))
   "List of variables to set to get a particular indentation style.
-Should be used via `cperl-set-style' or via Perl menu.
+Should be used via `cperl-set-style', `cperl-file-style' or via Perl menu.
 
 See examples in `cperl-style-examples'.")
 
 (defun cperl-set-style (style)
   "Set CPerl mode variables to use one of several different indentation styles.
+This command sets the default values for the variables.  It does
+not affect buffers visiting files where the style has been set as
+a file or directory variable.  To change the indentation style of
+a buffer, use the command `cperl-file-style' instead.
 The arguments are a string representing the desired style.
 The list of styles is in `cperl-style-alist', available styles
-are CPerl, PerlStyle, GNU, K&R, BSD, C++ and Whitesmith.
+are \"CPerl\", \"PBP\", \"PerlStyle\", \"GNU\", \"K&R\", \"BSD\", \"C++\"
+and \"Whitesmith\".
 
 The current value of style is memorized (unless there is a memorized
 data already), may be restored by `cperl-set-style-back'.
@@ -6482,19 +6942,17 @@ data already), may be restored by `cperl-set-style-back'.
 Choosing \"Current\" style will not change style, so this may be used for
 side-effect of memorizing only.  Examples in `cperl-style-examples'."
   (interactive
-   (let ((list (mapcar (function (lambda (elt) (list (car elt))))
-		       cperl-style-alist)))
-     (list (completing-read "Enter style: " list nil 'insist))))
+   (list (completing-read "Enter style: " cperl-style-alist nil 'insist)))
   (or cperl-old-style
       (setq cperl-old-style
-	    (mapcar (function
-		     (lambda (name)
-		       (cons name (eval name))))
+            (mapcar (lambda (name)
+                      (cons name (eval name)))
 		    cperl-styles-entries)))
-  (let ((style (cdr (assoc style cperl-style-alist))) setting str sym)
+  (let ((style (cdr (assoc style cperl-style-alist))) setting)
     (while style
       (setq setting (car style) style (cdr style))
-      (set (car setting) (cdr setting)))))
+      (set-default-toplevel-value (car setting) (cdr setting))))
+  (set-default-toplevel-value 'cperl-file-style style))
 
 (defun cperl-set-style-back ()
   "Restore a style memorized by `cperl-set-style'."
@@ -6504,19 +6962,27 @@ side-effect of memorizing only.  Examples in `cperl-style-examples'."
     (while cperl-old-style
       (setq setting (car cperl-old-style)
 	    cperl-old-style (cdr cperl-old-style))
-      (set (car setting) (cdr setting)))))
+      (set-default-toplevel-value (car setting) (cdr setting)))))
 
-(defun cperl-check-syntax ()
-  (interactive)
-  (require 'mode-compile)
-  (let ((perl-dbg-flags (concat cperl-extra-perl-args " -wc")))
-    (eval '(mode-compile))))		; Avoid a warning
+(defun cperl-file-style (style)
+  "Set the indentation style for the current buffer to STYLE.
+The list of styles is in `cperl-style-alist', available styles
+are \"CPerl\", \"PBP\", \"PerlStyle\", \"GNU\", \"K&R\", \"BSD\", \"C++\"
+and \"Whitesmith\"."
+  (interactive
+   (list (completing-read "Enter style: " cperl-style-alist nil 'insist)))
+  (dolist (setting (cdr (assoc style cperl-style-alist)) style)
+    (let ((option (car setting))
+          (value (cdr setting)))
+      (set (make-local-variable option) value)))
+  (setq-local cperl-file-style style))
 
 (declare-function Info-find-node "info"
-		  (filename nodename &optional no-going-back strict-case))
+		  (filename nodename &optional no-going-back strict-case
+                            noerror))
 
 (defun cperl-info-buffer (type)
-  ;; Returns buffer with documentation.  Creates if missing.
+  ;; Return buffer with documentation.  Creates if missing.
   ;; If TYPE, this vars buffer.
   ;; Special care is taken to not stomp over an existing info buffer
   (let* ((bname (if type "*info-perl-var*" "*info-perl*"))
@@ -6538,8 +7004,7 @@ side-effect of memorizing only.  Examples in `cperl-style-examples'."
 	       (set-buffer "*info-perl-tmp*")
 	       (rename-buffer "*info*")
 	       (set-buffer bname)))
-	(make-local-variable 'window-min-height)
-	(setq window-min-height 2)
+        (setq-local window-min-height 2)
 	(current-buffer)))))
 
 (defun cperl-word-at-point (&optional p)
@@ -6552,34 +7017,26 @@ side-effect of memorizing only.  Examples in `cperl-style-examples'."
 	  (funcall (or (and (boundp 'find-tag-default-function)
 			    find-tag-default-function)
 		       (get major-mode 'find-tag-default-function)
-		       ;; XEmacs 19.12 has `find-tag-default-hook'; it is
-		       ;; automatically used within `find-tag-default':
 		       'find-tag-default))))))
 
 (defun cperl-info-on-command (command)
-  "Show documentation for Perl command COMMAND in other window.
-If perl-info buffer is shown in some frame, uses this frame.
-Customized by setting variables `cperl-shrink-wrap-info-frame',
-`cperl-max-help-size'."
+  (declare (obsolete cperl-perldoc "30.1"))
   (interactive
    (let* ((default (cperl-word-at-point))
 	  (read (read-string
-		 (format "Find doc for Perl function (default %s): "
-			 default))))
+		 (cperl--format-prompt "Find doc for Perl function" default))))
      (list (if (equal read "")
 	       default
 	     read))))
 
-  (let ((buffer (current-buffer))
-	(cmd-desc (concat "^" (regexp-quote command) "[^a-zA-Z_0-9]")) ; "tr///"
-	pos isvar height iniheight frheight buf win fr1 fr2 iniwin not-loner
+  (let ((cmd-desc (concat "^" (regexp-quote command) "[^a-zA-Z_0-9]")) ; "tr///"
+	pos isvar height iniheight frheight buf win iniwin not-loner
 	max-height char-height buf-list)
     (if (string-match "^-[a-zA-Z]$" command)
 	(setq cmd-desc "^-X[ \t\n]"))
     (setq isvar (string-match "^[$@%]" command)
 	  buf (cperl-info-buffer isvar)
-	  iniwin (selected-window)
-	  fr1 (window-frame iniwin))
+	  iniwin (selected-window))
     (set-buffer buf)
     (goto-char (point-min))
     (or isvar
@@ -6600,11 +7057,7 @@ Customized by setting variables `cperl-shrink-wrap-info-frame',
 	  (or (not win)
 	      (eq (window-buffer win) buf)
 	      (set-window-buffer win buf))
-	  (and win (setq fr2 (window-frame win)))
-	  (if (or (not fr2) (eq fr1 fr2))
-	      (pop-to-buffer buf)
-	    (special-display-popup-frame buf) ; Make it visible
-	    (select-window win))
+	  (pop-to-buffer buf)
 	  (goto-char pos)		; Needed (?!).
 	  ;; Resize
 	  (setq iniheight (window-height)
@@ -6638,52 +7091,30 @@ Customized by setting variables `cperl-shrink-wrap-info-frame',
     (select-window iniwin)))
 
 (defun cperl-info-on-current-command ()
-  "Show documentation for Perl command at point in other window."
+  (declare (obsolete cperl-perldoc "30.1"))
   (interactive)
-  (cperl-info-on-command (cperl-word-at-point)))
+  (cperl-perldoc (cperl-word-at-point)))
 
 (defun cperl-imenu-info-imenu-search ()
+  (declare (obsolete nil "30.1"))
   (if (looking-at "^-X[ \t\n]") nil
     (re-search-backward
      "^\n\\([-a-zA-Z_]+\\)[ \t\n]")
     (forward-line 1)))
 
 (defun cperl-imenu-info-imenu-name ()
+  (declare (obsolete nil "30.1"))
   (buffer-substring
    (match-beginning 1) (match-end 1)))
 
 (declare-function imenu-choose-buffer-index "imenu" (&optional prompt alist))
 
 (defun cperl-imenu-on-info ()
-  "Shows imenu for Perl Info Buffer.
-Opens Perl Info buffer if needed."
+  (declare (obsolete nil "30.1"))
   (interactive)
-  (require 'imenu)
-  (let* ((buffer (current-buffer))
-	 imenu-create-index-function
-	 imenu-prev-index-position-function
-	 imenu-extract-index-name-function
-	 (index-item (save-restriction
-		       (save-window-excursion
-			 (set-buffer (cperl-info-buffer nil))
-			 (setq imenu-create-index-function
-			       'imenu-default-create-index-function
-			       imenu-prev-index-position-function
-			       'cperl-imenu-info-imenu-search
-			       imenu-extract-index-name-function
-			       'cperl-imenu-info-imenu-name)
-			 (imenu-choose-buffer-index)))))
-    (and index-item
-	 (progn
-	   (push-mark)
-	   (pop-to-buffer "*info-perl*")
-	   (cond
-	    ((markerp (cdr index-item))
-	     (goto-char (marker-position (cdr index-item))))
-	    (t
-	     (goto-char (cdr index-item))))
-	   (set-window-start (selected-window) (point))
-	   (pop-to-buffer buffer)))))
+  (message
+   (concat "The info file `perl' is no longer available.\n"
+           "Consider installing the perl-doc package from GNU ELPA.")))
 
 (defun cperl-lineup (beg end &optional step minshift)
   "Lineup construction in a region.
@@ -6697,7 +7128,7 @@ If STEP is nil, `cperl-lineup-step' will be used
 \(or `cperl-indent-level', if `cperl-lineup-step' is nil).
 Will not move the position at the start to the left."
   (interactive "r")
-  (let (search col tcol seen b)
+  (let (search col tcol seen)
     (save-excursion
       (goto-char end)
       (end-of-line)
@@ -6708,6 +7139,8 @@ Will not move the position at the start to the left."
       (indent-region beg end nil)
       (goto-char beg)
       (setq col (current-column))
+      ;; Assuming that lineup is done on Perl syntax, this regexp
+      ;; doesn't need to be unicode aware -- haj, 2021-09-10
       (if (looking-at "[a-zA-Z0-9_]")
 	  (if (looking-at "\\<[a-zA-Z0-9_]+\\>")
 	      (setq search
@@ -6745,11 +7178,15 @@ Will not move the position at the start to the left."
   "Run etags with appropriate options for Perl files.
 If optional argument ALL is `recursive', will process Perl files
 in subdirectories too."
+  ;; Apparently etags doesn't support UTF-8 encoded sources, and usage
+  ;; of etags has been commented out in the menu since ... well,
+  ;; forever.  So, let's just stick to ASCII here. -- haj, 2021-09-14
   (interactive)
-  (let ((cmd "etags")
-	(args '("-l" "none" "-r"
-		;;       1=fullname  2=package?             3=name                       4=proto?             5=attrs? (VERY APPROX!)
-		"/\\<sub[ \\t]+\\(\\([a-zA-Z0-9:_]*::\\)?\\([a-zA-Z0-9_]+\\)\\)[ \\t]*\\(([^()]*)[ \t]*\\)?\\([ \t]*:[^#{;]*\\)?\\([{#]\\|$\\)/\\3/"
+  (let ((cmd etags-program-name)
+	(args `("-l" "none" "-r"
+		;;                        1=fullname  2=package?             3=name                       4=proto?             5=attrs? (VERY APPROX!)
+		,(concat
+		  "/\\<" cperl-sub-regexp "[ \\t]+\\(\\([a-zA-Z0-9:_]*::\\)?\\([a-zA-Z0-9_]+\\)\\)[ \\t]*\\(([^()]*)[ \t]*\\)?\\([ \t]*:[^#{;]*\\)?\\([{#]\\|$\\)/\\3/")
 		"-r"
 		"/\\<package[ \\t]+\\(\\([a-zA-Z0-9:_]*::\\)?\\([a-zA-Z0-9_]+\\)\\)[ \\t]*\\([#;]\\|$\\)/\\1/"
 		"-r"
@@ -6803,17 +7240,16 @@ in subdirectories too."
 	   (if (cperl-val 'cperl-electric-parens) "" "not ")))
 
 (defun cperl-toggle-autohelp ()
+  ;; FIXME: Turn me into a minor mode.  Fix menu entries for "Auto-help on" as
+  ;; well.
   "Toggle the state of Auto-Help on Perl constructs (put in the message area).
 Delay of auto-help controlled by `cperl-lazy-help-time'."
   (interactive)
-  (if (fboundp 'run-with-idle-timer)
-      (progn
-	(if cperl-lazy-installed
-	    (cperl-lazy-unstall)
-	  (cperl-lazy-install))
-	(message "Perl help messages will %sbe automatically shown now."
-		 (if cperl-lazy-installed "" "not ")))
-    (message "Cannot automatically show Perl help messages - run-with-idle-timer missing.")))
+  (if cperl-lazy-installed
+      (cperl-lazy-unstall)
+    (cperl-lazy-install))
+  (message "Perl help messages will %sbe automatically shown now."
+	   (if cperl-lazy-installed "" "not ")))
 
 (defun cperl-toggle-construct-fix ()
   "Toggle whether `indent-region'/`indent-sexp' fix whitespace too."
@@ -6842,7 +7278,8 @@ by CPerl."
   (interactive "P")
   (or arg
       (setq arg (if (eq cperl-syntaxify-by-font-lock
-			(if backtrace 'backtrace 'message)) 0 1)))
+			(if backtrace 'backtrace 'message))
+                    0 1)))
   (setq arg (if (> arg 0) (if backtrace 'backtrace 'message) t))
   (setq cperl-syntaxify-by-font-lock arg)
   (message "Debugging messages of syntax unwind %sabled."
@@ -6859,9 +7296,8 @@ by CPerl."
   (auto-fill-mode 0)
   (if cperl-use-syntax-table-text-property-for-tags
       (progn
-	(make-local-variable 'parse-sexp-lookup-properties)
 	;; Do not introduce variable if not needed, we check it!
-	(set 'parse-sexp-lookup-properties t))))
+        (setq-local parse-sexp-lookup-properties t))))
 
 ;; Copied from imenu-example--name-and-position.
 (defvar imenu-use-markers)
@@ -6879,11 +7315,14 @@ Does not move point."
 (defun cperl-xsub-scan ()
   (require 'imenu)
   (let ((index-alist '())
-	(prev-pos 0) index index1 name package prefix)
+        index index1 name package prefix)
     (goto-char (point-min))
     ;; Search for the function
     (progn ;;save-match-data
       (while (re-search-forward
+              ;; FIXME: Should XS code be unicode aware?  Recent C
+              ;; compilers (Gcc 10+) are, but I guess this isn't used
+              ;; much. -- haj, 2021-09-14
 	      "^\\([ \t]*MODULE\\>[^\n]*\\<PACKAGE[ \t]*=[ \t]*\\([a-zA-Z_][a-zA-Z_0-9:]*\\)\\>\\|\\([a-zA-Z_][a-zA-Z_0-9]*\\)(\\|[ \t]*BOOT:\\)"
 	      nil t)
 	(cond
@@ -6919,12 +7358,12 @@ Does not move point."
 
 (defun cperl-find-tags (ifile xs topdir)
   (let ((b (get-buffer cperl-tmp-buffer)) ind lst elt pos ret rel
-	(cperl-pod-here-fontify nil) f file)
+	(cperl-pod-here-fontify nil) file)
     (save-excursion
       (if b (set-buffer b)
 	(cperl-setup-tmp-buf))
       (erase-buffer)
-      (condition-case err
+      (condition-case nil
 	  (setq file (car (insert-file-contents ifile)))
 	(error (if cperl-unreadable-ok nil
 		 (if (y-or-n-p
@@ -6938,29 +7377,28 @@ Does not move point."
 		 (not xs))
 	    (condition-case err		; after __END__ may have garbage
 		(cperl-find-pods-heres nil nil noninteractive)
-	      (error (message "While scanning for syntax: %s" err))))
+	      (error (message "While scanning for syntax: %S" err))))
 	(if xs
 	    (setq lst (cperl-xsub-scan))
 	  (setq ind (cperl-imenu--create-perl-index))
 	  (setq lst (cdr (assoc "+Unsorted List+..." ind))))
 	(setq lst
 	      (mapcar
-	       (function
-		(lambda (elt)
-		  (cond ((string-match "^[_a-zA-Z]" (car elt))
-			 (goto-char (cdr elt))
-			 (beginning-of-line) ; pos should be of the start of the line
-			 (list (car elt)
-			       (point)
-			       (1+ (count-lines 1 (point))) ; 1+ since at beg-o-l
-			       (buffer-substring (progn
-						   (goto-char (cdr elt))
-						   ;; After name now...
-						   (or (eolp) (forward-char 1))
-						   (point))
-						 (progn
-						   (beginning-of-line)
-						   (point))))))))
+               (lambda (elt)
+                 (cond ((string-match (rx line-start (or alpha "_")) (car elt))
+                        (goto-char (cdr elt))
+                        (beginning-of-line) ; pos should be of the start of the line
+                        (list (car elt)
+                              (point)
+                              (1+ (count-lines 1 (point))) ; 1+ since at beg-o-l
+                              (buffer-substring (progn
+                                                  (goto-char (cdr elt))
+                                                  ;; After name now...
+                                                  (or (eolp) (forward-char 1))
+                                                  (point))
+                                                (progn
+                                                  (beginning-of-line)
+                                                  (point)))))))
 	       lst))
 	(erase-buffer)
 	(while lst
@@ -6971,15 +7409,22 @@ Does not move point."
 			127
 			(if (string-match "^package " (car elt))
 			    (substring (car elt) 8)
-			  (car elt) )
+			  (if (string-match "^class " (car elt))
+			      (substring (car elt) 6)
+			    (car elt)))
 			1
 			(number-to-string (elt elt 2)) ; Line
 			","
 			(number-to-string (1- (elt elt 1))) ; Char pos 0-based
 			"\n")
-		(if (and (string-match "^[_a-zA-Z]+::" (car elt))
-			 (string-match "^sub[ \t]+\\([_a-zA-Z]+\\)[^:_a-zA-Z]"
-				       (elt elt 3)))
+		(if (and (string-match (rx line-start
+                                           (eval cperl--basic-identifier-rx) "++")
+                                       (car elt))
+                         (string-match (rx-to-string `(sequence line-start
+                                                                (regexp ,cperl-sub-regexp)
+                                                                (1+ (in " \t"))
+                                                                ,cperl--normal-identifier-rx))
+                                       (elt elt 3)))
 		    ;; Need to insert the name without package as well
 		    (setq lst (cons (cons (substring (elt elt 3)
 						     (match-beginning 1)
@@ -7003,27 +7448,27 @@ Does not move point."
 (defun cperl-add-tags-recurse-noxs ()
   "Add to TAGS data for \"pure\" Perl files in the current directory and kids.
 Use as
-  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \
-        -f cperl-add-tags-recurse-noxs
-"
+  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \\
+        -f cperl-add-tags-recurse-noxs"
   (cperl-write-tags nil nil t t nil t))
 
 (defun cperl-add-tags-recurse-noxs-fullpath ()
   "Add to TAGS data for \"pure\" Perl in the current directory and kids.
 Writes down fullpath, so TAGS is relocatable (but if the build directory
 is relocated, the file TAGS inside it breaks). Use as
-  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \
-        -f cperl-add-tags-recurse-noxs-fullpath
-"
+  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \\
+        -f cperl-add-tags-recurse-noxs-fullpath"
   (cperl-write-tags nil nil t t nil t ""))
 
 (defun cperl-add-tags-recurse ()
   "Add to TAGS file data for Perl files in the current directory and kids.
 Use as
-  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \
-        -f cperl-add-tags-recurse
-"
+  emacs -batch -q -no-site-file -l emacs/cperl-mode.el \\
+        -f cperl-add-tags-recurse"
   (cperl-write-tags nil nil t t))
+
+(defvar cperl-tags-file-name "TAGS"
+  "TAGS file name to use in `cperl-write-tags'.")
 
 (defun cperl-write-tags (&optional file erase recurse dir inbuffer noxs topdir)
   ;; If INBUFFER, do not select buffer, and do not save
@@ -7034,16 +7479,16 @@ Use as
     (if (and (not dir) (buffer-modified-p)) (error "Save buffer first!")))
   (or topdir
       (setq topdir default-directory))
-  (let ((tags-file-name "TAGS")
-	(case-fold-search (and (featurep 'xemacs) (eq system-type 'emx)))
-	xs rel tm)
+  (let ((tags-file-name cperl-tags-file-name)
+        (inhibit-read-only t)
+	(case-fold-search nil)
+	xs rel)
     (save-excursion
       (cond (inbuffer nil)		; Already there
 	    ((file-exists-p tags-file-name)
-	     (if (featurep 'xemacs)
-		 (visit-tags-table-buffer)
-	       (visit-tags-table-buffer tags-file-name)))
-	    (t (set-buffer (find-file-noselect tags-file-name))))
+	     (visit-tags-table-buffer tags-file-name))
+	    (t
+             (set-buffer (find-file-noselect tags-file-name))))
       (cond
        (dir
 	(cond ((eq erase 'ignore))
@@ -7051,7 +7496,7 @@ Use as
 	       (erase-buffer)
 	       (setq erase 'ignore)))
 	(let ((files
-	       (condition-case err
+	       (condition-case nil
 		   (directory-files file t
 				    (if recurse nil cperl-scan-files-regexp)
 				    t)
@@ -7059,19 +7504,19 @@ Use as
 		  (if cperl-unreadable-ok nil
 		    (if (y-or-n-p
 			 (format "Directory %s unreadable.  Continue? " file))
-			(setq cperl-unreadable-ok t
-			      tm nil)	; Return empty list
+			(progn
+                          (setq cperl-unreadable-ok t)
+                          nil)	; Return empty list
 		      (error "Aborting: unreadable directory %s" file)))))))
-	  (mapc (function
-		 (lambda (file)
-		   (cond
-		    ((string-match cperl-noscan-files-regexp file)
-		     nil)
-		    ((not (file-directory-p file))
-		     (if (string-match cperl-scan-files-regexp file)
-			 (cperl-write-tags file erase recurse nil t noxs topdir)))
-		    ((not recurse) nil)
-		    (t (cperl-write-tags file erase recurse t t noxs topdir)))))
+          (mapc (lambda (file)
+                  (cond
+                   ((string-match cperl-noscan-files-regexp file)
+                    nil)
+                   ((not (file-directory-p file))
+                    (if (string-match cperl-scan-files-regexp file)
+                        (cperl-write-tags file erase recurse nil t noxs topdir)))
+                   ((not recurse) nil)
+                   (t (cperl-write-tags file erase recurse t t noxs topdir))))
 		files)))
        (t
 	(setq xs (string-match "\\.xs$" file))
@@ -7100,7 +7545,7 @@ Use as
 	      (insert (cperl-find-tags file xs topdir))))))
       (if inbuffer nil			; Delegate to the caller
 	(save-buffer 0)			; No backup
-	(if (fboundp 'initialize-new-tags-table) ; Do we need something special in XEmacs?
+	(if (fboundp 'initialize-new-tags-table)
 	    (initialize-new-tags-table))))))
 
 (defvar cperl-tags-hier-regexp-list
@@ -7108,7 +7553,7 @@ Use as
    "^\\("
       "\\(package\\)\\>"
      "\\|"
-      "sub\\>[^\n]+::"
+      cperl-sub-regexp "\\>[^\n]+::"
      "\\|"
       "[a-zA-Z_][a-zA-Z_0-9:]*(\C-?[^\n]+::" ; XSUB?
      "\\|"
@@ -7125,10 +7570,9 @@ Use as
 (defun cperl-tags-hier-fill ()
   ;; Suppose we are in a tag table cooked by cperl.
   (goto-char 1)
-  (let (type pack name pos line chunk ord cons1 file str info fileind)
+  (let (pack name line ord cons1 file info fileind)
     (while (re-search-forward cperl-tags-hier-regexp-list nil t)
-      (setq pos (match-beginning 0)
-	    pack (match-beginning 2))
+      (setq pack (match-beginning 2))
       (beginning-of-line)
       (if (looking-at (concat
 		       "\\([^\n]+\\)"
@@ -7147,7 +7591,7 @@ Use as
 		  file (file-of-tag)
 		  fileind (format "%s:%s" file line)
 		  ;; Moves to beginning of the next line:
-		  info (cperl-etags-snarf-tag file line))
+		  info (etags-snarf-tag))
 	    ;; Move back
 	    (forward-char -1)
 	    ;; Make new member of hierarchy name ==> file ==> pos if needed
@@ -7176,31 +7620,22 @@ One may build such TAGS files from CPerl mode menu."
   (require 'etags)
   (require 'imenu)
   (if (or update (null (nth 2 cperl-hierarchy)))
-      (let ((remover (function (lambda (elt) ; (name (file1...) (file2..))
-				 (or (nthcdr 2 elt)
-				     ;; Only in one file
-				     (setcdr elt (cdr (nth 1 elt)))))))
-	    pack name cons1 to l1 l2 l3 l4 b)
+      (let ((remover (lambda (elt) ; (name (file1...) (file2..))
+                       (or (nthcdr 2 elt)
+                           ;; Only in one file
+                           (setcdr elt (cdr (nth 1 elt))))))
+	    to) ;; l1 l2 l3
 	;; (setq cperl-hierarchy '(() () ())) ; Would write into '() later!
-	(setq cperl-hierarchy (list l1 l2 l3))
-	(if (featurep 'xemacs)		; Not checked
-	    (progn
-	      (or tags-file-name
-		  ;; Does this work in XEmacs?
-		  (call-interactively 'visit-tags-table))
-	      (message "Updating list of classes...")
-	      (set-buffer (get-file-buffer tags-file-name))
-	      (cperl-tags-hier-fill))
-	  (or tags-table-list
-	      (call-interactively 'visit-tags-table))
-	  (mapc
-	   (function
-	    (lambda (tagsfile)
-	      (message "Updating list of classes... %s" tagsfile)
-	      (set-buffer (get-file-buffer tagsfile))
-	      (cperl-tags-hier-fill)))
-	   tags-table-list)
-	  (message "Updating list of classes... postprocessing..."))
+	(setq cperl-hierarchy (list () () ())) ;; (list l1 l2 l3)
+	(or tags-table-list
+	    (call-interactively 'visit-tags-table))
+	(mapc
+         (lambda (tagsfile)
+           (message "Updating list of classes... %s" tagsfile)
+           (set-buffer (get-file-buffer tagsfile))
+           (cperl-tags-hier-fill))
+	 tags-table-list)
+	(message "Updating list of classes... postprocessing...")
 	(mapc remover (car cperl-hierarchy))
 	(mapc remover (nth 1 cperl-hierarchy))
 	(setq to (list nil (cons "Packages: " (nth 1 cperl-hierarchy))
@@ -7208,17 +7643,12 @@ One may build such TAGS files from CPerl mode menu."
 	(cperl-tags-treeify to 1)
 	(setcar (nthcdr 2 cperl-hierarchy)
 		(cperl-menu-to-keymap (cons '("+++UPDATE+++" . -999) (cdr to))))
-	(message "Updating list of classes: done, requesting display...")
-	;;(cperl-imenu-addback (nth 2 cperl-hierarchy))
-	))
+	(message "Updating list of classes: done, requesting display...")))
   (or (nth 2 cperl-hierarchy)
       (error "No items found"))
   (setq update
-;;;	(imenu-choose-buffer-index "Packages: " (nth 2 cperl-hierarchy))
-	(if (if (fboundp 'display-popup-menus-p)
-		(let ((f 'display-popup-menus-p))
-		  (funcall f))
-	      window-system)
+        ;; (imenu-choose-buffer-index "Packages: " (nth 2 cperl-hierarchy))
+        (if (display-popup-menus-p)
 	    (x-popup-menu t (nth 2 cperl-hierarchy))
 	  (require 'tmm)
 	  (tmm-prompt (nth 2 cperl-hierarchy))))
@@ -7228,85 +7658,76 @@ One may build such TAGS files from CPerl mode menu."
   (if (vectorp update)
       (progn
 	(find-file (elt update 0))
-	(cperl-etags-goto-tag-location (elt update 1))))
+	(etags-goto-tag-location (elt update 1))))
   (if (eq update -999) (cperl-tags-hier-init t)))
 
 (defun cperl-tags-treeify (to level)
   ;; cadr of `to' is read-write.  On start it is a cons
   (let* ((regexp (concat "^\\(" (mapconcat
-				 'identity
+				 #'identity
 				 (make-list level "[_a-zA-Z0-9]+")
 				 "::")
 			 "\\)\\(::\\)?"))
 	 (packages (cdr (nth 1 to)))
 	 (methods (cdr (nth 2 to)))
-	 l1 head tail cons1 cons2 ord writeto packs recurse
-	 root-packages root-functions ms many_ms same_name ps
+	 head cons1 cons2 ord writeto recurse ;; l1
+	 root-packages root-functions
 	 (move-deeper
-	  (function
-	   (lambda (elt)
-	     (cond ((and (string-match regexp (car elt))
-			 (or (eq ord 1) (match-end 2)))
-		    (setq head (substring (car elt) 0 (match-end 1))
-			  tail (if (match-end 2) (substring (car elt)
-							    (match-end 2)))
-			  recurse t)
-		    (if (setq cons1 (assoc head writeto)) nil
-		      ;; Need to init new head
-		      (setcdr writeto (cons (list head (list "Packages: ")
-						  (list "Methods: "))
-					    (cdr writeto)))
-		      (setq cons1 (nth 1 writeto)))
-		    (setq cons2 (nth ord cons1)) ; Either packs or meths
-		    (setcdr cons2 (cons elt (cdr cons2))))
-		   ((eq ord 2)
-		    (setq root-functions (cons elt root-functions)))
-		   (t
-		    (setq root-packages (cons elt root-packages))))))))
-    (setcdr to l1)			; Init to dynamic space
+          (lambda (elt)
+            (cond ((and (string-match regexp (car elt))
+                        (or (eq ord 1) (match-end 2)))
+                   (setq head (substring (car elt) 0 (match-end 1))
+                         recurse t)
+                   (if (setq cons1 (assoc head writeto)) nil
+                     ;; Need to init new head
+                     (setcdr writeto (cons (list head (list "Packages: ")
+                                                 (list "Methods: "))
+                                           (cdr writeto)))
+                     (setq cons1 (nth 1 writeto)))
+                   (setq cons2 (nth ord cons1)) ; Either packs or meths
+                   (setcdr cons2 (cons elt (cdr cons2))))
+                  ((eq ord 2)
+                   (setq root-functions (cons elt root-functions)))
+                  (t
+                   (setq root-packages (cons elt root-packages)))))))
+    (setcdr to nil) ;; l1		; Init to dynamic space
     (setq writeto to)
     (setq ord 1)
     (mapc move-deeper packages)
     (setq ord 2)
     (mapc move-deeper methods)
     (if recurse
-	(mapc (function (lambda (elt)
-			  (cperl-tags-treeify elt (1+ level))))
+        (mapc (lambda (elt)
+                (cperl-tags-treeify elt (1+ level)))
 	      (cdr to)))
     ;;Now clean up leaders with one child only
-    (mapc (function (lambda (elt)
-		      (if (not (and (listp (cdr elt))
-				    (eq (length elt) 2))) nil
-			(setcar elt (car (nth 1 elt)))
-			(setcdr elt (cdr (nth 1 elt))))))
+    (mapc (lambda (elt)
+            (if (not (and (listp (cdr elt))
+                          (eq (length elt) 2)))
+                nil
+              (setcar elt (car (nth 1 elt)))
+              (setcdr elt (cdr (nth 1 elt)))))
 	  (cdr to))
     ;; Sort the roots of subtrees
     (if (default-value 'imenu-sort-function)
 	(setcdr to
 		(sort (cdr to) (default-value 'imenu-sort-function))))
     ;; Now add back functions removed from display
-    (mapc (function (lambda (elt)
-		      (setcdr to (cons elt (cdr to)))))
+    (mapc (lambda (elt)
+            (setcdr to (cons elt (cdr to))))
 	  (if (default-value 'imenu-sort-function)
 	      (nreverse
 	       (sort root-functions (default-value 'imenu-sort-function)))
 	    root-functions))
     ;; Now add back packages removed from display
-    (mapc (function (lambda (elt)
-		      (setcdr to (cons (cons (concat "package " (car elt))
-					     (cdr elt))
-				       (cdr to)))))
+    (mapc (lambda (elt)
+            (setcdr to (cons (cons (concat "package " (car elt))
+                                   (cdr elt))
+                             (cdr to))))
 	  (if (default-value 'imenu-sort-function)
 	      (nreverse
 	       (sort root-packages (default-value 'imenu-sort-function)))
 	    root-packages))))
-
-;;;(x-popup-menu t
-;;;   '(keymap "Name1"
-;;;	    ("Ret1" "aa")
-;;;	    ("Head1" "ab"
-;;;	     keymap "Name2"
-;;;	     ("Tail1" "x") ("Tail2" "y"))))
 
 (defun cperl-list-fold (list name limit)
   (let (list1 list2 elt1 (num 0))
@@ -7327,25 +7748,24 @@ One may build such TAGS files from CPerl mode menu."
 			    (nreverse list2))
 		      list1)))))
 
-(defun cperl-menu-to-keymap (menu &optional name)
+(defun cperl-menu-to-keymap (menu)
   (let (list)
     (cons 'keymap
 	  (mapcar
-	   (function
-	    (lambda (elt)
-	      (cond ((listp (cdr elt))
-		     (setq list (cperl-list-fold
-				 (cdr elt) (car elt) imenu-max-items))
-		     (cons nil
-			   (cons (car elt)
-				 (cperl-menu-to-keymap list))))
-		    (t
-		     (list (cdr elt) (car elt) t))))) ; t is needed in 19.34
+           (lambda (elt)
+             (cond ((listp (cdr elt))
+                    (setq list (cperl-list-fold
+                                (cdr elt) (car elt) imenu-max-items))
+                    (cons nil
+                          (cons (car elt)
+                                (cperl-menu-to-keymap list))))
+                   (t
+                    (list (cdr elt) (car elt) t)))) ; t is needed in 19.34
 	   (cperl-list-fold menu "Root" imenu-max-items)))))
 
 
 (defvar cperl-bad-style-regexp
-  (mapconcat 'identity
+  (mapconcat #'identity
 	     '("[^-\n\t <>=+!.&|(*/'`\"#^][-=+<>!|&^]" ; char sign
 	       "[-<>=+^&|]+[^- \t\n=+<>~]") ; sign+ char
 	     "\\|")
@@ -7353,7 +7773,7 @@ One may build such TAGS files from CPerl mode menu."
 
 (defvar cperl-not-bad-style-regexp
   (mapconcat
-   'identity
+   #'identity
    '("[^-\t <>=+]\\(--\\|\\+\\+\\)"	; var-- var++
      "[a-zA-Z0-9_][|&][a-zA-Z0-9_$]"	; abc|def abc&def are often used.
      "&[(a-zA-Z0-9_$]"			; &subroutine &(var->field)
@@ -7365,11 +7785,12 @@ One may build such TAGS files from CPerl mode menu."
      ".->"				; a->b
      "->"				; a SPACE ->b
      "\\[-"				; a[-1]
-     "\\\\[&$@*\\\\]"			; \&func
+     "\\\\[&$@*\\]"			; \&func
      "^="				; =head
      "\\$."				; $|
      "<<[a-zA-Z_'\"`]"			; <<FOO, <<'FOO'
      "||"
+     "//"
      "&&"
      "[CBIXSLFZ]<\\(\\sw\\|\\s \\|\\s_\\|[\n]\\)*>" ; C<code like text>
      "-[a-zA-Z_0-9]+[ \t]*=>"		; -option => value
@@ -7391,22 +7812,22 @@ Currently it is tuned to C and Perl syntax."
     (setq last-nonmenu-event 13)	; To disable popup
     (goto-char (point-min))
     (map-y-or-n-p "Insert space here? "
-		  (lambda (arg) (insert " "))
+		  (lambda (_) (insert " "))
 		  'cperl-next-bad-style
 		  '("location" "locations" "insert a space into")
-		  '((?\C-r (lambda (arg)
-			     (let ((buffer-quit-function
-				    'exit-recursive-edit))
-			       (message "Exit with Esc Esc")
-			       (recursive-edit)
-			       t))	; Consider acted upon
+		  `((?\C-r ,(lambda (_)
+			      (let ((buffer-quit-function
+				     #'exit-recursive-edit))
+			        (message "Exit with Esc Esc")
+			        (recursive-edit)
+			        t))	; Consider acted upon
 			   "edit, exit with Esc Esc")
-		    (?e (lambda (arg)
-			  (let ((buffer-quit-function
-				 'exit-recursive-edit))
-			    (message "Exit with Esc Esc")
-			    (recursive-edit)
-			    t))		; Consider acted upon
+		    (?e ,(lambda (_)
+			   (let ((buffer-quit-function
+				  #'exit-recursive-edit))
+			     (message "Exit with Esc Esc")
+			     (recursive-edit)
+			     t))        ; Consider acted upon
 			"edit, exit with Esc Esc"))
 		  t)
     (if found-bad (goto-char found-bad)
@@ -7414,7 +7835,7 @@ Currently it is tuned to C and Perl syntax."
       (message "No appropriate place found"))))
 
 (defun cperl-next-bad-style ()
-  (let (p (not-found t) (point (point)) found)
+  (let (p (not-found t) found)
     (while (and not-found
 		(re-search-forward cperl-bad-style-regexp nil 'to-end))
       (setq p (point))
@@ -7443,15 +7864,15 @@ Currently it is tuned to C and Perl syntax."
 (defvar cperl-have-help-regexp
   ;;(concat "\\("
   (mapconcat
-   'identity
-   '("[$@%*&][0-9a-zA-Z_:]+\\([ \t]*[[{]\\)?" ; Usual variable
+   #'identity
+   '("[$@%*&][[:alnum:]_:]+\\([ \t]*[[{]\\)?" ; Usual variable
      "[$@]\\^[a-zA-Z]"			; Special variable
      "[$@][^ \n\t]"			; Special variable
      "-[a-zA-Z]"			; File test
      "\\\\[a-zA-Z0]"			; Special chars
      "^=[a-z][a-zA-Z0-9_]*"		; POD sections
-     "[-!&*+,-./<=>?\\\\^|~]+"		; Operator
-     "[a-zA-Z_0-9:]+"			; symbol or number
+     "[-!&*+,./<=>?\\^|~]+"		; Operator
+     "[[:alnum:]_:]+"			; symbol or number
      "x="
      "#!")
    ;;"\\)\\|\\("
@@ -7467,8 +7888,8 @@ Currently it is tuned to C and Perl syntax."
   ;; Does not save-excursion
   ;; Get to the something meaningful
   (or (eobp) (eolp) (forward-char 1))
-  (re-search-backward "[-a-zA-Z0-9_:!&*+,-./<=>?\\\\^|~$%@]"
-		      (point-at-bol)
+  (re-search-backward "[-[:alnum:]_:!&*+,./<=>?\\^|~$%@]"
+                      (line-beginning-position)
 		      'to-beg)
   ;;  (cond
   ;;   ((or (eobp) (looking-at "[][ \t\n{}();,]")) ; Not at a symbol
@@ -7476,8 +7897,8 @@ Currently it is tuned to C and Perl syntax."
   ;;    (or (bobp) (backward-char 1))))
   ;; Try to backtrace
   (cond
-   ((looking-at "[a-zA-Z0-9_:]")	; symbol
-    (skip-chars-backward "a-zA-Z0-9_:")
+   ((looking-at "[[:alnum:]_:]")	; symbol
+    (skip-chars-backward "[:alnum:]_:")
     (cond
      ((and (eq (preceding-char) ?^)	; $^I
 	   (eq (char-after (- (point) 2)) ?\$))
@@ -7488,28 +7909,28 @@ Currently it is tuned to C and Perl syntax."
 	   (eq (current-column) 1))
       (forward-char -1)))		; =head1
     (if (and (eq (preceding-char) ?\<)
-	     (looking-at "\\$?[a-zA-Z0-9_:]+>")) ; <FH>
+             (looking-at "\\$?[[:alnum:]_:]+>")) ; <FH>
 	(forward-char -1)))
    ((and (looking-at "=") (eq (preceding-char) ?x)) ; x=
     (forward-char -1))
    ((and (looking-at "\\^") (eq (preceding-char) ?\$)) ; $^I
     (forward-char -1))
-   ((looking-at "[-!&*+,-./<=>?\\\\^|~]")
-    (skip-chars-backward "-!&*+,-./<=>?\\\\^|~")
+   ((looking-at "[-!&*+,./<=>?\\^|~]")
+    (skip-chars-backward "-!&*+,./<=>?\\^|~")
     (cond
      ((and (eq (preceding-char) ?\$)
 	   (not (eq (char-after (- (point) 2)) ?\$))) ; $-
       (forward-char -1))
      ((and (eq (following-char) ?\>)
-	   (string-match "[a-zA-Z0-9_]" (char-to-string (preceding-char)))
+	   (string-match "[[:alnum:]_]" (char-to-string (preceding-char)))
 	   (save-excursion
 	     (forward-sexp -1)
 	     (and (eq (preceding-char) ?\<)
-		  (looking-at "\\$?[a-zA-Z0-9_:]+>")))) ; <FH>
+		  (looking-at "\\$?[[:alnum:]_:]+>")))) ; <FH>
       (search-backward "<"))))
    ((and (eq (following-char) ?\$)
 	 (eq (preceding-char) ?\<)
-	 (looking-at "\\$?[a-zA-Z0-9_:]+>")) ; <$fh>
+	 (looking-at "\\$?[[:alnum:]_:]+>")) ; <$fh>
     (forward-char -1)))
   (if (looking-at cperl-have-help-regexp)
       (buffer-substring (match-beginning 0) (match-end 0))))
@@ -7543,7 +7964,7 @@ than a line.  Your contribution to update/shorten it is appreciated."
 (defun cperl-describe-perl-symbol (val)
   "Display the documentation of symbol at point, a Perl operator."
   (let ((enable-recursive-minibuffers t)
-	args-file regexp)
+	regexp)
     (cond
      ((string-match "^[&*][a-zA-Z_]" val)
       (setq val (concat (substring val 0 1) "NAME")))
@@ -7710,16 +8131,33 @@ $~	The name of the current report format.
 ... = ...	Assignment.
 ... == ...	Numeric equality.
 ... =~ ...	Search pattern, substitution, or translation
+... ~~ ..       Smart match
 ... > ...	Numeric greater than.
 ... >= ...	Numeric greater than or equal to.
 ... >> ...	Bitwise shift right.
 ... >>= ...	Bitwise shift right assignment.
-... ? ... : ...	Condition=if-then-else operator.   ?PAT? One-time pattern match.
-?PATTERN?	One-time pattern match.
+... ? ... : ...	Condition=if-then-else operator.
+... | ...	Bitwise or.
+... || ...	Logical or.
+... // ...      Defined-or.
+~ ...		Unary bitwise complement.
+... and ...		Low-precedence synonym for &&.
+... cmp ...	String compare.
+... eq ...	String equality.
+... ge ...	String greater than or equal.
+... gt ...	String greater than.
+... le ...	String less than or equal.
+... lt ...	String less than.
+... ne ...	String inequality.
+not ...		Low-precedence synonym for ! - negation.
+... or ...		Low-precedence synonym for ||.
+... x ...	Repeat string or array.
+x= ...	Repetition assignment.
+... xor ...		Low-precedence synonym for exclusive or.
 @ARGV	Command line arguments (not including the command name - see $0).
 @INC	List of places to look for perl scripts during do/include/use.
 @_    Parameter array for subroutines; result of split() unless in list context.
-\\  Creates reference to what follows, like \\$var, or quotes non-\\w in strings.
+\\  Creates reference to what follows, like \\$var.  Quotes non-\\w in strings.
 \\0	Octal char, e.g. \\033.
 \\E	Case modification terminator.  See \\Q, \\L, and \\U.
 \\L	Lowercase until \\E .  See also \\l, lc.
@@ -7737,276 +8175,280 @@ $~	The name of the current report format.
 \\u	Upcase the next character.  See also \\U and \\l, ucfirst.
 \\x	Hex character, e.g. \\x1b.
 ... ^ ...	Bitwise exclusive or.
-__END__	Ends program source.
+__CLASS__	The class of an object in construction
 __DATA__	Ends program source.
-__FILE__	Current (source) filename.
-__LINE__	Current line in current source.
-__PACKAGE__	Current package.
+__END__	Ends program source.
+ADJUST {...}	Callback for object creation
 ARGV	Default multi-file input filehandle.  <ARGV> is a synonym for <>.
 ARGVOUT	Output filehandle with -i flag.
 BEGIN { ... }	Immediately executed (during compilation) piece of code.
 END { ... }	Pseudo-subroutine executed after the script finishes.
 CHECK { ... }	Pseudo-subroutine executed after the script is compiled.
+UNITCHECK { ... }
 INIT { ... }	Pseudo-subroutine executed before the script starts running.
 DATA	Input filehandle for what follows after __END__	or __DATA__.
-accept(NEWSOCKET,GENERICSOCKET)
-alarm(SECONDS)
-atan2(X,Y)
-bind(SOCKET,NAME)
-binmode(FILEHANDLE)
-caller[(LEVEL)]
-chdir(EXPR)
-chmod(LIST)
-chop[(LIST|VAR)]
-chown(LIST)
-chroot(FILENAME)
-close(FILEHANDLE)
-closedir(DIRHANDLE)
-... cmp ...	String compare.
-connect(SOCKET,NAME)
+abs [ EXPR ]	absolute value function
+accept(NEWSOCKET,GENERICSOCKET)	accept an incoming socket connect
+alarm(SECONDS)	schedule a SIGALRM
+async(SUB NAME {}|SUB {})	Mark function as potentially asynchronous
+atan2(X,Y)	arctangent of Y/X in the range -PI to PI
+await(ASYNCEXPR)	Yield result of Future
+bind(SOCKET,NAME)	binds an address to a socket
+binmode(FILEHANDLE)	prepare binary files for I/O
+bless REFERENCE [, PACKAGE]	Makes reference into an object of a package.
+break	Break out of a given/when statement
+caller[(LEVEL)]	get context of the current subroutine call
+chdir(EXPR)	change your current working directory
+chmod(LIST)	changes the permissions on a list of files
+chomp [LIST]	Strips $/ off LIST/$_.  Returns count.
+chop[(LIST|VAR)]	remove the last character from a string
+chown(LIST)	change the ownership on a list of files
+chr [NUMBER]	Converts a number to char with the same ordinal.
+chroot(FILENAME)	make directory new root for path lookups
+class NAME	Introduce an object class.
+close(FILEHANDLE)	close file (or pipe or socket) handle
+closedir(DIRHANDLE)	close directory handle
+connect(SOCKET,NAME)	connect to a remote socket
 continue of { block } continue { block }.  Is executed after `next' or at end.
-cos(EXPR)
-crypt(PLAINTEXT,SALT)
-dbmclose(%HASH)
-dbmopen(%HASH,DBNAME,MODE)
-defined(EXPR)
-delete($HASH{KEY})
-die(LIST)
+cos(EXPR)	cosine function
+crypt(PLAINTEXT,SALT)	one-way passwd-style encryption
+dbmclose(%HASH)	breaks binding on a tied dbm file
+dbmopen(%HASH,DBNAME,MODE)	create binding on a tied dbm file
+defined(EXPR)	test whether a value, variable, or function is defined
+delete($HASH{KEY})	deletes a value from a hash
+die(LIST)	raise an exception or bail out
 do { ... }|SUBR while|until EXPR	executes at least once
 do(EXPR|SUBR([LIST]))	(with while|until executes at least once)
-dump LABEL
-each(%HASH)
-endgrent
-endhostent
-endnetent
-endprotoent
-endpwent
-endservent
-eof[([FILEHANDLE])]
-... eq ...	String equality.
-eval(EXPR) or eval { BLOCK }
+dump LABEL	create an immediate core dump
+each(%HASH)	retrieve the next key/value pair from a hash
+endgrent	be done using group file
+endhostent	be done using hosts file
+endnetent	be done using networks file
+endprotoent	be done using protocols file
+endpwent	be done using passwd file
+endservent	be done using services file
+eof[([FILEHANDLE])]	test a filehandle for its end
+eval(EXPR) or eval { BLOCK }	catch exceptions or compile and run code
+evalbytes   See eval.
 exec([TRUENAME] ARGV0, ARGVs)     or     exec(SHELL_COMMAND_LINE)
-exit(EXPR)
-exp(EXPR)
+exists $HASH{KEY}	True if the key exists.
+exit(EXPR)	terminate this program
+exp(EXPR)	raise e to a power
+fc EXPR    Returns the casefolded version of EXPR.
 fcntl(FILEHANDLE,FUNCTION,SCALAR)
-fileno(FILEHANDLE)
-flock(FILEHANDLE,OPERATION)
-for (EXPR;EXPR;EXPR) { ... }
-foreach [VAR] (@ARRAY) { ... }
-fork
-... ge ...	String greater than or equal.
-getc[(FILEHANDLE)]
-getgrent
-getgrgid(GID)
-getgrnam(NAME)
-gethostbyaddr(ADDR,ADDRTYPE)
-gethostbyname(NAME)
-gethostent
-getlogin
-getnetbyaddr(ADDR,ADDRTYPE)
-getnetbyname(NAME)
-getnetent
-getpeername(SOCKET)
-getpgrp(PID)
-getppid
-getpriority(WHICH,WHO)
-getprotobyname(NAME)
-getprotobynumber(NUMBER)
-getprotoent
-getpwent
-getpwnam(NAME)
-getpwuid(UID)
-getservbyname(NAME,PROTO)
-getservbyport(PORT,PROTO)
-getservent
-getsockname(SOCKET)
-getsockopt(SOCKET,LEVEL,OPTNAME)
-gmtime(EXPR)
-goto LABEL
-... gt ...	String greater than.
-hex(EXPR)
-if (EXPR) { ... } [ elsif (EXPR) { ... } ... ] [ else { ... } ] or EXPR if EXPR
-index(STR,SUBSTR[,OFFSET])
-int(EXPR)
-ioctl(FILEHANDLE,FUNCTION,SCALAR)
-join(EXPR,LIST)
-keys(%HASH)
-kill(LIST)
-last [LABEL]
-... le ...	String less than or equal.
-length(EXPR)
-link(OLDFILE,NEWFILE)
-listen(SOCKET,QUEUESIZE)
-local(LIST)
-localtime(EXPR)
-log(EXPR)
-lstat(EXPR|FILEHANDLE|VAR)
-... lt ...	String less than.
-m/PATTERN/iogsmx
-mkdir(FILENAME,MODE)
-msgctl(ID,CMD,ARG)
-msgget(KEY,FLAGS)
-msgrcv(ID,VAR,SIZE,TYPE.FLAGS)
-msgsnd(ID,MSG,FLAGS)
+field VAR  [:param[(NAME)]] [=EXPR]	declare an object attribute
+__FILE__	Current (source) filename.
+fileno(FILEHANDLE)	return file descriptor from filehandle
+flock(FILEHANDLE,OPERATION)	lock an entire file with an advisory lock
+fork	create a new process just like this one
+format [NAME] =	 Start of output format.  Ended by a single dot (.) on a line.
+formline PICTURE, LIST	Backdoor into \"format\" processing.
+getc[(FILEHANDLE)]	get the next character from the filehandle
+getgrent	get group record given group user ID
+getgrgid(GID)	get group record given group user ID
+getgrnam(NAME)	get group record given group name
+gethostbyaddr(ADDR,ADDRTYPE)	get host record given name
+gethostbyname(NAME)	get host record given name
+gethostent	get next hosts record
+getlogin	return who logged in at this tty
+getnetbyaddr(ADDR,ADDRTYPE)	get network record given its address
+getnetbyname(NAME)	get networks record given name
+getnetent	get next networks record
+getpeername(SOCKET)	find the other end of a socket connection
+getpgrp(PID)	get process group
+getppid	get parent process ID
+getpriority(WHICH,WHO)	get current nice value
+getprotobyname(NAME)	get protocol record given name
+getprotobynumber(NUMBER)	get protocol record numeric protocol
+getprotoent	get next protocols record
+getpwent	get next passwd record
+getpwnam(NAME)	get passwd record given user login name
+getpwuid(UID)	get passwd record given user ID
+getservbyname(NAME,PROTO)	get services record given its name
+getservbyport(PORT,PROTO)	get services record given numeric port
+getservent	get next services record
+getsockname(SOCKET)	retrieve the sockaddr for a given socket
+getsockopt(SOCKET,LEVEL,OPTNAME)	get socket options on a given socket
+glob EXPR	expand filenames using wildcards.  Synonym of <EXPR>.
+gmtime(EXPR)	convert UNIX time into record or string using Greenwich time
+goto LABEL	create spaghetti code
+grep EXPR,LIST  or grep {BLOCK} LIST	Filters LIST via EXPR/BLOCK.
+hex(EXPR)	convert a hexadecimal string to a number
+import	patch a module's namespace into your own
+index(STR,SUBSTR[,OFFSET])	find a substring within a string
+int(EXPR)	get the integer portion of a number
+ioctl(FILEHANDLE,FUNCTION,SCALAR)	device control system call
+join(EXPR,LIST)	join a list into a string using a separator
+keys(%HASH)	retrieve list of indices from a hash
+kill(LIST)	send a signal to a process or process group
+last [LABEL]	exit a block prematurely
+lc [ EXPR ]	Returns lowercased EXPR.
+lcfirst [ EXPR ]	Returns EXPR with lower-cased first letter.
+length(EXPR)	return the number of characters in a string
+__LINE__	Current line in current source.
+link(OLDFILE,NEWFILE)	create a hard link in the filesystem
+listen(SOCKET,QUEUESIZE)	register your socket as a server
+local(LIST)	create a temporary value for a global variable
+localtime(EXPR)	convert UNIX time into record or string using local time
+lock(THING)	get a thread lock on a variable, subroutine, or method
+log(EXPR)	retrieve the natural logarithm for a number
+lstat(EXPR|FILEHANDLE|VAR)	stat a symbolic link
+m/PATTERN/iogsmx	match a string with a regular expression pattern
+map EXPR, LIST	or map {BLOCK} LIST	Applies EXPR/BLOCK to elts of LIST.
+method  [NAME [(signature)]] { BODY }	method NAME;
+mkdir(FILENAME,MODE)	create a directory
+msgctl(ID,CMD,ARG)	SysV IPC message control operations
+msgget(KEY,FLAGS)	get SysV IPC message queue
+msgrcv(ID,VAR,SIZE,TYPE.FLAGS)	receive a SysV IPC message from a message queue
+msgsnd(ID,MSG,FLAGS)	send a SysV IPC message to a message queue
 my VAR or my (VAR1,...)	Introduces a lexical variable ($VAR, @ARR, or %HASH).
-our VAR or our (VAR1,...) Lexically enable a global variable ($V, @A, or %H).
-... ne ...	String inequality.
-next [LABEL]
-oct(EXPR)
-open(FILEHANDLE[,EXPR])
-opendir(DIRHANDLE,EXPR)
+next [LABEL]	iterate a block prematurely
+no MODULE [SYMBOL1, ...]  Partial reverse for `use'.  Runs `unimport' method.
+oct(EXPR)	convert a string to an octal number
+open(FILEHANDLE[,EXPR])	open a file, pipe, or descriptor
+opendir(DIRHANDLE,EXPR)	open a directory
 ord(EXPR)	ASCII value of the first char of the string.
-pack(TEMPLATE,LIST)
+our VAR or our (VAR1,...) Lexically enable a global variable ($V, @A, or %H).
+pack(TEMPLATE,LIST)	convert a list into a binary representation
 package NAME	Introduces package context.
+__PACKAGE__	Current package.
 pipe(READHANDLE,WRITEHANDLE)	Create a pair of filehandles on ends of a pipe.
-pop(ARRAY)
-print [FILEHANDLE] [(LIST)]
-printf [FILEHANDLE] (FORMAT,LIST)
-push(ARRAY,LIST)
+pop(ARRAY)	remove the last element from an array and return it
+pos STRING    Set/Get end-position of the last match over this string, see \\G.
+print [FILEHANDLE] [(LIST)]	output a list to a filehandle
+printf [FILEHANDLE] (FORMAT,LIST)	output a formatted list to a filehandle
+prototype \\&SUB	Returns prototype of the function given a reference.
+push(ARRAY,LIST)	append one or more elements to an array
 q/STRING/	Synonym for \\='STRING\\='
 qq/STRING/	Synonym for \"STRING\"
+qr/PATTERN/	compile pattern
+quotemeta	quote regular expression magic characters
+qw/STRING/	quote a list of words
 qx/STRING/	Synonym for \\=`STRING\\=`
-rand[(EXPR)]
-read(FILEHANDLE,SCALAR,LENGTH[,OFFSET])
-readdir(DIRHANDLE)
-readlink(EXPR)
-recv(SOCKET,SCALAR,LEN,FLAGS)
-redo [LABEL]
-rename(OLDNAME,NEWNAME)
-require [FILENAME | PERL_VERSION]
-reset[(EXPR)]
-return(LIST)
-reverse(LIST)
-rewinddir(DIRHANDLE)
-rindex(STR,SUBSTR[,OFFSET])
-rmdir(FILENAME)
-s/PATTERN/REPLACEMENT/gieoxsm
-scalar(EXPR)
-seek(FILEHANDLE,POSITION,WHENCE)
-seekdir(DIRHANDLE,POS)
-select(FILEHANDLE | RBITS,WBITS,EBITS,TIMEOUT)
-semctl(ID,SEMNUM,CMD,ARG)
-semget(KEY,NSEMS,SIZE,FLAGS)
-semop(KEY,...)
-send(SOCKET,MSG,FLAGS[,TO])
-setgrent
-sethostent(STAYOPEN)
-setnetent(STAYOPEN)
-setpgrp(PID,PGRP)
-setpriority(WHICH,WHO,PRIORITY)
-setprotoent(STAYOPEN)
-setpwent
-setservent(STAYOPEN)
-setsockopt(SOCKET,LEVEL,OPTNAME,OPTVAL)
-shift[(ARRAY)]
-shmctl(ID,CMD,ARG)
-shmget(KEY,SIZE,FLAGS)
-shmread(ID,VAR,POS,SIZE)
-shmwrite(ID,STRING,POS,SIZE)
-shutdown(SOCKET,HOW)
-sin(EXPR)
-sleep[(EXPR)]
-socket(SOCKET,DOMAIN,TYPE,PROTOCOL)
-socketpair(SOCKET1,SOCKET2,DOMAIN,TYPE,PROTOCOL)
-sort [SUBROUTINE] (LIST)
-splice(ARRAY,OFFSET[,LENGTH[,LIST]])
-split[(/PATTERN/[,EXPR[,LIMIT]])]
-sprintf(FORMAT,LIST)
-sqrt(EXPR)
-srand(EXPR)
-stat(EXPR|FILEHANDLE|VAR)
-study[(SCALAR)]
+rand[(EXPR)]	retrieve the next pseudorandom number
+read(FILEHANDLE,SCALAR,LENGTH[,OFFSET])	fixed-length buffered input
+readdir(DIRHANDLE)	get a directory from a directory handle
+readline FH	Synonym of <FH>.
+readlink(EXPR)	determine where a symbolic link is pointing
+readpipe CMD	Synonym of \\=`CMD\\=`.
+recv(SOCKET,SCALAR,LEN,FLAGS)	receive a message over a Socket
+redo [LABEL]	start this loop iteration over again
+ref [ EXPR ]	Type of EXPR when dereferenced.
+rename(OLDNAME,NEWNAME)	change a filename
+require [FILENAME | PERL_VERSION]	load from a library at runtime
+reset[(EXPR)]	clear all variables of a given name
+return(LIST)	get out of a function early
+reverse(LIST)	flip a string or a list
+rewinddir(DIRHANDLE)	reset directory handle
+rindex(STR,SUBSTR[,OFFSET])	right-to-left substring search
+rmdir(FILENAME)	remove a directory
+s/PATTERN/REPLACEMENT/gieoxsm	replace a pattern with a string
+say [FILEHANDLE] [(LIST)]	output a list, appending a newline
+scalar(EXPR)	force a scalar context
+seek(FILEHANDLE,POSITION,WHENCE)	reposition file pointer
+seekdir(DIRHANDLE,POS)	reposition directory pointer
+select(FILEHANDLE)	reset default output or do I/O multiplexing
+select(RBITS,WBITS,EBITS,TIMEOUT)	do I/O multiplexing
+semctl(ID,SEMNUM,CMD,ARG)	SysV semaphore control operations
+semget(KEY,NSEMS,SIZE,FLAGS)	get set of SysV semaphores
+semop(KEY,...)	SysV semaphore operations
+send(SOCKET,MSG,FLAGS[,TO])	send a message over a socket
+setgrent	prepare group file for use
+sethostent(STAYOPEN)	prepare hosts file for use
+setnetent(STAYOPEN)	prepare networks file for use
+setpgrp(PID,PGRP)	set the process group of a process
+setpriority(WHICH,WHO,PRIORITY)	Process	set a process\\='s nice value
+setprotoent(STAYOPEN)	etwork	prepare protocols file for use
+setpwent	prepare passwd file for use
+setservent(STAYOPEN)	prepare services file for use
+setsockopt(SOCKET,LEVEL,OPTNAME,OPTVAL)	set some socket options
+shift[(ARRAY)]	remove the first element of an array, and return it
+shmctl(ID,CMD,ARG)	SysV shared memory operations
+shmget(KEY,SIZE,FLAGS)	get SysV shared memory segment identifier
+shmread(ID,VAR,POS,SIZE)	read SysV shared memory
+shmwrite(ID,STRING,POS,SIZE)	write SysV shared memory
+shutdown(SOCKET,HOW)	close down just half of a socket connection
+sin(EXPR)	return the sine of a number
+sleep[(EXPR)]	block for some number of seconds
+socket(SOCKET,DOMAIN,TYPE,PROTOCOL)	create a socket
+socketpair(SOCKET1,SOCKET2,DOMAIN,TYPE,PROTOCOL)	create a pair of sockets
+sort [SUBROUTINE] (LIST)	sort a list of values
+splice(ARRAY,OFFSET[,LENGTH[,LIST]])	add or remove elements anywhere
+split[(/PATTERN/[,EXPR[,LIMIT]])]	split up a string using a regexp
+sprintf(FORMAT,LIST)	formatted print into a string
+sqrt(EXPR)	square root function
+srand(EXPR)	seed the random number generator
+stat(EXPR|FILEHANDLE|VAR)	get a file\\='s status information
+state VAR or state (VAR1,...)	Introduces a static lexical variable
+study[(SCALAR)]	no-op, formerly optimized input data for repeated searches
 sub [NAME [(format)]] { BODY }	sub NAME [(format)];	sub [(format)] {...}
-substr(EXPR,OFFSET[,LEN])
-symlink(OLDFILE,NEWFILE)
-syscall(LIST)
-sysread(FILEHANDLE,SCALAR,LENGTH[,OFFSET])
+__SUB__	the current subroutine, or C<undef> if not in a subroutine
+substr(EXPR,OFFSET[,LEN])	get or alter a portion of a string
+symlink(OLDFILE,NEWFILE)	create a symbolic link to a file
+syscall(LIST)	execute an arbitrary system call
+sysopen FH, FILENAME, MODE [, PERM]	(MODE is numeric, see Fcntl.)
+sysread(FILEHANDLE,SCALAR,LENGTH[,OFFSET])	fixed-length unbuffered input
+sysseek(FILEHANDLE,POSITION,WHENCE) position I/O pointer on handle
 system([TRUENAME] ARGV0 [,ARGV])     or     system(SHELL_COMMAND_LINE)
-syswrite(FILEHANDLE,SCALAR,LENGTH[,OFFSET])
-tell[(FILEHANDLE)]
-telldir(DIRHANDLE)
-time
-times
-tr/SEARCHLIST/REPLACEMENTLIST/cds
-truncate(FILE|EXPR,LENGTH)
-umask[(EXPR)]
-undef[(EXPR)]
-unless (EXPR) { ... } [ else { ... } ] or EXPR unless EXPR
-unlink(LIST)
-unpack(TEMPLATE,EXPR)
-unshift(ARRAY,LIST)
-until (EXPR) { ... }					EXPR until EXPR
-utime(LIST)
-values(%HASH)
-vec(EXPR,OFFSET,BITS)
-wait
-waitpid(PID,FLAGS)
+syswrite(FILEHANDLE,SCALAR,LENGTH[,OFFSET])	fixed-length unbuffered output
+tell[(FILEHANDLE)]	get current seekpointer on a filehandle
+telldir(DIRHANDLE)	get current seekpointer on a directory handle
+tie VAR, CLASS, LIST	Hide an object behind a simple Perl variable.
+tied		Returns internal object for a tied data.
+time	return number of seconds since 1970
+times	return elapsed time for self and child processes
+tr/SEARCHLIST/REPLACEMENTLIST/cds	transliterate a string
+truncate(FILE|EXPR,LENGTH)	shorten a file
+uc [ EXPR ]	Returns upcased EXPR.
+ucfirst [ EXPR ]	Returns EXPR with upcased first letter.
+umask[(EXPR)]	set file creation mode mask
+undef[(EXPR)]	remove a variable or function definition
+unlink(LIST)	remove one link to a file
+unpack(TEMPLATE,EXPR)	convert binary structure into normal perl variables
+unshift(ARRAY,LIST)	prepend more elements to the beginning of a list
+untie VAR	Unlink an object from a simple Perl variable.
+use MODULE [SYMBOL1, ...]  Compile-time `require' with consequent `import'.
+utime(LIST)	set a file\\='s last access and modify times
+values(%HASH)	return a list of the values in a hash
+vec(EXPR,OFFSET,BITS)	test or set particular bits in a string
+wait	wait for any child process to die
+waitpid(PID,FLAGS)	wait for a particular child process to die
 wantarray	Returns true if the sub/eval is called in list context.
-warn(LIST)
-while  (EXPR) { ... }					EXPR while EXPR
-write[(EXPR|FILEHANDLE)]
-... x ...	Repeat string or array.
-x= ...	Repetition assignment.
-y/SEARCHLIST/REPLACEMENTLIST/
-... | ...	Bitwise or.
-... || ...	Logical or.
-~ ...		Unary bitwise complement.
+warn(LIST)	print debugging info
+write[(EXPR|FILEHANDLE)]	print a picture record
+y/SEARCHLIST/REPLACEMENTLIST/	transliterate a string
 #!	OS interpreter indicator.  If contains `perl', used for options, and -x.
 AUTOLOAD {...}	Shorthand for `sub AUTOLOAD {...}'.
 CORE::		Prefix to access builtin function if imported sub obscures it.
 SUPER::		Prefix to lookup for a method in @ISA classes.
 DESTROY		Shorthand for `sub DESTROY {...}'.
-... EQ ...	Obsolete synonym of `eq'.
-... GE ...	Obsolete synonym of `ge'.
-... GT ...	Obsolete synonym of `gt'.
-... LE ...	Obsolete synonym of `le'.
-... LT ...	Obsolete synonym of `lt'.
-... NE ...	Obsolete synonym of `ne'.
-abs [ EXPR ]	absolute value
-... and ...		Low-precedence synonym for &&.
-bless REFERENCE [, PACKAGE]	Makes reference into an object of a package.
-chomp [LIST]	Strips $/ off LIST/$_.  Returns count.  Special if $/ eq \\='\\='!
-chr		Converts a number to char with the same ordinal.
 else		Part of if/unless {BLOCK} elsif {BLOCK} else {BLOCK}.
 elsif		Part of if/unless {BLOCK} elsif {BLOCK} else {BLOCK}.
-exists $HASH{KEY}	True if the key exists.
-format [NAME] =	 Start of output format.  Ended by a single dot (.) on a line.
-formline PICTURE, LIST	Backdoor into \"format\" processing.
-glob EXPR	Synonym of <EXPR>.
-lc [ EXPR ]	Returns lowercased EXPR.
-lcfirst [ EXPR ]	Returns EXPR with lower-cased first letter.
-grep EXPR,LIST  or grep {BLOCK} LIST	Filters LIST via EXPR/BLOCK.
-map EXPR, LIST	or map {BLOCK} LIST	Applies EXPR/BLOCK to elts of LIST.
-no PACKAGE [SYMBOL1, ...]  Partial reverse for `use'.  Runs `unimport' method.
-not ...		Low-precedence synonym for ! - negation.
-... or ...		Low-precedence synonym for ||.
-pos STRING    Set/Get end-position of the last match over this string, see \\G.
-quotemeta [ EXPR ]	Quote regexp metacharacters.
-qw/WORD1 .../		Synonym of split(\\='\\=', \\='WORD1 ...\\=')
-readline FH	Synonym of <FH>.
-readpipe CMD	Synonym of \\=`CMD\\=`.
-ref [ EXPR ]	Type of EXPR when dereferenced.
-sysopen FH, FILENAME, MODE [, PERM]	(MODE is numeric, see Fcntl.)
-tie VAR, PACKAGE, LIST	Hide an object behind a simple Perl variable.
-tied		Returns internal object for a tied data.
-uc [ EXPR ]	Returns upcased EXPR.
-ucfirst [ EXPR ]	Returns EXPR with upcased first letter.
-untie VAR	Unlink an object from a simple Perl variable.
-use PACKAGE [SYMBOL1, ...]  Compile-time `require' with consequent `import'.
-... xor ...		Low-precedence synonym for exclusive or.
-prototype \\&SUB	Returns prototype of the function given a reference.
+default { ... } default case for given/when block
+defer { ... }	run this block after the containing block.
+for (EXPR;EXPR;EXPR) { ... }
+foreach [VAR] (@ARRAY) { ... }
+given (EXPR) { [ when (EXPR) { ... } ]+ [ default { ... } ]? }
+if (EXPR) { ... } [ elsif (EXPR) { ... } ... ] [ else { ... } ] or EXPR if EXPR
+unless (EXPR) { ... } [ else { ... } ] or EXPR unless EXPR
+until (EXPR) { ... }	EXPR until EXPR
+while  (EXPR) { ... }	EXPR while EXPR
 =head1		Top-level heading.
 =head2		Second-level heading.
-=head3		Third-level heading (is there such?).
+=head3		Third-level heading.
+=head4		Fourth-level heading.
 =over [ NUMBER ]	Start list.
 =item [ TITLE ]		Start new item in the list.
 =back		End list.
 =cut		Switch from POD to Perl.
 =pod		Switch from Perl to POD.
-")
+=begin formatname	Start directly formatted region.
+=end formatname	End directly formatted region.
+=for formatname text	Paragraph in special format.
+=encoding encodingname	Encoding of the document.")
 
 (defun cperl-switch-to-doc-buffer (&optional interactive)
-  "Go to the perl documentation buffer and insert the documentation."
+  "Go to the Perl documentation buffer and insert the documentation."
   (interactive "p")
   (let ((buf (get-buffer-create cperl-doc-buffer)))
     (if interactive
@@ -8025,7 +8467,7 @@ prototype \\&SUB	Returns prototype of the function given a reference.
   ;; The REx is guaranteed to have //x
   ;; LEVEL shows how many levels deep to go
   ;; position at enter and at leave is not defined
-  (let (s c tmp (m (make-marker)) (m1 (make-marker)) c1 spaces inline code pos)
+  (let (s c tmp (m (make-marker)) (m1 (make-marker)) c1 spaces inline pos)
     (if embed
 	(progn
 	  (goto-char b)
@@ -8073,7 +8515,7 @@ prototype \\&SUB	Returns prototype of the function given a reference.
 		       "\\|"		; $ ^
 		       "[$^]"
 		       "\\|"		; simple-code simple-code*?
-		       "\\(\\\\.\\|[^][()#|*+?\n]\\)\\([*+{?]\\??\\)?" ; 4 5
+		       "\\(\\\\.\\|[^][()#|*+?$^\n]\\)\\([*+{?]\\??\\)?" ; 4 5
 		       "\\|"		; Class
 		       "\\(\\[\\)"	; 6
 		       "\\|"		; Grouping
@@ -8221,8 +8663,8 @@ prototype \\&SUB	Returns prototype of the function given a reference.
 	  (goto-char (match-end 1))
 	(re-search-backward "\\s|")))	; Assume it is scanned already.
     ;;(forward-char 1)
-    (let ((b (point)) (e (make-marker)) have-x delim (c (current-column))
-	  (sub-p (eq (preceding-char) ?s)) s)
+    (let ((b (point)) (e (make-marker)) have-x delim
+	  (sub-p (eq (preceding-char) ?s)))
       (forward-sexp 1)
       (set-marker e (1- (point)))
       (setq delim (preceding-char))
@@ -8235,7 +8677,7 @@ prototype \\&SUB	Returns prototype of the function given a reference.
       ;; Protect fragile " ", "#"
       (if have-x nil
 	(goto-char (1+ b))
-	(while (re-search-forward "\\(\\=\\|[^\\\\]\\)\\(\\\\\\\\\\)*[ \t\n#]" e t) ; Need to include (?#) too?
+	(while (re-search-forward "\\(\\=\\|[^\\]\\)\\(\\\\\\\\\\)*[ \t\n#]" e t) ; Need to include (?#) too?
 	  (forward-char -1)
 	  (insert "\\")
 	  (forward-char 1)))
@@ -8264,7 +8706,7 @@ We suppose that the regexp is scanned already."
 	  (error "Cannot find `(' which starts a group"))
       (setq done
 	    (save-excursion
-	      (skip-chars-backward "\\")
+	      (skip-chars-backward "\\\\")
 	      (looking-at "\\(\\\\\\\\\\)*(")))
       (or done (forward-char -1)))))
 
@@ -8299,7 +8741,7 @@ We suppose that the regexp is scanned already."
 	(cperl-regext-to-level-start)
       (error				; We are outside outermost group
        (goto-char (cperl-make-regexp-x))))
-    (let ((b (point)) (e (make-marker)) s c)
+    (let ((b (point)) (e (make-marker)))
       (forward-sexp 1)
       (set-marker e (1- (point)))
       (goto-char (1+ b))
@@ -8511,20 +8953,17 @@ the appropriate statement modifier."
 
 (declare-function Man-getpage-in-background "man" (topic))
 
-;;; By Anthony Foiani <afoiani@uswest.com>
-;;; Getting help on modules in C-h f ?
-;;; This is a modified version of `man'.
-;;; Need to teach it how to lookup functions
+;; By Anthony Foiani <afoiani@uswest.com>
+;; Getting help on modules in C-h f ?
+;; This is a modified version of `man'.
+;; Need to teach it how to lookup functions
 ;;;###autoload
 (defun cperl-perldoc (word)
   "Run `perldoc' on WORD."
   (interactive
    (list (let* ((default-entry (cperl-word-at-point))
                 (input (read-string
-                        (format "perldoc entry%s: "
-                                (if (string= default-entry "")
-                                    ""
-                                  (format " (default %s)" default-entry))))))
+                        (cperl--format-prompt "perldoc entry" default-entry))))
            (if (string= input "")
                (if (string= default-entry "")
                    (error "No perldoc args given")
@@ -8533,20 +8972,14 @@ the appropriate statement modifier."
   (require 'man)
   (let* ((case-fold-search nil)
 	 (is-func (and
-		   (string-match "^[a-z]+$" word)
+		   (string-match "^\\(-[A-Za-z]\\|[a-z]+\\)$" word)
 		   (string-match (concat "^" word "\\>")
 				 (documentation-property
 				  'cperl-short-docs
 				  'variable-documentation))))
 	 (Man-switches "")
-	 (manual-program (if is-func "perldoc -f" "perldoc")))
-    (cond
-     ((featurep 'xemacs)
-      (let ((Manual-program "perldoc")
-	    (Manual-switches (if is-func (list "-f"))))
-	(manual-entry word)))
-     (t
-      (Man-getpage-in-background word)))))
+         (manual-program (concat "perldoc -i" (if is-func " -f"))))
+    (Man-getpage-in-background word)))
 
 ;;;###autoload
 (defun cperl-perldoc-at-point ()
@@ -8554,12 +8987,14 @@ the appropriate statement modifier."
   (interactive)
   (cperl-perldoc (cperl-word-at-point)))
 
-(defcustom pod2man-program "pod2man"
+(define-obsolete-variable-alias 'pod2man-program 'cperl-pod2man-program "29.1")
+(defcustom cperl-pod2man-program "pod2man"
   "File name for `pod2man'."
   :type 'file
-  :group 'cperl)
+  :group 'cperl
+  :version "29.1")
 
-;;; By Nick Roberts <Nick.Roberts@src.bae.co.uk> (with changes)
+;; By Nick Roberts <Nick.Roberts@src.bae.co.uk> (with changes)
 (defun cperl-pod-to-manpage ()
   "Create a virtual manpage in Emacs from the Perl Online Documentation."
   (interactive)
@@ -8576,23 +9011,17 @@ the appropriate statement modifier."
                         (format (cperl-pod2man-build-command) pod2man-args))
          'Man-bgproc-sentinel)))))
 
-;;; Updated version by him too
 (defun cperl-build-manpage ()
   "Create a virtual manpage in Emacs from the POD in the file."
   (interactive)
   (require 'man)
-  (cond
-   ((featurep 'xemacs)
-    (let ((Manual-program "perldoc"))
-      (manual-entry buffer-file-name)))
-   (t
-    (let* ((manual-program "perldoc")
-	   (Man-switches ""))
-      (Man-getpage-in-background buffer-file-name)))))
+  (let ((manual-program "perldoc")
+	(Man-switches ""))
+    (Man-getpage-in-background buffer-file-name)))
 
 (defun cperl-pod2man-build-command ()
   "Builds the entire background manpage and cleaning command."
-  (let ((command (concat pod2man-program " %s 2>/dev/null"))
+  (let ((command (concat pod2man-program " %s 2>" null-device))
         (flist (and (boundp 'Man-filter-list) Man-filter-list)))
     (while (and flist (car flist))
       (let ((pcom (car (car flist)))
@@ -8639,55 +9068,54 @@ a result of qr//, this is not a performance hit), t for the rest."
     (and (eq (get-text-property beg 'syntax-type) 'string)
 	 (setq beg (next-single-property-change beg 'syntax-type nil limit)))
     (cperl-map-pods-heres
-     (function (lambda (s e p)
-		 (if (memq (get-text-property s 'REx-interpolated) skip)
-		     t
-		   (setq pp s)
-		   nil)))	; nil stops
+     (lambda (s _e _p)
+       (if (memq (get-text-property s 'REx-interpolated) skip)
+           t
+         (setq pp s)
+         nil))	; nil stops
      'REx-interpolated beg limit)
     (if pp (goto-char pp)
       (message "No more interpolated REx"))))
 
-;;; Initial version contributed by Trey Belew
-(defun cperl-here-doc-spell (&optional beg end)
+;; Initial version contributed by Trey Belew
+(defun cperl-here-doc-spell ()
   "Spell-check HERE-documents in the Perl buffer.
 If a region is highlighted, restricts to the region."
-  (interactive "")
-  (cperl-pod-spell t beg end))
+  (interactive)
+  (cperl-pod-spell t))
 
-(defun cperl-pod-spell (&optional do-heres beg end)
+(defun cperl-pod-spell (&optional do-heres)
   "Spell-check POD documentation.
 If invoked with prefix argument, will do HERE-DOCs instead.
 If a region is highlighted, restricts to the region."
   (interactive "P")
   (save-excursion
     (let (beg end)
-      (if (cperl-mark-active)
+      (if (region-active-p)
 	  (setq beg (min (mark) (point))
 		end (max (mark) (point)))
 	(setq beg (point-min)
 	      end (point-max)))
-      (cperl-map-pods-heres (function
-			     (lambda (s e p)
-			       (if do-heres
-				   (setq e (save-excursion
-					     (goto-char e)
-					     (forward-line -1)
-					     (point))))
-			       (ispell-region s e)
-			       t))
+      (cperl-map-pods-heres (lambda (s e _p)
+                         (if do-heres
+                             (setq e (save-excursion
+                                       (goto-char e)
+                                       (forward-line -1)
+                                       (point))))
+                         (ispell-region s e)
+                         t)
 			    (if do-heres 'here-doc-group 'in-pod)
 			    beg end))))
 
 (defun cperl-map-pods-heres (func &optional prop s end)
-  "Executes a function over regions of pods or here-documents.
+  "Execute a function over regions of pods or here-documents.
 PROP is the text-property to search for; default to `in-pod'.  Stop when
 function returns nil."
   (let (pos posend has-prop (cont t))
     (or prop (setq prop 'in-pod))
     (or s (setq s (point-min)))
     (or end (setq end (point-max)))
-    (cperl-update-syntaxification end end)
+    (cperl-update-syntaxification end)
     (save-excursion
       (goto-char (setq pos s))
       (while (and cont (< pos end))
@@ -8697,13 +9125,13 @@ function returns nil."
 	     (setq cont (funcall func pos posend prop)))
 	(setq pos posend)))))
 
-;;; Based on code by Masatake YAMATO:
+;; Based on code by Masatake YAMATO:
 (defun cperl-get-here-doc-region (&optional pos pod)
   "Return HERE document region around the point.
 Return nil if the point is not in a HERE document region.  If POD is non-nil,
 will return a POD section if point is in a POD section."
   (or pos (setq pos (point)))
-  (cperl-update-syntaxification pos pos)
+  (cperl-update-syntaxification pos)
   (if (or (eq 'here-doc  (get-text-property pos 'syntax-type))
 	  (and pod
 	       (eq 'pod (get-text-property pos 'syntax-type))))
@@ -8719,8 +9147,8 @@ POS defaults to the point."
   (let ((p (cperl-get-here-doc-region pos)))
     (or p (error "Not inside a HERE document"))
     (narrow-to-region (car p) (cdr p))
-    (message
-     "When you are finished with narrow editing, type C-x n w")))
+    (message (substitute-command-keys
+              "When you are finished with narrow editing, type \\[widen]"))))
 
 (defun cperl-select-this-pod-or-here-doc (&optional pos)
   "Select the HERE-DOC (or POD section) at POS.
@@ -8733,7 +9161,7 @@ POS defaults to the point."
 	  (push-mark (cdr p) nil t))	; Message, activate in transient-mode
       (message "I do not think POS is in POD or a HERE-doc..."))))
 
-(defun cperl-facemenu-add-face-function (face end)
+(defun cperl-facemenu-add-face-function (face _end)
   "A callback to process user-initiated font-change requests.
 Translates `bold', `italic', and `bold-italic' requests to insertion of
 corresponding POD directives, and `underline' to C<> POD directive.
@@ -8746,7 +9174,7 @@ Such requests are usually bound to M-o LETTER."
 			(italic . "I<")
 			(bold-italic . "B<I<")
 			(underline . "C<")))
-	   (error "Face %s not configured for cperl-mode"
+	   (error "Face %S not configured for cperl-mode"
 		  face))))
 
 (defun cperl-time-fontification (&optional l step lim)
@@ -8762,9 +9190,7 @@ start with default arguments, then refine the slowdown regions."
   (or l (setq l 1))
   (or step (setq step 500))
   (or lim (setq lim 40))
-  (let* ((timems (function (lambda ()
-			     (let ((tt (current-time)))
-			       (+ (* 1000 (nth 1 tt)) (/ (nth 2 tt) 1000))))))
+  (let* ((timems (lambda () (car (cperl--time-convert nil 1000))))
 	 (tt (funcall timems)) (c 0) delta tot)
     (goto-char (point-min))
     (forward-line (1- l))
@@ -8775,12 +9201,10 @@ start with default arguments, then refine the slowdown regions."
       (forward-line step)
       (setq l (+ l step))
       (setq c (1+ c))
-      (cperl-update-syntaxification (point) (point))
+      (cperl-update-syntaxification (point))
       (setq delta (- (- tt (setq tt (funcall timems)))) tot (+ tot delta))
       (message "to %s:%6s,%7s" l delta tot))
     tot))
-
-(defvar font-lock-cache-position)
 
 (defun cperl-emulate-lazy-lock (&optional window-size)
   "Emulate `lazy-lock' without `condition-case', so `debug-on-error' works.
@@ -8798,7 +9222,7 @@ may be used to debug problems with delayed incremental fontification."
     (goto-char pos)
     (normal-mode)
     ;; Why needed???  With older font-locks???
-    (set (make-local-variable 'font-lock-cache-position) (make-marker))
+    (setq-local font-lock-cache-position (make-marker))
     (while (if (> window-size 0)
 	       (< pos (point-max))
 	     (> pos (point-min)))
@@ -8809,64 +9233,56 @@ may be used to debug problems with delayed incremental fontification."
       (setq pos p))))
 
 
-(defun cperl-lazy-install ())		; Avoid a warning
-(defun cperl-lazy-unstall ())		; Avoid a warning
+(defvar cperl-help-shown nil
+  "Non-nil means that the help was already shown now.")
 
-(if (fboundp 'run-with-idle-timer)
-    (progn
-      (defvar cperl-help-shown nil
-	"Non-nil means that the help was already shown now.")
+(defvar cperl-lazy-installed nil
+  "Non-nil means that the lazy-help handlers are installed now.")
 
-      (defvar cperl-lazy-installed nil
-	"Non-nil means that the lazy-help handlers are installed now.")
-
-      (defun cperl-lazy-install ()
-	"Switches on Auto-Help on Perl constructs (put in the message area).
+;; FIXME: Use eldoc?
+(defun cperl-lazy-install ()
+  "Switch on Auto-Help on Perl constructs (put in the message area).
 Delay of auto-help controlled by `cperl-lazy-help-time'."
-	(interactive)
-	(make-local-variable 'cperl-help-shown)
-	(if (and (cperl-val 'cperl-lazy-help-time)
-		 (not cperl-lazy-installed))
-	    (progn
-	      (add-hook 'post-command-hook 'cperl-lazy-hook)
-	      (run-with-idle-timer
-	       (cperl-val 'cperl-lazy-help-time 1000000 5)
-	       t
-	       'cperl-get-help-defer)
-	      (setq cperl-lazy-installed t))))
+  (interactive)
+  (make-local-variable 'cperl-help-shown)
+  (if (and (cperl-val 'cperl-lazy-help-time)
+	   (not cperl-lazy-installed))
+      (progn
+	(add-hook 'post-command-hook #'cperl-lazy-hook)
+	(run-with-idle-timer
+	 (cperl-val 'cperl-lazy-help-time 1000000 5)
+	 t
+	 #'cperl-get-help-defer)
+	(setq cperl-lazy-installed t))))
 
-      (defun cperl-lazy-unstall ()
-	"Switches off Auto-Help on Perl constructs (put in the message area).
+(defun cperl-lazy-unstall ()
+  "Switch off Auto-Help on Perl constructs (put in the message area).
 Delay of auto-help controlled by `cperl-lazy-help-time'."
-	(interactive)
-	(remove-hook 'post-command-hook 'cperl-lazy-hook)
-	(cancel-function-timers 'cperl-get-help-defer)
-	(setq cperl-lazy-installed nil))
+  (interactive)
+  (remove-hook 'post-command-hook #'cperl-lazy-hook)
+  (cancel-function-timers #'cperl-get-help-defer)
+  (setq cperl-lazy-installed nil))
 
-      (defun cperl-lazy-hook ()
-	(setq cperl-help-shown nil))
+(defun cperl-lazy-hook ()
+  (setq cperl-help-shown nil))
 
-      (defun cperl-get-help-defer ()
-	(if (not (memq major-mode '(perl-mode cperl-mode))) nil
-	  (let ((cperl-message-on-help-error nil) (cperl-help-from-timer t))
-	    (cperl-get-help)
-	    (setq cperl-help-shown t))))
-      (cperl-lazy-install)))
+(defun cperl-get-help-defer ()
+  (if (not (memq major-mode '(perl-mode cperl-mode))) nil
+    (let ((cperl-message-on-help-error nil) (cperl-help-from-timer t))
+      (cperl-get-help)
+      (setq cperl-help-shown t))))
+(cperl-lazy-install)
 
 
 ;;; Plug for wrong font-lock:
 
 (defun cperl-font-lock-unfontify-region-function (beg end)
-  (let* ((modified (buffer-modified-p)) (buffer-undo-list t)
-	 (inhibit-read-only t) (inhibit-point-motion-hooks t)
-	 (inhibit-modification-hooks t)
-	 deactivate-mark buffer-file-name buffer-file-truename)
-    (remove-text-properties beg end '(face nil))
-    (if (and (not modified) (buffer-modified-p))
-      (set-buffer-modified-p nil))))
+  (declare (obsolete nil "30.1"))
+  (with-silent-modifications
+    (remove-text-properties beg end '(face nil))))
 
 (defun cperl-font-lock-fontify-region-function (beg end loudly)
-  "Extends the region to safe positions, then calls the default function.
+  "Extend the region to safe positions, then call the default function.
 Newer `font-lock's can do it themselves.
 We unwind only as far as needed for fontification.  Syntaxification may
 do extra unwind via `cperl-unwind-to-safe'."
@@ -8882,7 +9298,7 @@ do extra unwind via `cperl-unwind-to-safe'."
 	(goto-char new-beg)))
     (setq beg (point))
     (goto-char end)
-    (while (and end
+    (while (and end (< end (point-max))
 		(progn
 		  (or (bolp) (condition-case nil
 				 (forward-line 1)
@@ -8894,18 +9310,12 @@ do extra unwind via `cperl-unwind-to-safe'."
     (setq end (point)))
   (font-lock-default-fontify-region beg end loudly))
 
-(defvar cperl-d-l nil)
-(defun cperl-fontify-syntaxically (end)
+(defun cperl-fontify-syntactically (end)
   ;; Some vars for debugging only
   ;; (message "Syntaxifying...")
   (let ((dbg (point)) (iend end) (idone cperl-syntax-done-to)
 	(istate (car cperl-syntax-state))
-	start from-start edebug-backtrace-buffer)
-    (if (eq cperl-syntaxify-by-font-lock 'backtrace)
-	(progn
-	  (require 'edebug)
-	  (let ((f 'edebug-backtrace))
-	    (funcall f))))	; Avoid compile-time warning
+	start from-start)
     (or cperl-syntax-done-to
 	(setq cperl-syntax-done-to (point-min)
 	      from-start t))
@@ -8941,7 +9351,8 @@ do extra unwind via `cperl-unwind-to-safe'."
 
 (defun cperl-fontify-update-bad (end)
   ;; Since fontification happens with different region than syntaxification,
-  ;; do to the end of buffer, not to END;;; likewise, start earlier if needed
+  ;; do to the end of buffer, not to END
+  ;; likewise, start earlier if needed
   (let* ((pos (point)) (prop (get-text-property pos 'cperl-postpone)) posend)
     (if prop
 	(setq pos (or (cperl-beginning-of-property
@@ -8955,28 +9366,44 @@ do extra unwind via `cperl-unwind-to-safe'."
   nil)					; Do not iterate
 
 ;; Called when any modification is made to buffer text.
-(defun cperl-after-change-function (beg end old-len)
+(defun cperl-after-change-function (beg _end _old-len)
   ;; We should have been informed about changes by `font-lock'.  Since it
   ;; does not inform as which calls are deferred, do it ourselves
   (if cperl-syntax-done-to
       (setq cperl-syntax-done-to (min cperl-syntax-done-to beg))))
 
-(defun cperl-update-syntaxification (from to)
-  (cond
-   ((not cperl-use-syntax-table-text-property) nil)
-   ((fboundp 'syntax-propertize) (syntax-propertize to))
-   ((and cperl-syntaxify-by-font-lock
-         (or (null cperl-syntax-done-to)
-             (< cperl-syntax-done-to to)))
-    (save-excursion
-      (goto-char from)
-      (cperl-fontify-syntaxically to)))))
+(defun cperl-update-syntaxification (to)
+  (when cperl-use-syntax-table-text-property
+    (syntax-propertize to)))
 
 (defvar cperl-version
   (let ((v  "Revision: 6.2"))
     (string-match ":\\s *\\([0-9.]+\\)" v)
     (substring v (match-beginning 1) (match-end 1)))
   "Version of IZ-supported CPerl package this file is based on.")
+(make-obsolete-variable 'cperl-version 'emacs-version "28.1")
+
+(defvar cperl-do-not-fontify 'fontified
+  "Text property which inhibits refontification.")
+(make-obsolete-variable 'cperl-do-not-fontify nil "28.1")
+
+;;; Minor mode for optional Perl features
+(define-minor-mode cperl-extra-paired-delimiters-mode
+  "Toggle treatment of extra paired delimiters in Perl.
+Many non-ASCII paired delimiters can be used for quote-like constructs
+by activating the feature \"extra_paired_delimiters\" either explicitly
+or as part of the Perl 5.40 feature bundle.  This command allows
+`cperl-mode' to recognize the same set of paired delimiters, see the
+variable `cperl--extra-paired-delimiters'."
+  :group 'cperl
+  :lighter "«»"
+  :interactive (cperl-mode)
+  (if cperl-extra-paired-delimiters-mode
+      (progn
+        (setq-local cperl-starters cperl--extra-paired-delimiters)
+        (cperl-find-pods-heres (point-min) (point-max)))
+    (setq-local cperl-starters cperl--basic-paired-delimiters)
+    (cperl-find-pods-heres (point-min) (point-max))))
 
 (provide 'cperl-mode)
 

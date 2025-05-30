@@ -1,6 +1,6 @@
-;;; locate.el --- interface to the locate command
+;;; locate.el --- interface to the locate command  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1996, 1998, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1996, 1998, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Peter Breton <pbreton@cs.umb.edu>
 ;; Keywords: unix files
@@ -22,10 +22,10 @@
 
 ;;; Commentary:
 
-;; Search a database of files and use dired commands on the result.
+;; Search a database of files and use Dired commands on the result.
 ;;
 ;; Locate.el provides an interface to a program which searches a
-;; database of file names. By default, this program is the GNU locate
+;; database of file names.  By default, this program is the GNU locate
 ;; command, but it could also be the BSD-style find command, or even a
 ;; user specified command.
 ;;
@@ -39,7 +39,7 @@
 ;;   To use a more complicated expression, create a function which
 ;; takes a string (the name to find) as input and returns a list.
 ;; The first element should be the command to be executed, the remaining
-;; elements should be the arguments (including the name to find). Then put
+;; elements should be the arguments (including the name to find).  Then put
 ;;
 ;; (setq locate-make-command-line 'my-locate-command-line)
 ;;
@@ -47,25 +47,25 @@
 ;; my-locate-command-line.
 ;;
 ;; You should make sure that whichever command you use works correctly
-;; from a shell prompt. GNU locate and BSD find expect the file databases
+;; from a shell prompt.  GNU locate and BSD find expect the file databases
 ;; to either be in standard places or located via environment variables.
 ;; If the latter, make sure these environment variables are set in
-;; your emacs process.
+;; your Emacs process.
 ;;
 ;; Locate-mode assumes that each line output from the locate-command
 ;; consists exactly of a file name, possibly preceded or trailed by
-;; whitespace. If your file database has other information on the line (for
+;; whitespace.  If your file database has other information on the line (for
 ;; example, the file size), you will need to redefine the function
 ;; `locate-get-file-positions' to return a list consisting of the first
 ;; character in the file name and the last character in the file name.
 ;;
 ;; To use locate-mode, simply type M-x locate and then the string
-;; you wish to find. You can use almost all of the dired commands in
+;; you wish to find.  You can use almost all of the Dired commands in
 ;; the resulting *Locate* buffer.  It is worth noting that your commands
-;; do not, of course, affect the file database. For example, if you
+;; do not, of course, affect the file database.  For example, if you
 ;; compress a file in the locate buffer, the actual file will be
 ;; compressed, but the entry in the file database will not be
-;; affected. Consequently, the database and the filesystem will be out
+;; affected.  Consequently, the database and the filesystem will be out
 ;; of sync until the next time the database is updated.
 ;;
 ;; The command `locate-with-filter' keeps only lines matching a
@@ -90,7 +90,7 @@
 ;;
 ;;;;;;;; ADVICE For dired-make-relative: ;;;;;;;;;
 ;;
-;; For certain dired commands to work right, you should also include the
+;; For certain Dired commands to work right, you should also include the
 ;; following in your _emacs/.emacs:
 ;;
 ;; (defadvice dired-make-relative (before set-no-error activate)
@@ -141,13 +141,11 @@ system, or of all files that you have access to.  Consult the
 documentation of that program for the details about how it determines
 which file names match SEARCH-STRING.  (Those details vary highly with
 the version.)"
-  :type 'string
-  :group 'locate)
+  :type 'string)
 
 (defcustom locate-post-command-hook nil
   "List of hook functions run after `locate' (see `run-hooks')."
-  :type  'hook
-  :group 'locate)
+  :type  'hook)
 
 (defvar locate-history-list nil
   "The history list used by the \\[locate] command.")
@@ -162,13 +160,11 @@ This function should take one argument, a string (the name to find)
 and return a list of strings.  The first element of the list should be
 the name of a command to be executed by a shell, the remaining elements
 should be the arguments to that command (including the name to find)."
-  :type 'function
-  :group 'locate)
+  :type 'function)
 
 (defcustom locate-buffer-name "*Locate*"
   "Name of the buffer to show results from the \\[locate] command."
-  :type 'string
-  :group 'locate)
+  :type 'string)
 
 (defcustom locate-fcodes-file nil
   "File name for the database of file names used by `locate'.
@@ -179,20 +175,17 @@ Just setting this variable does not actually change the database
 that `locate' searches.  The executive program that the Emacs
 function `locate' uses, as given by the variables `locate-command'
 or `locate-make-command-line', determines the database."
-  :type '(choice (const :tag "None" nil) file)
-  :group 'locate)
+  :type '(choice (const :tag "None" nil) file))
 
 (defcustom locate-header-face nil
   "Face used to highlight the locate header."
-  :type '(choice (const :tag "None" nil) face)
-  :group 'locate)
+  :type '(choice (const :tag "None" nil) face))
 
 ;;;###autoload
 (defcustom locate-ls-subdir-switches (purecopy "-al")
   "`ls' switches for inserting subdirectories in `*Locate*' buffers.
 This should contain the \"-l\" switch, but not the \"-F\" or \"-b\" switches."
   :type 'string
-  :group 'locate
   :version "22.1")
 
 (defcustom locate-update-when-revert nil
@@ -202,13 +195,11 @@ If non-nil, offer to update the locate database when reverting that buffer.
 option `locate-update-path'.)
 If nil, reverting does not update the locate database."
   :type 'boolean
-  :group 'locate
   :version "22.1")
 
 (defcustom locate-update-command "updatedb"
   "The executable program used to update the locate database."
-  :type 'string
-  :group 'locate)
+  :type 'string)
 
 (defcustom locate-update-path "/"
   "The default directory from where `locate-update-command' is called.
@@ -218,7 +209,6 @@ can be achieved by setting this option to \"/su::\" or \"/sudo::\"
 permissions are sufficient to run the command, you can set this
 option to \"/\"."
   :type 'string
-  :group 'locate
   :version "22.1")
 
 (defcustom locate-prompt-for-command nil
@@ -227,17 +217,17 @@ Otherwise, that behavior is invoked via a prefix argument.
 
 Setting this option non-nil actually inverts the meaning of a prefix arg;
 that is, with a prefix arg, you get the default behavior."
-  :group 'locate
   :type 'boolean)
 
 (defcustom locate-mode-hook nil
   "List of hook functions run by `locate-mode' (see `run-mode-hooks')."
-  :type  'hook
-  :group 'locate)
+  :type  'hook)
 
 ;; Functions
 
 (defun locate-default-make-command-line (search-string)
+  (unless (executable-find locate-command)
+    (error "Can't find the %s command" locate-command))
   (list locate-command search-string))
 
 (defun locate-word-at-point ()
@@ -261,15 +251,13 @@ that is, with a prefix arg, you get the default behavior."
 	 "Run locate (like this): "
 	 (cons
 	  (concat (car locate-cmd) "  "
-		  (mapconcat 'identity (cdr locate-cmd) " "))
+		  (mapconcat #'identity (cdr locate-cmd) " "))
 	  (+ 2 (length (car locate-cmd))))
 	 nil nil 'locate-history-list))
     (let* ((default (locate-word-at-point))
 	   (input
 	    (read-from-minibuffer
-	     (if  (> (length default) 0)
-		 (format "Locate (default %s): " default)
-	       (format "Locate: "))
+             (format-prompt "Locate" default)
 	     nil nil nil 'locate-history-list default t)))
       (and (equal input "") default
 	   (setq input default))
@@ -313,7 +301,7 @@ then `locate-post-command-hook'."
 	      (and (not arg) locate-prompt-for-command))))
 
     ;; Find the Locate buffer
-    (save-window-excursion
+    (save-window-excursion              ;FIXME: What window-excursion?
       (set-buffer (get-buffer-create locate-buffer-name))
       (locate-mode)
       (let ((inhibit-read-only t)
@@ -321,13 +309,13 @@ then `locate-post-command-hook'."
 	(erase-buffer)
 
 	(setq locate-current-filter filter)
-	(set (make-local-variable 'locate-local-search) search-string)
-	(set (make-local-variable 'locate-local-filter) filter)
-	(set (make-local-variable 'locate-local-prompt) run-locate-command)
+        (setq-local locate-local-search search-string)
+        (setq-local locate-local-filter filter)
+        (setq-local locate-local-prompt run-locate-command)
 
 	(if run-locate-command
 	    (shell-command search-string locate-buffer-name)
-	  (apply 'call-process locate-cmd nil t nil locate-cmd-args))
+	  (apply #'call-process locate-cmd nil t nil locate-cmd-args))
 
 	(and filter
 	     (locate-filter-output filter))
@@ -371,17 +359,17 @@ except that FILTER is not optional."
 (defvar locate-mode-map
   (let ((map (copy-keymap dired-mode-map)))
     ;; Undefine Useless Dired Menu bars
-    (define-key map [menu-bar Dired]   'undefined)
-    (define-key map [menu-bar subdir]  'undefined)
-    (define-key map [menu-bar mark executables] 'undefined)
-    (define-key map [menu-bar mark directory]   'undefined)
-    (define-key map [menu-bar mark directories] 'undefined)
-    (define-key map [menu-bar mark symlinks]    'undefined)
-    (define-key map [M-mouse-2] 'locate-mouse-view-file)
-    (define-key map "\C-c\C-t"  'locate-tags)
-    (define-key map "l"       'locate-do-redisplay)
-    (define-key map "U"       'dired-unmark-all-files)
-    (define-key map "V"       'locate-find-directory)
+    (define-key map [menu-bar Dired]   #'undefined)
+    (define-key map [menu-bar subdir]  #'undefined)
+    (define-key map [menu-bar mark executables] #'undefined)
+    (define-key map [menu-bar mark directory]   #'undefined)
+    (define-key map [menu-bar mark directories] #'undefined)
+    (define-key map [menu-bar mark symlinks]    #'undefined)
+    (define-key map [M-mouse-2] #'locate-mouse-view-file)
+    (define-key map "\C-c\C-t"  #'locate-tags)
+    (define-key map "l"       #'locate-do-redisplay)
+    (define-key map "U"       #'dired-unmark-all-files)
+    (define-key map "V"       #'locate-find-directory)
     map)
   "Local keymap for Locate mode buffers.")
 
@@ -451,7 +439,7 @@ file name or is inside a subdirectory."
 (define-derived-mode locate-mode special-mode "Locate"
   "Major mode for the `*Locate*' buffer made by \\[locate].
 \\<locate-mode-map>\
-In that buffer, you can use almost all the usual dired bindings.
+In that buffer, you can use almost all the usual Dired bindings.
 \\[locate-find-directory] visits the directory of the file on the current line.
 This function runs `locate-mode-hook' before returning.
 
@@ -463,14 +451,12 @@ Specific `locate-mode' commands, such as \\[locate-find-directory],
 do not work in subdirectories.
 
 \\{locate-mode-map}"
-  ;; Avoid clobbering this variable
-  (make-local-variable 'dired-subdir-alist)
   (setq default-directory   "/"
-	buffer-read-only    t
-	selective-display   t)
+	buffer-read-only    t)
+  (add-to-invisibility-spec '(dired . t))
   (dired-alist-add-1 default-directory (point-min-marker))
-  (set (make-local-variable 'dired-directory) "/")
-  (set (make-local-variable 'dired-subdir-switches) locate-ls-subdir-switches)
+  (setq dired-directory "/")
+  (setq-local dired-subdir-switches locate-ls-subdir-switches)
   (setq dired-switches-alist nil)
   ;; This should support both Unix and Windoze style names
   (setq-local directory-listing-before-filename-regexp
@@ -488,7 +474,7 @@ do not work in subdirectories.
 
   (setq-local revert-buffer-function #'locate-update)
   (setq-local page-delimiter "\n\n"))
-(put 'locate-mode 'derived-mode-parent 'dired-mode)
+(derived-mode-add-parents 'locate-mode '(dired-mode special-mode))
 
 (defun locate-do-setup (search-string)
   (goto-char (point-min))
@@ -499,9 +485,9 @@ do not work in subdirectories.
 	 (progn
 	   (kill-buffer locate-buffer-name)
 	   (if locate-current-filter
-	       (error "Locate: no match for %s in database using filter %s"
+	       (user-error "Locate: no match for %s in database using filter %s"
 		      search-string locate-current-filter)
-	     (error "Locate: no match for %s in database" search-string))))
+	     (user-error "Locate: no match for %s in database" search-string))))
 
     (locate-insert-header search-string)
 
@@ -554,7 +540,7 @@ do not work in subdirectories.
 	  locate-regexp-match
 	  (concat locate-regexp-match ":\n"))
 
-    (insert (apply 'format locate-format-string (reverse locate-format-args)))
+    (insert (apply #'format locate-format-string (reverse locate-format-args)))
 
     (save-excursion
       (goto-char (point-min))
@@ -573,7 +559,7 @@ do not work in subdirectories.
 
 (defun locate-tags ()
   "Visit a tags table in `*Locate*' mode."
-  (interactive)
+  (interactive nil locate-mode)
   (if (locate-main-listing-line-p)
       (let ((tags-table (locate-get-filename)))
 	(and (y-or-n-p (format "Visit tags table %s? " tags-table))
@@ -603,7 +589,7 @@ locate database using the shell command in `locate-update-command'."
 
 (defun locate-find-directory ()
   "Visit the directory of the file mentioned on this line."
-  (interactive)
+  (interactive nil locate-mode)
   (if (locate-main-listing-line-p)
       (let ((directory-name (locate-get-dirname)))
 	(if (file-directory-p directory-name)
@@ -615,7 +601,7 @@ locate database using the shell command in `locate-update-command'."
 
 (defun locate-find-directory-other-window ()
   "Visit the directory of the file named on this line in other window."
-  (interactive)
+  (interactive nil locate-mode)
   (if (locate-main-listing-line-p)
       (find-file-other-window (locate-get-dirname))
     (message "This command only works inside main listing.")))
@@ -670,11 +656,11 @@ the database on the command line."
   (or (file-exists-p database)
       (error "Database file %s does not exist" database))
   (let ((locate-make-command-line
-	 (function (lambda (string)
-		     (cons locate-command
-			   (list (concat "--database="
-					 (expand-file-name database))
-				 string))))))
+         (lambda (string)
+           (cons locate-command
+                 (list (concat "--database="
+                               (expand-file-name database))
+                       string)))))
     (locate search-string)))
 
 (defun locate-do-redisplay (&optional arg test-for-subdir)

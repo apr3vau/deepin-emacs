@@ -1,6 +1,6 @@
 ;;; minibuf-tests.el --- tests for minibuf.c functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 2016-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2016-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -34,7 +34,7 @@
   (let ((num 0))
     (mapcar (lambda (str) (cons str (cl-incf num))) list)))
 (defun minibuf-tests--strings-to-obarray (list)
-  (let ((ob (make-vector 7 0)))
+  (let ((ob (obarray-make 7)))
     (mapc (lambda (str) (intern str ob)) list)
     ob))
 (defun minibuf-tests--strings-to-string-hashtable (list)
@@ -60,6 +60,9 @@
 
 
 ;;; Testing functions that are agnostic to type of COLLECTION.
+
+(defun minibuf-tests--set-equal (a b)
+  (null (cl-set-exclusive-or a b :test #'equal)))
 
 (defun minibuf-tests--try-completion (xform-collection)
   (let* ((abcdef (funcall xform-collection '("abc" "def")))
@@ -101,7 +104,8 @@
   (let* ((abcdef (funcall xform-collection '("abc" "def")))
          (+abba  (funcall xform-collection '("abc" "abba" "def"))))
     (should (equal (all-completions "a" abcdef) '("abc")))
-    (should (equal (all-completions "a" +abba) '("abc" "abba")))
+    (should (minibuf-tests--set-equal (all-completions "a" +abba)
+                                      '("abc" "abba")))
     (should (equal (all-completions "abc" +abba) '("abc")))
     (should (equal (all-completions "abcd" +abba) nil))))
 
@@ -111,7 +115,8 @@
          (+abba  (funcall xform-collection '("abc" "abba" "def")))
          (+abba-member (funcall collection-member +abba)))
     (should (equal (all-completions "a" abcdef abcdef-member) '("abc")))
-    (should (equal (all-completions "a" +abba +abba-member) '("abc" "abba")))
+    (should (minibuf-tests--set-equal (all-completions "a" +abba +abba-member)
+                                      '("abc" "abba")))
     (should (equal (all-completions "abc" +abba +abba-member) '("abc")))
     (should (equal (all-completions "abcd" +abba +abba-member) nil))
     (should-not (all-completions "a" abcdef #'ignore))
@@ -124,7 +129,8 @@
         (+abba  (funcall xform-collection '("abc" "abba" "def"))))
     (let ((completion-regexp-list '(".")))
       (should (equal (all-completions "a" abcdef) '("abc")))
-      (should (equal (all-completions "a" +abba) '("abc" "abba")))
+      (should (minibuf-tests--set-equal (all-completions "a" +abba)
+                                        '("abc" "abba")))
       (should (equal (all-completions "abc" +abba) '("abc")))
       (should (equal (all-completions "abcd" +abba) nil)))
     (let ((completion-regexp-list '("X")))
@@ -398,6 +404,32 @@
 (ert-deftest test-completion-symbol-hashtable-completion-regexp ()
   (minibuf-tests--test-completion-regexp
    #'minibuf-tests--strings-to-symbol-hashtable))
+
+(ert-deftest test-try-completion-ignore-case ()
+  (let ((completion-ignore-case t))
+    (should (equal (try-completion "bar" '("bAr" "barfoo")) "bAr"))
+    (should (equal (try-completion "bar" '("bArfoo" "barbaz")) "bar"))
+    (should (equal (try-completion "bar" '("bArfoo" "barbaz"))
+                   (try-completion "bar" '("barbaz" "bArfoo"))))
+    ;; bug#11339
+    (should (equal (try-completion "baz" '("baz" "bAz")) "baz")) ;And not t!
+    (should (equal (try-completion "baz" '("bAz" "baz"))
+                   (try-completion "baz" '("baz" "bAz"))))))
+
+(ert-deftest test-inhibit-interaction ()
+  (let ((inhibit-interaction t))
+    (should-error (read-from-minibuffer "foo: ") :type 'inhibited-interaction)
+
+    (should-error (y-or-n-p "Foo?") :type 'inhibited-interaction)
+    (should-error (yes-or-no-p "Foo?") :type 'inhibited-interaction)
+    (should-error (read-no-blanks-input "foo: ") :type 'inhibited-interaction)
+
+    ;; See that we get the expected error.
+    (should (eq (condition-case nil
+                    (read-from-minibuffer "foo: ")
+                  (inhibited-interaction 'inhibit)
+                  (error nil))
+                'inhibit))))
 
 
 ;;; minibuf-tests.el ends here

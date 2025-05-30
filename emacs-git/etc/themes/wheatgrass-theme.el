@@ -1,6 +1,6 @@
-;;; wheatgrass-theme.el --- custom theme for faces
+;;; wheatgrass-theme.el --- custom theme for faces  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2010-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -19,11 +19,14 @@
 
 ;;; Code:
 
+;;;###theme-autoload
 (deftheme wheatgrass
   "High-contrast green/blue/brown faces on a black background.
 Basic, Font Lock, Isearch, Gnus, and Message faces are included.
 The default face foreground is wheat, with other faces in shades
-of green, brown, and blue.")
+of green, brown, and blue."
+  :background-mode 'dark
+  :kind 'color-scheme)
 
 (let ((class '((class color) (min-colors 89))))
   (custom-theme-set-faces
@@ -37,6 +40,7 @@ of green, brown, and blue.")
    `(compilation-mode-line-fail ((,class (:foreground "dark green"))))
    `(compilation-mode-line-run  ((,class (:foreground "dark goldenrod"))))
    `(compilation-mode-line-exit ((,class (:foreground "SpringGreen4"))))
+   `(compilation-info ((,class (:foreground "ForestGreen"))))
    ;; Highlighting faces
    `(highlight ((,class (:foreground "white" :background "dark green"))))
    `(region ((,class (:foreground "white" :background "dark green"))))
@@ -82,9 +86,5 @@ of green, brown, and blue.")
    `(realgud-backtrace-number      ((,class (:foreground "dark cyan" :weight bold))))))
 
 (provide-theme 'wheatgrass)
-
-;; Local Variables:
-;; no-byte-compile: t
-;; End:
 
 ;;; wheatgrass-theme.el ends here

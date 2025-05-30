@@ -1,6 +1,6 @@
 ;;; em-rebind.el --- rebind keys when point is at current input  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -24,20 +24,22 @@
 ;;; Code:
 
 (require 'esh-mode)
-(eval-when-compile (require 'eshell))
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-rebind nil
   "This module allows for special keybindings that only take effect
-while the point is in a region of input text.  By default, it binds
-C-a to move to the beginning of the input text (rather than just the
-beginning of the line), and C-p and C-n to move through the input
-history, C-u kills the current input text, etc.  It also, if
-`eshell-confine-point-to-input' is non-nil, does not allow certain
-commands to cause the point to leave the input area, such as
-`backward-word', `previous-line', etc.  This module intends to mimic
-the behavior of normal shells while the user editing new input text."
+while the point is in a region of input text.  The default
+keybindings mimic the bindings used in other shells when the user
+is editing new input text.
+
+For example, it binds C-u to kill the current input text and C-w
+to `backward-kill-word'.  If the history module is enabled, it
+also binds C-p and C-n to move through the input history, etc.
+
+If `eshell-confine-point-to-input' is non-nil, this module prevents
+certain commands from causing the point to leave the input area, such
+as `backward-word', `previous-line', etc."
   :tag "Rebind keys at input"
   :group 'eshell-module))
 
@@ -50,9 +52,7 @@ the behavior of normal shells while the user editing new input text."
   :group 'eshell-rebind)
 
 (defcustom eshell-rebind-keys-alist
-  '(([(control ?a)] . eshell-bol)
-    ([home]         . eshell-bol)
-    ([(control ?d)] . eshell-delchar-or-maybe-eof)
+  '(([(control ?d)] . eshell-delchar-or-maybe-eof)
     ([backspace]    . eshell-delete-backward-char)
     ([delete]       . eshell-delete-backward-char)
     ([(control ?w)] . backward-kill-word)
@@ -114,7 +114,6 @@ This is default behavior of shells like bash."
     backward-list
     forward-page
     backward-page
-    forward-point
     forward-paragraph
     backward-paragraph
     backward-prefix-chars
@@ -137,6 +136,9 @@ This is default behavior of shells like bash."
   :type '(repeat function)
   :group 'eshell-rebind)
 
+(defvar-keymap eshell-rebind-mode-map
+  "C-c M-l" #'eshell-lock-local-map)
+
 ;; Internal Variables:
 
 (defvar eshell-input-keymap)
@@ -145,7 +147,13 @@ This is default behavior of shells like bash."
 
 ;;; Functions:
 
-(defun eshell-rebind-initialize ()
+(define-minor-mode eshell-rebind-mode
+  "Minor mode for the eshell-rebind module.
+
+\\{eshell-rebind-mode-map}"
+  :keymap eshell-rebind-mode-map)
+
+(defun eshell-rebind-initialize ()  ;Called from `eshell-mode' via intern-soft!
   "Initialize the inputting code."
   (unless eshell-non-interactive-p
     (add-hook 'eshell-mode-hook 'eshell-setup-input-keymap nil t)
@@ -153,12 +161,12 @@ This is default behavior of shells like bash."
     (add-hook 'pre-command-hook 'eshell-save-previous-point nil t)
     (make-local-variable 'overriding-local-map)
     (add-hook 'post-command-hook 'eshell-rebind-input-map nil t)
-    (set (make-local-variable 'eshell-lock-keymap) nil)
-    (define-key eshell-command-map [(meta ?l)] 'eshell-lock-local-map)))
+    (setq-local eshell-lock-keymap nil)
+    (eshell-rebind-mode)))
 
 (defun eshell-lock-local-map (&optional arg)
   "Lock or unlock the current local keymap.
-Within a prefix arg, set the local keymap to its normal value, and
+With prefix ARG, set the local keymap to its normal value, and
 lock it at that."
   (interactive "P")
   (if (or arg (not eshell-lock-keymap))
@@ -182,7 +190,7 @@ lock it at that."
 	(and eshell-remap-previous-input
 	     (setq begin
 		   (save-excursion
-		     (eshell-bol)
+		     (beginning-of-line)
 		     (and (not (bolp)) (point))))
 	     (>= pos begin)
 	     (<= pos (line-end-position))
@@ -209,8 +217,7 @@ lock it at that."
 
 (defun eshell-setup-input-keymap ()
   "Setup the input keymap to be used during input editing."
-  (make-local-variable 'eshell-input-keymap)
-  (setq eshell-input-keymap (make-sparse-keymap))
+  (setq-local eshell-input-keymap (make-sparse-keymap))
   (set-keymap-parent eshell-input-keymap eshell-mode-map)
   (let ((bindings eshell-rebind-keys-alist))
     (while bindings
@@ -223,7 +230,7 @@ lock it at that."
   (interactive "P")
   (let ((count (prefix-numeric-value n)))
     (if (eshell-point-within-input-p (- (point) count))
-	(delete-backward-char count n)
+	(delete-char (- count) n)
       (beep))))
 
 (defun eshell-delchar-or-maybe-eof (arg)
@@ -231,7 +238,7 @@ lock it at that."
 Sends an EOF only if point is at the end of the buffer and there is no
 input."
   (interactive "p")
-  (let ((proc (eshell-interactive-process)))
+  (let ((proc (eshell-head-process)))
     (if (eobp)
 	(cond
 	 ((/= (point) eshell-last-output-end)
@@ -243,9 +250,4 @@ input."
       (eshell-delete-backward-char (- arg)))))
 
 (provide 'em-rebind)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-rebind.el ends here

@@ -182,7 +182,7 @@
 
 2007-04-19  Glenn Morris  <rgm@gnu.org>
 
-	* calendar/todo-mode.el: Fix typo: "threshhold" -> "threshold".
+	* calendar/todo-mode.el: Fix typo for "threshold".
 
 2007-04-18  Glenn Morris  <rgm@gnu.org>
 
@@ -1556,7 +1556,7 @@
 	(org-search-not-self): Rename from `org-search-not-link'.
 	(org-open-link-marker): New variable.
 	(org-open-at-point): Set `org-open-link-marker'.
-	(org-print-icalendar-entries): Fixe bug with excluding DONE
+	(org-print-icalendar-entries): Fix bug with excluding DONE
 	entries from the exported list.
 	(org-edit-formula-lisp-indent): New command.
 	(orgtbl-to-texinfo, orgtbl-to-html): New functions.
@@ -5243,7 +5243,7 @@
 
 2006-10-11  Ilya Zakharevich  <ilyaz@cpan.org>
 
-	* progmodes/cperl-mode.el: Merge from upstream, upto version 5.22.
+	* progmodes/cperl-mode.el: Merge from upstream, up to version 5.22.
 	After 5.0:
 	(cperl-add-tags-recurse-noxs-fullpath): New function (for -batch mode).
 
@@ -5551,7 +5551,7 @@
 	(cperl-next-interpolated-REx-1): Likewise.
 	"\C-c\C-x", "\C-c\C-y", "\C-c\C-v": New keybinding for these functions.
 	Perl/Regexp menu: 3 new entries for `cperl-next-interpolated-REx'.
-	(cperl-praise): Mention finded interpolated RExen.
+	(cperl-praise): Mention finding interpolated RExen.
 
 	After 5.19:
 	(cperl-init-faces): Highlight %$foo, @$foo too.
@@ -6156,7 +6156,7 @@
 	* saveplace.el (load-save-place-alist-from-file): Use expanded name
 	in both messages.
 
-2006-09-16  Slawomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>
+2006-09-16  Sławomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>
 
 	* progmodes/python.el (python-preoutput-filter):
 	Fix arg order to string-match.
@@ -6540,7 +6540,7 @@
 	conf-space-keywords-override local.
 	Call conf-space-mode-internal directly as well as via hook.
 
-2006-09-09  Slawomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
+2006-09-09  Sławomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
 
 	* progmodes/python.el (python-font-lock-keywords): Add `self' and other
 	quasi-keywords.
@@ -6789,8 +6789,8 @@
 2006-09-04  Daiki Ueno  <ueno@unixuser.org>
 
 	* pgg-gpg.el (pgg-gpg-process-region): Revert two patches from Satyaki
-	Das.  http://article.gmane.org/gmane.emacs.gnus.general/49947
-	http://article.gmane.org/gmane.emacs.gnus.general/50457
+	Das.  http://article.gmane.org/gmane.emacs.gnus.general/49947 [dead link]
+	http://article.gmane.org/gmane.emacs.gnus.general/50457 [dead link]
 
 2006-09-03  Chong Yidong  <cyd@stupidchicken.com>
 
@@ -8873,7 +8873,7 @@
 2006-06-06  Nick Roberts  <nickrob@snap.net.nz>
 
 	* progmodes/gud.el (gud-running): Fix doc string.
-	(gud-menu-map): Use :visible instead fo :enable for debugger test.
+	(gud-menu-map): Use :visible instead of :enable for debugger test.
 	(gud-tooltip-modes): Add python-mode.
 	(gud-tooltip-print-command): Add pdb.  Remove perldb.
 
@@ -10678,7 +10678,7 @@
 	for root variables.
 
 	* progmodes/gdb-ui.el (gdb-pc-address): Rename from gdb-frame-address.
-	(gdb-frame-address): Re-use to identify frame for watch expression.
+	(gdb-frame-address): Reuse to identify frame for watch expression.
 	(gdb-var-list, gdb-var-create-handler): Add frame address for root
 	variables.
 	(gdb-init-1, gdb-source, gdb-post-prompt)
@@ -11874,7 +11874,7 @@
 
 	* files.el (hack-local-variables-confirm): Don't prompt for ! if
 	enable-local-variables is set to always query, or there is no
-	savable variable.
+	saveable variable.
 
 2006-03-10  Bill Wohler  <wohler@newt.com>
 
@@ -12040,7 +12040,7 @@
 	* emacs-lisp/edebug.el (edebug-display): Use `edebug-sit-for-seconds'
 	value instead of a literal constant (1) on more pauses.
 
-2006-03-03  Slawomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
+2006-03-03  Sławomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
 
 	* textmodes/flyspell.el (flyspell-external-point-words):
 	Be case-sensitive.
@@ -14359,7 +14359,7 @@
 	* ldefs-boot.el: Likewise.
 
 	* textmodes/bibtex.el (bibtex-validate-globally): Fix typo in a
-	message text: "Duplicat" => "Duplicate".
+	message text.
 
 2006-01-06  Sven Joachim  <svenjoac@gmx.de>  (tiny change)
 
@@ -15827,7 +15827,7 @@
 
 	* progmodes/cc-cmds.el (c-hungry-delete): New function to fix
 	<delete> key behavior in XEmacs according to `delete-forward-p'.
-	C.f. `c-electric-delete'.
+	Cf. `c-electric-delete'.
 
 2005-12-08  Alan Mackenzie  <acm@muc.de>
 
@@ -16274,7 +16274,7 @@
 
 	(c-guess-basic-syntax): Adapt case 5B for the new
 	`c-just-after-func-arglist-p'.  Merge cases 5B.1 and 5B.3.
-	Remove cases 5D.1 and 5D.2 since they aren't trigged anymore (case 5B.1
+	Remove cases 5D.1 and 5D.2 since they aren't triggered anymore (case 5B.1
 	covers all cases now).
 
 	* progmodes/cc-defs.el (c-point): Add `bosws' and `eosws'.
@@ -17840,7 +17840,7 @@
 	* man.el (Man-highlight-references): Doc fix.  Reformat code in a
 	more Lisp-ish way.
 
-2005-11-19  Slawomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
+2005-11-19  Sławomir Nowaczyk  <slawomir.nowaczyk.847@student.lu.se>  (tiny change)
 
 	* ls-lisp.el (ls-lisp-format-file-size): Format file size with 9
 	digits, not 8, to avoid misalignment for files larger than 100MB.
@@ -18028,7 +18028,7 @@
 
 	* cus-edit.el (face): Enclose %t in %{...%}.
 
-2005-11-16  Hrvoje Niksic  <hniksic@xemacs.org>
+2005-11-16  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* savehist.el (savehist-mode-hook): Re-add the var.
 	(savehist-mode): Use it.
@@ -18163,7 +18163,7 @@
 	Use the `variable-documentation' property to give the mode hook a
 	docstring and expand that docstring.
 
-2005-11-14  Hrvoje Niksic  <hniksic@xemacs.org>
+2005-11-14  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* savehist.el (savehist-mode): Don't bother with
 	`custom-set-minor-mode'.
@@ -18983,7 +18983,7 @@
 	(savehist-mode) <defun>: Run the minor mode hook, set the custom state
 	and emit a message if applicable.
 
-2005-11-01  Hrvoje Niksic  <hniksic@xemacs.org>
+2005-11-01  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* savehist.el: Sync up to version 19.
 	(savehist-mode): New minor mode.
@@ -19496,7 +19496,7 @@
 	* simple.el (completion-common-substring):
 	Use `completion-common-substring' prior to `completion-base-size'.
 
-2005-10-24  Hrvoje Niksic  <hniksic@xemacs.org>
+2005-10-24  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* savehist.el: Require CL while compiling.
 	(savehist-history-variables): Remove.
@@ -20221,7 +20221,7 @@
 	(savehist-process-for-saving): Replace use of CL funs `subseq' and
 	`delete-if-not'.
 
-2005-10-16  Hrvoje Niksic  <hniksic@xemacs.org>
+2005-10-16  Hrvoje Nikšić  <hniksic@xemacs.org>
 
 	* savehist.el: Newer version.
 	(savehist-autosave-interval, savehist-coding-system, savehist-timer)
@@ -21480,7 +21480,7 @@
 2005-09-18  Michael Albinus  <michael.albinus@gmx.de>
 
 	* net/tramp.el (tramp-login-prompt-regexp): Expand regexp in order
-	to cover prompts like "login as:".  Reported by Slawomir Nowaczyk
+	to cover prompts like "login as:".  Reported by Sławomir Nowaczyk
 	<slawomir.nowaczyk.847@student.lu.se>.
 
 2005-09-18  Chong Yidong  <cyd@stupidchicken.com>
@@ -24499,8 +24499,9 @@
 	is updated.
 
 	* whitespace.el (whitespace-buffer-leading-cleanup):
-	Simplify w/ skip-chars-forward.
-	(whitespace-buffer-trailing-cleanup): Simplify w/ skip-chars-backward.
+	Simplify with skip-chars-forward.
+	(whitespace-buffer-trailing-cleanup): Simplify with
+	skip-chars-backward.
 
 	* mail/rmail.el (rmail-only-expunge): Fix paren error.
 	Unconditionally try to leave point at the same old place.
@@ -31346,7 +31347,7 @@
 
 	* facemenu.el (list-colors-print): Print #RRGGBB in default face.
 	Remove 1 space before #RRGGBB to not truncate it on terminal
-	windows w/o fringes.  Remove 1 space between bg and fg examples
+	windows without fringes.  Remove 1 space between bg and fg examples
 	to get more space.
 	(list-colors-duplicates): Replace `and' with `if' for `boundp' to
 	avoid byte-compile warnings.
@@ -32866,7 +32867,7 @@
 	(reftex-index-switch-index-tag): Add `redo' to arguments of
 	`reftex-display-index'.
 	(reftex-index-make-phrase-regexp): Fix bug with case-sensitive
-	indexing.  Fix bug with matching is there is a quote before or
+	indexing.  Fix bug with matching if there is a quote before or
 	after the word.
 
 	* textmodes/reftex-cite.el (reftex-all-used-citation-keys):
@@ -32889,7 +32890,7 @@
 
 2005-01-14  Nick Roberts  <nickrob@snap.net.nz>
 
-	* xt-mouse.el (xterm-mouse-event): Compute window co-ordinates
+	* xt-mouse.el (xterm-mouse-event): Compute window coordinates
 	more carefully.
 
 2005-01-13  Stefan Monnier  <monnier@iro.umontreal.ca>
@@ -33334,7 +33335,7 @@ See ChangeLog.11 for earlier changes.
 ;; add-log-time-zone-rule: t
 ;; End:
 
-    Copyright (C) 2005-2017 Free Software Foundation, Inc.
+    Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
   This file is part of GNU Emacs.
 

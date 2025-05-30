@@ -1,6 +1,6 @@
 ;;; em-smart.el --- smart display of output  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1999-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2025 Free Software Foundation, Inc.
 
 ;; Author: John Wiegley <johnw@gnu.org>
 
@@ -69,9 +69,8 @@
 ;;; Code:
 
 (require 'esh-mode)
-(eval-when-compile (require 'eshell))
 
-;;;###autoload
+;;;###esh-module-autoload
 (progn
 (defgroup eshell-smart nil
   "This module combines the facility of normal, modern shells with
@@ -94,13 +93,13 @@ it to get a real sense of how it works."
 
 (defcustom eshell-smart-unload-hook
   (list
-   (function
-    (lambda ()
-      (remove-hook 'window-configuration-change-hook
-		   'eshell-refresh-windows))))
+   (lambda ()
+     (remove-hook 'window-configuration-change-hook
+                  'eshell-smart-scroll)))
   "A hook that gets run when `eshell-smart' is unloaded."
   :type 'hook
   :group 'eshell-smart)
+(make-obsolete-variable 'eshell-smart-unload-hook nil "30.1")
 
 (defcustom eshell-review-quick-commands nil
   "If t, always review commands.
@@ -132,7 +131,7 @@ only if that output can be presented in its entirely in the Eshell window."
   :group 'eshell-smart)
 
 (defcustom eshell-smart-space-goes-to-end t
-  "If non-nil, space will go to end of buffer when point-max is visible.
+  "If non-nil, space will go to end of buffer when `point-max' is visible.
 That is, if a command is running and the user presses SPACE at a time
 when the end of the buffer is visible, point will go to the end of the
 buffer and smart-display will be turned off (that is, subsequently
@@ -151,7 +150,7 @@ buffer using \\[end-of-buffer]."
   :group 'eshell-smart)
 
 (defcustom eshell-where-to-jump 'begin
-  "This variable indicates where point should jump to after a command.
+  "The location where point should jump to after a command.
 The options are `begin', `after' or `end'."
   :type '(radio (const :tag "Beginning of command" begin)
 		(const :tag "After command word" after)
@@ -160,25 +159,22 @@ The options are `begin', `after' or `end'."
 
 ;;; Internal Variables:
 
-(defvar eshell-smart-displayed nil)
 (defvar eshell-smart-command-done nil)
-(defvar eshell-currently-handling-window nil)
 
 ;;; Functions:
 
-(defun eshell-smart-initialize ()
+(defun eshell-smart-initialize ()   ;Called from `eshell-mode' via intern-soft!
   "Setup Eshell smart display."
   (unless eshell-non-interactive-p
     ;; override a few variables, since they would interfere with the
     ;; smart display functionality.
-    (set (make-local-variable 'eshell-scroll-to-bottom-on-output) nil)
-    (set (make-local-variable 'eshell-scroll-to-bottom-on-input) nil)
-    (set (make-local-variable 'eshell-scroll-show-maximum-output) t)
+    (setq-local eshell-scroll-to-bottom-on-output nil)
+    (setq-local eshell-scroll-to-bottom-on-input nil)
+    (setq-local eshell-scroll-show-maximum-output t)
 
-    (add-hook 'window-scroll-functions 'eshell-smart-scroll-window nil t)
-    (add-hook 'window-configuration-change-hook 'eshell-refresh-windows)
+    (add-hook 'window-configuration-change-hook 'eshell-smart-scroll nil t)
 
-    (add-hook 'eshell-output-filter-functions 'eshell-refresh-windows t t)
+    (add-hook 'eshell-output-filter-functions 'eshell-smart-scroll-windows 90 t)
 
     (add-hook 'after-change-functions 'eshell-disable-after-change nil t)
 
@@ -186,39 +182,23 @@ The options are `begin', `after' or `end'."
 
     (make-local-variable 'eshell-smart-command-done)
     (add-hook 'eshell-post-command-hook
-	      (function
-	       (lambda ()
-		 (setq eshell-smart-command-done t)))
+              (lambda ()
+                (setq eshell-smart-command-done t))
               t t)
 
     (unless (eq eshell-review-quick-commands t)
       (add-hook 'eshell-post-command-hook
 		'eshell-smart-maybe-jump-to-end nil t))))
 
-;; This is called by window-scroll-functions with two arguments.
-(defun eshell-smart-scroll-window (wind _start)
-  "Scroll the given Eshell window accordingly."
-  (unless eshell-currently-handling-window
-    (let ((inhibit-point-motion-hooks t)
-	  (eshell-currently-handling-window t))
-      (with-selected-window wind
-	(eshell-smart-redisplay)))))
-
-(defun eshell-refresh-windows (&optional frame)
-  "Refresh all visible Eshell buffers."
-  (let (affected)
-    (walk-windows
-     (function
-      (lambda (wind)
-	(with-current-buffer (window-buffer wind)
-	  (if eshell-mode
-	      (let (window-scroll-functions) ;;FIXME: Why?
-		(eshell-smart-scroll-window wind (window-start))
-		(setq affected t))))))
-     0 frame)
-    (if affected
-	(let (window-scroll-functions) ;;FIXME: Why?
-	  (eshell-redisplay)))))
+(defun eshell-smart-scroll-windows ()
+  "Scroll all eshell windows to display as much output as possible, smartly."
+  (walk-windows
+   (lambda (wind)
+     (with-current-buffer (window-buffer wind)
+       (if eshell-mode
+           (with-selected-window wind
+             (eshell-smart-scroll)))))
+   0 t))
 
 (defun eshell-smart-display-setup ()
   "Set the point to somewhere in the beginning of the last command."
@@ -235,8 +215,7 @@ The options are `begin', `after' or `end'."
    (t
     (error "Invalid value for `eshell-where-to-jump'")))
   (setq eshell-smart-command-done nil)
-  (add-hook 'pre-command-hook 'eshell-smart-display-move nil t)
-  (eshell-refresh-windows))
+  (add-hook 'pre-command-hook 'eshell-smart-display-move nil t))
 
 ;; Called from after-change-functions with 3 arguments.
 (defun eshell-disable-after-change (_b _e _l)
@@ -258,28 +237,22 @@ and the end of the buffer are still visible."
     (goto-char (point-max))
     (remove-hook 'pre-command-hook 'eshell-smart-display-move t)))
 
-(defun eshell-smart-redisplay ()
-  "Display as much output as possible, smartly."
-  (if (eobp)
+(defun eshell-smart-scroll ()
+  "Scroll WINDOW to display as much output as possible, smartly."
+  (let ((top-point (point)))
+    (and (memq 'eshell-smart-display-move pre-command-hook)
+         (>= (point) eshell-last-input-start)
+         (< (point) eshell-last-input-end)
+         (set-window-start (selected-window)
+                           (pos-bol) t))
+    (when (pos-visible-in-window-p (point-max) (selected-window))
       (save-excursion
-	(recenter -1)
-	;; trigger the redisplay now, so that we catch any attempted
-	;; point motion; this is to cover for a redisplay bug
-	(eshell-redisplay))
-    (let ((top-point (point)))
-      (and (memq 'eshell-smart-display-move pre-command-hook)
-	   (>= (point) eshell-last-input-start)
-	   (< (point) eshell-last-input-end)
-	   (set-window-start (selected-window)
-			     (line-beginning-position) t))
-      (if (pos-visible-in-window-p (point-max))
-	  (save-excursion
-	    (goto-char (point-max))
-	    (recenter -1)
-	    (unless (pos-visible-in-window-p top-point)
-	      (goto-char top-point)
-	      (set-window-start (selected-window)
-				(line-beginning-position) t)))))))
+        (goto-char (point-max))
+        (recenter -1)
+        (unless (pos-visible-in-window-p top-point (selected-window))
+          (goto-char top-point)
+          (set-window-start (selected-window)
+                            (pos-bol) t))))))
 
 (defun eshell-smart-goto-end ()
   "Like `end-of-buffer', but do not push a mark."
@@ -298,7 +271,7 @@ and the end of the buffer are still visible."
        ((eq this-command 'self-insert-command)
 	(if (eq last-command-event ? )
 	    (if (and eshell-smart-space-goes-to-end
-		     eshell-current-command)
+		     eshell-foreground-command)
 		(if (not (pos-visible-in-window-p (point-max)))
 		    (setq this-command 'scroll-up)
 		  (setq this-command 'eshell-smart-goto-end))
@@ -326,10 +299,8 @@ and the end of the buffer are still visible."
     (if clear
 	(remove-hook 'pre-command-hook 'eshell-smart-display-move t))))
 
+(defun em-smart-unload-hook ()
+  (remove-hook 'window-configuration-change-hook #'eshell-smart-scroll))
+
 (provide 'em-smart)
-
-;; Local Variables:
-;; generated-autoload-file: "esh-groups.el"
-;; End:
-
 ;;; em-smart.el ends here

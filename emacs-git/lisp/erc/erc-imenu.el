@@ -1,12 +1,11 @@
-;;; erc-imenu.el -- Imenu support for ERC
+;;; erc-imenu.el --- Imenu support for ERC  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2001-2002, 2004, 2006-2017 Free Software Foundation,
-;; Inc.
+;; Copyright (C) 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Mario Lang <mlang@delysid.org>
-;; Maintainer: emacs-devel@gnu.org
+;; Maintainer: Amin Bandali <bandali@gnu.org>, F. Jason Park <jp@neverwas.me>
 ;; Keywords: comm
-;; URL: http://www.emacswiki.org/cgi-bin/wiki.pl?ErcImenu
+;; URL: https://www.emacswiki.org/emacs/ErcImenu
 
 ;; This file is part of GNU Emacs.
 
@@ -42,6 +41,10 @@
 (require 'erc)
 (require 'imenu)
 
+(defgroup erc-imenu nil
+  "Imenu integration for ERC."
+  :group 'erc)
+
 (defun erc-unfill-notice ()
   "Return text from point to a computed end as a string unfilled.
 Don't rely on this function, read it first!"
@@ -53,7 +56,8 @@ Don't rely on this function, read it first!"
 			 (forward-line 1)
 			 (looking-at "    "))
 		  (forward-line 1))
-		(end-of-line) (point)))))
+		(end-of-line) (point))))
+	(inhibit-read-only t))
     (with-temp-buffer
       (insert str)
       (goto-char (point-min))
@@ -71,15 +75,13 @@ Don't rely on this function, read it first!"
 	(message-alist '())
 	(mode-change-alist '())
 	(topic-change-alist '())
-	prev-pos)
+	) ;; prev-pos
     (goto-char (point-max))
-    (imenu-progress-message prev-pos 0)
     (while (if (bolp)
 	       (> (forward-line -1)
 		  -1)
 	     (progn (forward-line 0)
 		    t))
-      (imenu-progress-message prev-pos nil t)
       (save-match-data
 	(when (looking-at (concat (regexp-quote erc-notice-prefix)
 				  "\\(.+\\)$"))
@@ -108,7 +110,8 @@ Don't rely on this function, read it first!"
 		    "^\\(\\S-+\\) (.+) has set the topic for \\S-+: \\(.*\\)$"
 		    notice-text)
 	       (push (cons (concat (match-string 1 notice-text) ": "
-				   (match-string 2 notice-text)) pos)
+				   (match-string 2 notice-text))
+			   pos)
 		     topic-change-alist)))))
 	(when (looking-at "<\\(\\S-+\\)> \\(.+\\)$")
 	  (let ((from (match-string 1))
@@ -126,11 +129,31 @@ Don't rely on this function, read it first!"
 				  index-alist))
     index-alist))
 
+(defvar-local erc-imenu--create-index-function nil
+  "Previous local value of `imenu-create-index-function', if any.")
+
+(defun erc-imenu-setup ()
+  "Wire up support for Imenu in an ERC buffer."
+  (when (and (local-variable-p 'imenu-create-index-function)
+             imenu-create-index-function)
+    (setq erc-imenu--create-index-function imenu-create-index-function))
+  (setq imenu-create-index-function #'erc-create-imenu-index))
+
+;;;###autoload(autoload 'erc-imenu-mode "erc-imenu" nil t)
+(define-erc-module imenu nil
+  "Simple Imenu integration for ERC."
+  ((add-hook 'erc-mode-hook #'erc-imenu-setup)
+   (unless erc--updating-modules-p (erc-buffer-do #'erc-imenu-setup)))
+  ((remove-hook 'erc-mode-hook #'erc-imenu-setup)
+   (erc-with-all-buffers-of-server nil nil
+     (when erc-imenu--create-index-function
+       (setq imenu-create-index-function erc-imenu--create-index-function)
+       (kill-local-variable 'erc-imenu--create-index-function)))))
+
 (provide 'erc-imenu)
 
 ;;; erc-imenu.el ends here
 ;;
 ;; Local Variables:
-;; indent-tabs-mode: t
-;; tab-width: 8
+;; generated-autoload-file: "erc-loaddefs.el"
 ;; End:

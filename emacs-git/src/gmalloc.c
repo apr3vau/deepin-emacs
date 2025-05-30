@@ -1,5 +1,5 @@
 /* Declarations for `malloc' and friends.
-   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2017 Free
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
    Software Foundation, Inc.
 		  Written May 1989 by Mike Haertel.
 
@@ -36,9 +36,7 @@ License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 #include <pthread.h>
 #endif
 
-#ifdef emacs
-# include "lisp.h"
-#endif
+#include "lisp.h"
 
 #ifdef HAVE_MALLOC_H
 # if GNUC_PREREQ (4, 2, 0)
@@ -49,11 +47,15 @@ License along with this library.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef __MALLOC_HOOK_VOLATILE
 # define __MALLOC_HOOK_VOLATILE volatile
 #endif
-#ifndef HAVE_MALLOC_H
+#if !defined HAVE_MALLOC_H						\
+  || (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 34)
 extern void (*__MALLOC_HOOK_VOLATILE __after_morecore_hook) (void);
-extern void (*__MALLOC_HOOK_VOLATILE __malloc_initialize_hook) (void);
 extern void *(*__morecore) (ptrdiff_t);
-#endif
+#endif /* !defined HAVE_MALLOC_H || glibc >= 2.34 */
+#if !defined HAVE_MALLOC_H						\
+  || (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 24)
+extern void (*__MALLOC_HOOK_VOLATILE __malloc_initialize_hook) (void);
+#endif /* !defined HAVE_MALLOC_H || glibc >= 2.24 */
 
 /* If HYBRID_MALLOC is defined, then temacs will use malloc,
    realloc... as defined in this file (and renamed gmalloc,
@@ -76,7 +78,6 @@ extern void *(*__morecore) (ptrdiff_t);
 
 #ifdef HYBRID_MALLOC
 # include "sheap.h"
-# define DUMPED bss_sbrk_did_unexec
 #endif
 
 #ifdef	__cplusplus
@@ -182,7 +183,7 @@ struct list
   };
 
 /* Free list headers for each fragment size.  */
-extern struct list _fraghead[];
+static struct list _fraghead[BLOCKLOG];
 
 /* List of blocks allocated with aligned_alloc and friends.  */
 struct alignlist
@@ -294,7 +295,8 @@ extern struct mstats mstats (void);
 #endif
 
 /* Memory allocator `malloc'.
-   Copyright 1990, 1991, 1992, 1993, 1994, 1995 Free Software Foundation, Inc.
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
+   Software Foundation, Inc.
 		  Written May 1989 by Mike Haertel.
 
 This library is free software; you can redistribute it and/or
@@ -339,9 +341,6 @@ size_t _heapindex;
 /* Limit of valid info table indices.  */
 size_t _heaplimit;
 
-/* Free lists for each fragment size.  */
-struct list _fraghead[BLOCKLOG];
-
 /* Instrumentation.  */
 size_t _chunks_used;
 size_t _bytes_used;
@@ -350,10 +349,6 @@ size_t _bytes_free;
 
 /* Are you experienced?  */
 int __malloc_initialized;
-
-#else
-
-static struct list _fraghead[BLOCKLOG];
 
 #endif /* HYBRID_MALLOC */
 
@@ -919,7 +914,7 @@ malloc (size_t size)
      among multiple threads.  We just leave it for compatibility with
      glibc malloc (i.e., assignments to gmalloc_hook) for now.  */
   hook = gmalloc_hook;
-  return (hook != NULL ? *hook : _malloc_internal) (size);
+  return (hook ? hook : _malloc_internal) (size);
 }
 
 #if !(defined (_LIBC) || defined (HYBRID_MALLOC))
@@ -951,7 +946,8 @@ _realloc (void *ptr, size_t size)
 
 #endif
 /* Free a block of memory allocated by `malloc'.
-   Copyright 1990, 1991, 1992, 1994, 1995 Free Software Foundation, Inc.
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
+   Software Foundation, Inc.
 		  Written May 1989 by Mike Haertel.
 
 This library is free software; you can redistribute it and/or
@@ -1261,7 +1257,8 @@ cfree (void *ptr)
 #endif
 #endif
 /* Change the size of a block allocated by `malloc'.
-   Copyright 1990, 1991, 1992, 1993, 1994, 1995 Free Software Foundation, Inc.
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
+   Software Foundation, Inc.
 		     Written May 1989 by Mike Haertel.
 
 This library is free software; you can redistribute it and/or
@@ -1430,9 +1427,9 @@ realloc (void *ptr, size_t size)
     return NULL;
 
   hook = grealloc_hook;
-  return (hook != NULL ? *hook : _realloc_internal) (ptr, size);
+  return (hook ? hook : _realloc_internal) (ptr, size);
 }
-/* Copyright (C) 1991, 1992, 1994 Free Software Foundation, Inc.
+/* Copyright (C) 1991-1992, 1994, 2025 Free Software Foundation, Inc.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License as
@@ -1469,7 +1466,7 @@ calloc (size_t nmemb, size_t size)
     return memset (result, 0, bytes);
   return result;
 }
-/* Copyright (C) 1991, 1992, 1993, 1994, 1995 Free Software Foundation, Inc.
+/* Copyright (C) 1991-1992, 1994, 2025 Free Software Foundation, Inc.
 This file is part of the GNU C Library.
 
 The GNU C Library is free software; you can redistribute it and/or modify
@@ -1502,22 +1499,23 @@ extern void *__sbrk (ptrdiff_t increment);
 static void *
 gdefault_morecore (ptrdiff_t increment)
 {
-  void *result;
 #ifdef HYBRID_MALLOC
-  if (!DUMPED)
+  if (!definitely_will_not_unexec_p ())
     {
       return bss_sbrk (increment);
     }
 #endif
-  result = (void *) __sbrk (increment);
-  if (result == (void *) -1)
-    return NULL;
-  return result;
+#ifdef HAVE_SBRK
+  void *result = (void *) __sbrk (increment);
+  if (result != (void *) -1)
+    return result;
+#endif
+  return NULL;
 }
 
 void *(*__morecore) (ptrdiff_t) = gdefault_morecore;
 
-/* Copyright (C) 1991, 92, 93, 94, 95, 96 Free Software Foundation, Inc.
+/* Copyright (C) 1991-1992, 1994, 2025 Free Software Foundation, Inc.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License as
@@ -1649,7 +1647,8 @@ posix_memalign (void **memptr, size_t alignment, size_t size)
 #endif
 
 /* Allocate memory on a page boundary.
-   Copyright (C) 1991, 92, 93, 94, 96 Free Software Foundation, Inc.
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
+   Software Foundation, Inc.
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License as
@@ -1699,16 +1698,6 @@ valloc (size_t size)
 #undef free
 
 #ifdef HYBRID_MALLOC
-/* Declare system malloc and friends.  */
-extern void *malloc (size_t size);
-extern void *realloc (void *ptr, size_t size);
-extern void *calloc (size_t nmemb, size_t size);
-extern void free (void *ptr);
-#ifdef HAVE_ALIGNED_ALLOC
-extern void *aligned_alloc (size_t alignment, size_t size);
-#elif defined HAVE_POSIX_MEMALIGN
-extern int posix_memalign (void **memptr, size_t alignment, size_t size);
-#endif
 
 /* Assuming PTR was allocated via the hybrid malloc, return true if
    PTR was allocated via gmalloc, not the system malloc.  Also, return
@@ -1719,6 +1708,8 @@ extern int posix_memalign (void **memptr, size_t alignment, size_t size);
 static bool
 allocated_via_gmalloc (void *ptr)
 {
+  if (!__malloc_initialized)
+    return false;
   size_t block = BLOCK (ptr);
   size_t blockmax = _heaplimit - 1;
   return block <= blockmax && _heapinfo[block].busy.type != 0;
@@ -1730,7 +1721,7 @@ allocated_via_gmalloc (void *ptr)
 void *
 hybrid_malloc (size_t size)
 {
-  if (DUMPED)
+  if (definitely_will_not_unexec_p ())
     return malloc (size);
   return gmalloc (size);
 }
@@ -1738,13 +1729,13 @@ hybrid_malloc (size_t size)
 void *
 hybrid_calloc (size_t nmemb, size_t size)
 {
-  if (DUMPED)
+  if (definitely_will_not_unexec_p ())
     return calloc (nmemb, size);
   return gcalloc (nmemb, size);
 }
 
-void
-hybrid_free (void *ptr)
+static void
+hybrid_free_1 (void *ptr)
 {
   if (allocated_via_gmalloc (ptr))
     gfree (ptr);
@@ -1752,11 +1743,29 @@ hybrid_free (void *ptr)
     free (ptr);
 }
 
+void
+hybrid_free (void *ptr)
+{
+  /* Stolen from Gnulib, to make sure we preserve errno.  */
+#if defined __GNUC__ && !defined __clang__
+  int err[2];
+  err[0] = errno;
+  err[1] = errno;
+  errno = 0;
+  hybrid_free_1 (ptr);
+  errno = err[errno == 0];
+#else
+  int err = errno;
+  hybrid_free_1 (ptr);
+  errno = err;
+#endif
+}
+
 #if defined HAVE_ALIGNED_ALLOC || defined HAVE_POSIX_MEMALIGN
 void *
 hybrid_aligned_alloc (size_t alignment, size_t size)
 {
-  if (!DUMPED)
+  if (!definitely_will_not_unexec_p ())
     return galigned_alloc (alignment, size);
   /* The following is copied from alloc.c */
 #ifdef HAVE_ALIGNED_ALLOC
@@ -1779,7 +1788,7 @@ hybrid_realloc (void *ptr, size_t size)
     return hybrid_malloc (size);
   if (!allocated_via_gmalloc (ptr))
     return realloc (ptr, size);
-  if (!DUMPED)
+  if (!definitely_will_not_unexec_p ())
     return grealloc (ptr, size);
 
   /* The dumped emacs is trying to realloc storage allocated before
@@ -1833,7 +1842,8 @@ realloc (void *ptr, size_t size)
 #ifdef GC_MCHECK
 
 /* Standard debugging hooks for `malloc'.
-   Copyright 1990, 1991, 1992, 1993, 1994 Free Software Foundation, Inc.
+   Copyright (C) 1990-1993, 1995-1996, 1999, 2002-2007, 2013-2025 Free
+   Software Foundation, Inc.
    Written May 1989 by Mike Haertel.
 
 This library is free software; you can redistribute it and/or
@@ -2012,12 +2022,7 @@ mabort (enum mcheck_status status)
   __libc_fatal (msg);
 #else
   fprintf (stderr, "mcheck: %s\n", msg);
-  fflush (stderr);
-# ifdef emacs
   emacs_abort ();
-# else
-  abort ();
-# endif
 #endif
 }
 

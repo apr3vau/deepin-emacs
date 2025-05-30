@@ -6,8 +6,8 @@
 @copying
 This file describes EDE, the Emacs Development Environment.
 
-Copyright @copyright{} 1998--2001, 2004--2005, 2008--2017
-Free Software Foundation, Inc.
+Copyright @copyright{} 1998--2001, 2004--2005, 2008--2025 Free Software
+Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -67,17 +67,25 @@ modify this GNU manual.''
 
 @contents
 
-@node Top, EDE Project Concepts, (dir), (dir)
+@node Top
 @top EDE
 @comment  node-name,  next,  previous,  up
 
-@ede{} is the Emacs Development Environment: an Emacs extension that
-simplifies building and debugging programs in Emacs.  It attempts to
-emulate a typical IDE (Integrated Development Environment).  @ede{}
+@ede{} (Emacs Development Environment) is an Emacs extension that
+simplifies building and debugging programs in Emacs.  @ede{}
 can manage or create your makefiles and other building environment
 duties, allowing you to concentrate on writing code rather than
 support files.  It aims to make it much easier for new programmers to
 learn and adopt GNU ways of doing things.
+
+In contrast to Emacs's built-in ``project'' support (@pxref{Projects,,,
+emacs, GNU Emacs Manual}), which provides lightweight project management
+features focused on file navigation and search, @ede{} offers a
+structured approach to managing build systems, configuration files, and
+project metadata.  While built-in projects are well-suited to
+general-purpose workflows, @ede{} is useful for projects using tools
+like @samp{make}, @samp{automake}, or @samp{autoconf}, or that involve
+managing multiple targets, include paths, and build configurations.
 
 @ifnottex
 @insertcopying
@@ -95,11 +103,11 @@ learn and adopt GNU ways of doing things.
 * GNU Free Documentation License::  The license for this documentation.
 @end menu
 
-@node EDE Project Concepts, EDE Mode, Top, Top
+@node EDE Project Concepts
 @chapter @ede{} Project Concepts
 
 @ede{} is a generic interface for managing projects.  It specifies a
-single set of menus and keybindings, while supporting multiple ways to
+single set of menus and key bindings, while supporting multiple ways to
 express a project via a build system.
 
 In the subsequent chapters, we will describe the different project
@@ -130,7 +138,7 @@ of search to files in a single target, or to discover the location of
 documentation or interface files.  @ede{} can provide this
 information.
 
-@node EDE Mode, Quick Start, EDE Project Concepts, Top
+@node EDE Mode
 @chapter @ede{} Mode
 
 @ede{} is implemented as a minor mode, which augments other modes such
@@ -144,10 +152,10 @@ init file:
 
 Activating @ede{} adds a menu named @samp{Development} to the menu
 bar.  This menu provides several menu items for high-level @ede{}
-commands.  These menu items, and their corresponding keybindings, are
+commands.  These menu items, and their corresponding key bindings, are
 independent of the type of project you are actually working on.
 
-@node Quick Start, Creating a project, EDE Mode, Top
+@node Quick Start
 @chapter Quick Start
 
 Once you have @ede{} enabled, you can create a project.  This chapter
@@ -160,8 +168,8 @@ First, lets create a directory for our project.  For this example,
 we'll start with something in @file{/tmp}.
 
 @example
-C-x C-f /tmp/myproject/README RET
-M-x make-directory RET RET
+C-x C-f /tmp/myproject/README @key{RET}
+M-x make-directory @key{RET} @key{RET}
 @end example
 
 Now put some plain text in your README file to start.
@@ -169,7 +177,7 @@ Now put some plain text in your README file to start.
 Now, lets create the project:
 
 @example
-M-x ede-new RET Automake RET myproject RET
+M-x ede-new @key{RET} Automake @key{RET} myproject @key{RET}
 @end example
 
 
@@ -191,8 +199,8 @@ We'll make a more complex project, so use dired to create some more
 directories using the @kbd{+} key, and typing in new directories:
 
 @example
-+ include RET
-+ src RET
++ include @key{RET}
++ src @key{RET}
 @end example
 
 Now I'll short-cut in this tutorial.  Create the following files:
@@ -252,13 +260,13 @@ now create those projects.
 With @file{main.cpp} as your current buffer, type:
 
 @example
-M-x ede-new RET Automake RET src RET
+M-x ede-new @key{RET} Automake @key{RET} src @key{RET}
 @end example
 
 and in @file{myproj.hh} as your current buffer, type:
 
 @example
-M-x ede-new RET Automake RET include RET
+M-x ede-new @key{RET} Automake @key{RET} include @key{RET}
 @end example
 
 These steps effectively only create the Project.ede file in which you
@@ -271,8 +279,8 @@ Projects.  You can create targets either from a buffer, or from a
 @code{dired} directory buffer.
 
 Note: If for some reason a directory list buffer, or file does not have the
-@samp{Project} menu item, or if @ede{} keybindings don't work, just
-use @kbd{M-x revert-buffer RET} to force a refresh.  Sometimes
+@samp{Project} menu item, or if @ede{} key bindings don't work, just
+use @kbd{M-x revert-buffer @key{RET}} to force a refresh.  Sometimes
 creating a new project doesn't restart buffers correctly.
 
 Lets start with the header file.  In @file{include/myproj.hh}, you
@@ -280,7 +288,7 @@ could use the menu, but we will now start using the @ede{} command prefix
 which is @kbd{C-c .}.
 
 @example
-C-c . t includes RET miscellaneous RET y
+C-c . t includes @key{RET} miscellaneous @key{RET} y
 @end example
 
 
@@ -292,7 +300,7 @@ Next, visit the @file{src} directory using dired.  There should be a
 @samp{Project} menu.   You can create a new target with
 
 @example
-. t myprogram RET program RET
+. t myprogram @key{RET} program @key{RET}
 @end example
 
 Note that @kbd{. t} is a command for creating a target.  This command
@@ -304,7 +312,7 @@ Next, place the cursor on @file{main.cpp}, and use @kbd{. a} to add
 that file to your target.
 
 @example
-. a myprogram RET
+. a myprogram @key{RET}
 @end example
 
 Note that these prompts often have completion, so you can just press
@@ -316,8 +324,8 @@ all in your dired buffer, and add them all at the same time.
 Next, do the same for the library by placing the cursor on @file{mylib.cpp}.
 
 @example
-. t mylib RET sharedobject RET
-. a mylib RET
+. t mylib @key{RET} sharedobject @key{RET}
+. a mylib @key{RET}
 @end example
 
 @section Step 5: Compile, and fail
@@ -350,7 +358,7 @@ To fix the failed compile, we need to add
 Visit @file{main.cpp}.
 
 @example
-M-x customize-project RET
+M-x customize-project @key{RET}
 @end example
 
 Select the @samp{[Settings]} subgroup of options.  Under
@@ -407,7 +415,7 @@ project.  This is because variables such as the include path are
 treated globally, whereas dependencies for a target are target specific.
 
 @example
-M-x customize-target RET
+M-x customize-target @key{RET}
 @end example
 
 On the first page, you will see an Ldlibs-local section.  Add mylib to
@@ -437,13 +445,13 @@ C-c . C
 You can run your program directly from @ede{}.
 
 @example
-C-c . R RET RET
+C-c . R @key{RET} @key{RET}
 @end example
 
 If your program takes command line arguments, you can type them in
 when it offers the command line you want to use to run your program.
 
-@node Creating a project, Modifying your project, Quick Start, Top
+@node Creating a project
 @chapter Creating a project
 
 To create a new project, first visit a file that you want to include
@@ -488,7 +496,7 @@ the top-most project's makefile as a starting place for the build.  How
 the toplevel project handles subprojects in the build process is
 dependent on that project's type.
 
-@node Modifying your project, Building and Debugging, Creating a project, Top
+@node Modifying your project
 @chapter Modifying your project
 
 In this chapter, we describe the generic features for manipulating
@@ -504,7 +512,7 @@ detailed information about exactly what these features do.
 * EDE Project Features::
 @end menu
 
-@node Add/Remove target, Add/Remove files, Modifying your project, Modifying your project
+@node Add/Remove target
 @section Add/Remove target
 
 To create a new target, type @kbd{C-c . t} (@code{ede-new-target}) or
@@ -520,7 +528,7 @@ To remove a target from the project, type @kbd{M-x ede-delete-target},
 or use the @samp{Remove Target} menu item in the @samp{Project
 Options} submenu.
 
-@node Add/Remove files, Customize Features, Add/Remove target, Modifying your project
+@node Add/Remove files
 @section Add/Remove files
 
 To add the current file to an existing target, type @kbd{C-c . a}
@@ -541,7 +549,7 @@ not wish to add the file to any target, you can choose @samp{none}.
 You can customize this behavior with the variable
 @command{ede-auto-add-method}.
 
-@node Customize Features, Project Local Variables, Add/Remove files, Modifying your project
+@node Customize Features
 @section Customize Features
 
 A project, and its targets, are objects using the @samp{EIEIO} object
@@ -561,7 +569,7 @@ object, you can edit the file by typing @kbd{C-c . e}
 (@code{ede-edit-file-target}).  You should ``rescan'' the project
 afterwards (@pxref{Miscellaneous commands}).
 
-@node Project Local Variables, EDE Project Features, Customize Features, Modifying your project
+@node Project Local Variables
 @section Project Local Variables
 
 EDE projects can store and manager project local variables.  The
@@ -598,7 +606,7 @@ the format is an association list.  For example:
                          (compile-command . "make -f MyCustomMakefile all")))
 @end example
 
-@node EDE Project Features,  , Project Local Variables, Modifying your project
+@node EDE Project Features
 @section EDE Project Features
 
 This section details user facing features of an @ede{} @samp{Make}
@@ -618,7 +626,7 @@ additional details.
 * Configurations::
 @end menu
 
-@node Changing Compilers and Flags, Configurations, EDE Project Features, EDE Project Features
+@node Changing Compilers and Flags
 @subsection Changing Compilers and Flags
 
 Targets that build stuff need compilers.  To change compilers, you
@@ -638,7 +646,7 @@ see what commands are inserted.  Once you have determined the variable
 you need to modify, you can add a configuration for it.
 @xref{Configurations}.
 
-@node Configurations,  , Changing Compilers and Flags, EDE Project Features
+@node Configurations
 @subsection Configurations
 
 Configurations specify different ways to build a project.  For
@@ -658,7 +666,7 @@ block for ``configurations''.  Add a new named configuration here.
 To switch between different active configurations, modify the
 ``configuration default'' slot.
 
-@node Building and Debugging, Miscellaneous commands, Modifying your project, Top
+@node Building and Debugging
 @chapter Building and Debugging
 
 @ede{} provides the following ``project-aware'' compilation and
@@ -677,7 +685,7 @@ Build a distribution file for your project.
 
 These commands are also available from the @samp{Development} menu.
 
-@node Miscellaneous commands, Extending EDE, Building and Debugging, Top
+@node Miscellaneous commands
 @chapter Miscellaneous commands
 
 If you opt to go in and edit @ede{} project files directly---for
@@ -716,7 +724,7 @@ To activate the speedbar in this mode, type @kbd{C-c . s}
 * Simple projects::             Projects @ede{} doesn't manage.
 @end menu
 
-@node Make and Automake projects, Automake direct projects, Miscellaneous commands, Miscellaneous commands
+@node Make and Automake projects
 @section Make and Automake projects
 
 A project of @samp{ede-project} type creates a file called
@@ -728,7 +736,7 @@ in @samp{Makefile} mode, then this project will autogenerate a
 routines will also import and maintain a configure.am script and a
 host of other files required by Automake.
 
-@node Automake direct projects, Simple projects, Make and Automake projects, Miscellaneous commands
+@node Automake direct projects
 @section Automake direct projects
 
 The project type that reads @file{Makefile.am} directly is derived
@@ -738,7 +746,7 @@ distributed independently.  This mode eventually became @ede{}.  The
 not generate them automatically, or create new ones.  As such, it is
 useful as a browsing tool, or as maintenance in managing file lists.
 
-@node Simple projects,  , Automake direct projects, Miscellaneous commands
+@node Simple projects
 @section Simple Projects
 
 There is a wide array of simple projects.  In this case a simple
@@ -756,7 +764,7 @@ belonging to a project, but doesn't provide many features of a typical
 * Custom Locate::               Customizing how to locate files in a simple project
 @end menu
 
-@node ede-cpp-root, ede-emacs, Simple projects, Simple projects
+@node ede-cpp-root
 @subsection ede-cpp-root
 
 The @code{ede-cpp-root} project type allows you to create a single
@@ -897,7 +905,7 @@ of project.
 @xref{ede-cpp-root-project}, for details about the class that defines
 the @code{ede-cpp-root} project type.
 
-@node ede-emacs, ede-linux, ede-cpp-root, Simple projects
+@node ede-emacs
 @subsection ede-emacs
 
 The @code{ede-emacs} project automatically identifies an Emacs source
@@ -906,7 +914,7 @@ tree, and enables EDE project mode for it.
 It pre-populates the C Preprocessor symbol map for correct parsing,
 and has an optimized include file identification function.
 
-@node ede-linux, ede-generic-project, ede-emacs, Simple projects
+@node ede-linux
 @subsection ede-linux
 
 The @code{ede-linux} project will automatically identify a Linux
@@ -921,7 +929,7 @@ directory and its architecture, respectively.  The default is to assume that
 the build happens in the source directory and to auto-detect the
 architecture; if the auto-detection fails, you will be asked.
 
-@node ede-generic-project, Custom Locate, ede-linux, Simple projects
+@node ede-generic-project
 @subsection ede-generic-project
 
 The @code{ede-generic-project} is a project system that makes it easy
@@ -955,18 +963,16 @@ The example for Makefiles looks like this:
 ;;; MAKEFILE
 
 (defclass ede-generic-makefile-project (ede-generic-project)
-  ((buildfile :initform "Makefile")
-   )
+  ((buildfile :initform "Makefile"))
   "Generic Project for makefiles.")
 
-(defmethod ede-generic-setup-configuration ((proj ede-generic-makefile-project) config)
-  "Setup a configuration for Make."
+(cl-defmethod ede-generic-setup-configuration ((proj ede-generic-makefile-project) config)
+  "Set up a configuration for Make."
   (oset config build-command "make -k")
-  (oset config debug-command "gdb ")
-  )
+  (oset config debug-command "gdb "))
 
 (ede-generic-new-autoloader "generic-makefile" "Make"
-			    "Makefile" 'ede-generic-makefile-project)
+                            "Makefile" 'ede-generic-makefile-project)
 @end example
 
 This example project will detect any directory with the file
@@ -974,7 +980,7 @@ This example project will detect any directory with the file
 Customization of the project will allow you to make build and debug
 commands more precise.
 
-@node Custom Locate,  , ede-generic-project, Simple projects
+@node Custom Locate
 @subsection Custom Locate
 
 The various simple project styles all have one major drawback, which
@@ -1016,7 +1022,7 @@ simple example.
 More on idutils and cscope is in the CEDET manual, and they each have
 their own section.
 
-@node Extending EDE, GNU Free Documentation License, Miscellaneous commands, Top
+@node Extending EDE
 @chapter Extending @ede{}
 
 This chapter is intended for users who want to write new parts or fix
@@ -1029,16 +1035,17 @@ superclasses, specifically the PROJECT and TARGET@.  All commands in
 target.
 
 All specific projects in @ede{} derive subclasses of the @ede{}
-superclasses.  In this way, specific behaviors such as how a project
-is saved, or how a target is compiled can be customized by a project
-author in detail.  @ede{} communicates to these project objects via an
-API using methods.  The commands you use in @ede{} mode are high-level
-functional wrappers over these methods.  @xref{Top,,, eieio, EIEIO manual}. For
-details on using @eieio{} to extending classes, and writing methods.
+superclasses.  In this way, specific behaviors such as how a project is
+saved, or how a target is compiled can be customized by a project author
+in detail.  @ede{} communicates to these project objects via an API
+using methods.  The commands you use in @ede{} mode are high-level
+functional wrappers over these methods.  @xref{Top,,, eieio, EIEIO
+manual}, for details on using @eieio{} to extending classes, and writing
+methods.
 
 If you intend to extend @ede{}, it is most likely that a new target type is
 needed in one of the existing project types.  The rest of this chapter
-will discuss extending the @code{ede-project} class, and it's targets.
+will discuss extending the @code{ede-project} class, and its targets.
 See @file{project-am.el} for basic details on adding targets to it.
 
 For the @code{ede-project} type, the core target class is called
@@ -1061,7 +1068,7 @@ examples.
 @menu
 * Development Overview::
 * Detecting a Project::
-* User interface methods::      Methods associated with keybindings
+* User interface methods::      Methods associated with key bindings
 * Base project methods::        The most basic methods on @ede{} objects.
 * Sourcecode objects::          Defining new sourcecode classes.
 * Compiler and Linker objects::  Defining new compilers and linkers.
@@ -1071,7 +1078,7 @@ examples.
 * Compilers::                   Details of compiler classes.
 @end menu
 
-@node Development Overview, Detecting a Project, Extending EDE, Extending EDE
+@node Development Overview
 @section Development Overview
 
 @ede{} is made up of a series of classes implemented with @eieio{}.
@@ -1121,7 +1128,7 @@ number.  It also holds a list of @code{ede-target} objects and a list
 of sub projects, or more @code{ede-project} objects.
 
 New project types must subclass @code{ede-project} to add special
-behavior. New project types also need to subclass @code{ede-target} to
+behavior.  New project types also need to subclass @code{ede-target} to
 add specialty behavior.
 
 In this way, the common @ede{} interface is designed to work against
@@ -1163,7 +1170,7 @@ Here is a high-level UML diagram for the @ede{} system created with @cogre{}..
 @end example
 
 
-@node Detecting a Project, User interface methods, Development Overview, Extending EDE
+@node Detecting a Project
 @section Detecting a Project
 
 Project detection happens with the list of @code{ede-project-autoload}
@@ -1228,7 +1235,7 @@ to the global list of all projects.  All subprojects are then created
 and assembled into the project data structures.
 
 
-@node User interface methods, Base project methods, Detecting a Project, Extending EDE
+@node User interface methods
 @section User interface methods
 
 These methods are core behaviors associated with user commands.
@@ -1260,7 +1267,7 @@ Make a distribution (tar archive) of the project.
 Rescan a project file, changing the data in the existing objects.
 @end table
 
-@node Base project methods, Sourcecode objects, User interface methods, Extending EDE
+@node Base project methods
 @section Base project methods
 
 These methods are important for querying base information from project
@@ -1298,7 +1305,7 @@ stored in.
 List all documentation a project or target is responsible for.
 @end table
 
-@node Sourcecode objects, Compiler and Linker objects, Base project methods, Extending EDE
+@node Sourcecode objects
 @section Sourcecode objects
 
 @ede{} projects track source file / target associates via source code
@@ -1344,7 +1351,7 @@ In this case, the garbage pattern is the same.
 
 @xref{Sourcecode}.
 
-@node Compiler and Linker objects, Project, Sourcecode objects, Extending EDE
+@node Compiler and Linker objects
 @section Compiler and Linker objects
 
 In order for a target to create a @file{Makefile}, it must know how to
@@ -1405,7 +1412,7 @@ See @file{ede-proj-obj.el} for examples of the combination.
 @defindex sc
 @defindex cm
 
-@node Project, Targets, Compiler and Linker objects, Extending EDE
+@node Project
 @section Project
 
 @menu
@@ -1419,7 +1426,7 @@ See @file{ede-proj-obj.el} for examples of the combination.
 * ede-step-project::
 @end menu
 
-@node ede-project-placeholder, ede-project, Project, Project
+@node ede-project-placeholder
 @subsection ede-project-placeholder
 @pjindex ede-project-placeholder
 
@@ -1433,7 +1440,7 @@ See @file{ede-proj-obj.el} for examples of the combination.
 @item ede-project-placeholder
 @table @asis
 @item Children:
-@w{@xref{ede-project}.}
+@xref{ede-project}.
 @end table
 @end table
 @end table
@@ -1477,7 +1484,7 @@ Get the inode of the directory project @var{PROJ} is in.
 @end deffn
 
 @deffn Method ede-project-root :AFTER this
-If a project knows it's root, return it here.
+If a project knows its root, return it here.
 Allows for one-project-object-for-a-tree type systems.
 @end deffn
 
@@ -1486,7 +1493,7 @@ Find a subproject of @var{PROJ} that corresponds to @var{DIR}.
 @end deffn
 
 @deffn Method ede-project-root-directory :AFTER this &optional file
-If a project knows it's root, return it here.
+If a project knows its root, return it here.
 Allows for one-project-object-for-a-tree type systems.
 Optional @var{FILE} is the file to test.  It is ignored in preference
 of the anchor file for the project.
@@ -1505,7 +1512,7 @@ Make sure placeholder @var{THIS} is replaced with the real thing, and pass throu
 Make sure placeholder @var{THIS} is replaced with the real thing, and pass through.
 @end deffn
 
-@node ede-project, ede-cpp-root-project, ede-project-placeholder, Project
+@node ede-project
 @subsection ede-project
 @pjindex ede-project
 
@@ -1516,12 +1523,13 @@ Make sure placeholder @var{THIS} is replaced with the real thing, and pass throu
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
 @item ede-project
 @table @asis
 @item Children:
-@w{@xref{ede-cpp-root-project},} @w{ede-emacs-project,} @w{ede-linux-project,} @w{ede-maven-project,} @w{@xref{ede-simple-project},} @w{@xref{ede-simple-base-project},} @w{@xref{ede-proj-project},} @w{@xref{project-am-makefile},} @w{@xref{ede-step-project}.}
+@xref{ede-cpp-root-project}, @w{ede-emacs-project,} @w{ede-linux-project,} @w{ede-maven-project,} @xref{ede-simple-project}, @xref{ede-simple-base-project}, @xref{ede-proj-project}, @xref{project-am-makefile}, @xref{ede-step-project}.
 @end table
 @end table
 @end table
@@ -1553,14 +1561,14 @@ This is a URL to be sent to a web site for documentation.
 @item :web-site-directory @*
 
 A directory where web pages can be found by Emacs.
-For remote locations use a path compatible with ange-ftp or EFS@.
+For remote locations use a path compatible with ange-ftp.
 You can also use TRAMP for use with rcp & scp.
 
 @item :web-site-file @*
 
-A file which contains the home page for this project.
+A file which contains the website for this project.
 This file can be relative to slot @code{web-site-directory}.
-This can be a local file, use ange-ftp, EFS, or TRAMP.
+This can be a local file, use ange-ftp or TRAMP.
 
 @item :ftp-site
 Type: @code{string} @*
@@ -1791,7 +1799,7 @@ Retrieves the slot @code{menu} from an object of class @code{ede-project}
 Commit change to local variables in @var{PROJ}.
 @end deffn
 
-@node ede-cpp-root-project, ede-simple-project, ede-project, Project
+@node ede-cpp-root-project
 @subsection ede-cpp-root-project
 @pjindex ede-cpp-root-project
 
@@ -1802,9 +1810,11 @@ Commit change to local variables in @var{PROJ}.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item ede-cpp-root-project
 No children
@@ -1824,7 +1834,7 @@ This class implements the @code{ede-cpp-root} project type.
 @table @code
 @item :include-path
 Type: @code{list} @*
-Default Value: @code{(quote ("/include" "../include/"))}
+Default Value: @code{("/include" "../include/")}
 
 The default locate function expands filenames within a project.
 If a header file (.h, .hh, etc.)@: name is expanded, and
@@ -1897,23 +1907,23 @@ Make sure the @code{:file} is fully expanded.
 @end deffn
 
 @deffn Method ede-preprocessor-map :AFTER this
-Get the pre-processor map for project @var{THIS}.
+Get the pre-processor map for project @var{this}.
 @end deffn
 
 @deffn Method ede-cpp-root-header-file-p :AFTER proj name
-Non @code{nil} if in @var{PROJ} the filename @var{NAME} is a header.
+Non-@code{nil} if in @var{proj} the filename @var{name} is a header.
 @end deffn
 
 @deffn Method ede-system-include-path :AFTER this
-Get the system include path used by project @var{THIS}.
+Get the system include path used by project @var{this}.
 @end deffn
 
 @deffn Method ede-expand-filename-impl :AFTER proj name
-Within this project @var{PROJ}, find the file @var{NAME}.
+Within this project @var{proj}, find the file @var{name}.
 This knows details about or source tree.
 @end deffn
 
-@node ede-simple-project, ede-simple-base-project, ede-cpp-root-project, Project
+@node ede-simple-project
 @subsection ede-simple-project
 @pjindex ede-simple-project
 
@@ -1924,9 +1934,11 @@ This knows details about or source tree.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item ede-simple-project
 No children
@@ -1943,7 +1955,7 @@ No children
 Commit any change to @var{PROJ} to its file.
 @end deffn
 
-@node ede-simple-base-project, ede-proj-project, ede-simple-project, Project
+@node ede-simple-base-project
 @subsection ede-simple-base-project
 @pjindex ede-simple-base-project
 
@@ -1954,9 +1966,11 @@ Commit any change to @var{PROJ} to its file.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item ede-simple-base-project
 No children
@@ -1973,7 +1987,7 @@ This one project could control a tree of subdirectories.
 @table @asis
 @end table
 
-@node ede-proj-project, project-am-makefile, ede-simple-base-project, Project
+@node ede-proj-project
 @subsection ede-proj-project
 @pjindex ede-proj-project
 
@@ -1984,9 +1998,11 @@ This one project could control a tree of subdirectories.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item ede-proj-project
 No children
@@ -2163,7 +2179,7 @@ Return a list of files that constitutes a distribution of @var{THIS} project.
 Commit change to local variables in @var{PROJ}.
 @end deffn
 
-@node project-am-makefile, ede-step-project, ede-proj-project, Project
+@node project-am-makefile
 @subsection project-am-makefile
 @pjindex project-am-makefile
 
@@ -2174,9 +2190,11 @@ Commit change to local variables in @var{PROJ}.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item project-am-makefile
 No children
@@ -2205,7 +2223,7 @@ Despite the fact that this is a method, it depends on the current
 buffer being in order to provide a smart default target type.
 @end deffn
 
-@node ede-step-project,  , project-am-makefile, Project
+@node ede-step-project
 @subsection ede-step-project
 @pjindex ede-step-project
 
@@ -2216,9 +2234,11 @@ buffer being in order to provide a smart default target type.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-project-placeholder}.}
+@item ede-project-placeholder
+@xref{ede-project-placeholder}.
 @table @code
-@item @w{@xref{ede-project}.}
+@item ede-project
+@xref{ede-project}.
 @table @code
 @item ede-step-project
 No children
@@ -2262,14 +2282,14 @@ The variable GNUSTEP_INSTALLATION_DOMAIN is set at this value.
 
 @item :preamble
 Type: @code{(or null list)} @*
-Default Value: @code{(quote ("GNUmakefile.preamble"))}
+Default Value: @code{("GNUmakefile.preamble")}
 
 The auxiliary makefile for additional variables.
 Included just before the specific target files.
 
 @item :postamble
 Type: @code{(or null list)} @*
-Default Value: @code{(quote ("GNUmakefile.postamble"))}
+Default Value: @code{("GNUmakefile.postamble")}
 
 The auxiliary makefile for additional rules.
 Included just after the specific target files.
@@ -2330,7 +2350,7 @@ Return a list of files that constitutes a distribution of @var{THIS} project.
 Commit change to local variables in @var{PROJ}.
 @end deffn
 
-@node Targets, Sourcecode, Project, Extending EDE
+@node Targets
 @section Targets
 
 @menu
@@ -2358,7 +2378,7 @@ Commit change to local variables in @var{PROJ}.
 @end menu
 
 
-@node ede-target, ede-proj-target, Targets, Targets
+@node ede-target
 @subsection ede-target
 @tgindex ede-target
 
@@ -2372,7 +2392,7 @@ Commit change to local variables in @var{PROJ}.
 @item ede-target
 @table @asis
 @item Children:
-@w{ede-cpp-root-target,} @w{ede-emacs-target-c,} @w{ede-emacs-target-el,} @w{ede-emacs-target-misc,} @w{ede-linux-target-c,} @w{ede-linux-target-misc,} @w{ede-maven-target-java,} @w{ede-maven-target-c,} @w{ede-maven-target-misc,} @w{ede-simple-target,} @w{@xref{ede-proj-target},} @w{@xref{project-am-target}.}
+@w{ede-cpp-root-target,} @w{ede-emacs-target-c,} @w{ede-emacs-target-el,} @w{ede-emacs-target-misc,} @w{ede-linux-target-c,} @w{ede-linux-target-misc,} @w{ede-maven-target-java,} @w{ede-maven-target-c,} @w{ede-maven-target-misc,} @w{ede-simple-target,} @xref{ede-proj-target}, @xref{project-am-target}.
 @end table
 @end table
 @end table
@@ -2438,7 +2458,7 @@ Argument @var{THIS} is the project to convert @var{PATH} to.
 @end deffn
 
 @deffn Method ede-name :AFTER this
-Return the name of @var{THIS} targt.
+Return the name of @var{THIS} target.
 @end deffn
 
 @deffn Method ede-target-buffer-in-sourcelist :AFTER this buffer source
@@ -2516,7 +2536,7 @@ In sources for @var{THIS}, change version numbers to @var{VERSION}.
 @end deffn
 
 @deffn Method project-delete-target :AFTER ot
-Delete the current target @var{OT} from it's parent project.
+Delete the current target @var{OT} from its parent project.
 @end deffn
 
 @deffn Method ede-target-sourcecode :AFTER this
@@ -2537,7 +2557,7 @@ Call this when a user finishes customizing @var{TARGET}.
 @end deffn
 
 @deffn Method project-edit-file-target :AFTER ot
-Edit the target @var{OT} associated w/ this file.
+Edit the target @var{OT} associated with this file.
 @end deffn
 
 @deffn Method ede-documentation :AFTER this
@@ -2555,7 +2575,7 @@ Return non-@code{nil} if @var{THIS} target wants @var{FILE}.
 @end deffn
 
 @deffn Method project-add-file :AFTER ot file
-Add the current buffer into project project target @var{OT}.
+Add the current buffer into project target @var{OT}.
 Argument @var{FILE} is the file to add.
 @end deffn
 
@@ -2567,7 +2587,7 @@ Return the name of @var{THIS} target, suitable for make or debug style commands.
 Retrieves the slot @code{menu} from an object of class @code{ede-target}
 @end deffn
 
-@node ede-proj-target, ede-proj-target-makefile, ede-target, Targets
+@node ede-proj-target
 @subsection ede-proj-target
 @tgindex ede-proj-target
 
@@ -2578,12 +2598,13 @@ Retrieves the slot @code{menu} from an object of class @code{ede-target}
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
 @item ede-proj-target
 @table @asis
 @item Children:
-@w{@xref{ede-proj-target-makefile},} @w{ede-proj-target-aux,} @w{@xref{ede-proj-target-scheme}.}
+@xref{ede-proj-target-makefile}, @w{ede-proj-target-aux,} @xref{ede-proj-target-scheme}.
 @end table
 @end table
 @end table
@@ -2715,7 +2736,7 @@ Converts all symbols into the objects to be used.
 @end deffn
 
 @deffn Method project-delete-target :AFTER this
-Delete the current target @var{THIS} from it's parent project.
+Delete the current target @var{THIS} from its parent project.
 @end deffn
 
 @deffn Method ede-proj-makefile-target-name :AFTER this
@@ -2756,7 +2777,7 @@ sources variable.
 @end deffn
 
 
-@node ede-proj-target-makefile, semantic-ede-proj-target-grammar, ede-proj-target, Targets
+@node ede-proj-target-makefile
 @subsection ede-proj-target-makefile
 @tgindex ede-proj-target-makefile
 
@@ -2767,14 +2788,16 @@ sources variable.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
 @item ede-proj-target-makefile
 @table @asis
 @item Children:
-@w{@xref{semantic-ede-proj-target-grammar},} @w{@xref{ede-proj-target-makefile-objectcode},} @w{@xref{ede-proj-target-elisp},} @w{@xref{ede-proj-target-makefile-miscelaneous},} @w{@xref{ede-proj-target-makefile-info}.}
+@xref{semantic-ede-proj-target-grammar}, @xref{ede-proj-target-makefile-objectcode}, @xref{ede-proj-target-elisp}, @xref{ede-proj-target-makefile-miscelaneous}, @xref{ede-proj-target-makefile-info}.
 @end table
 @end table
 @end table
@@ -2797,7 +2820,7 @@ File name of generated Makefile.
 Type: @code{boolean} @*
 Default Value: @code{t}
 
-Non @code{nil} means the rule created is part of the all target.
+Non-@code{nil} means the rule created is part of the all target.
 Setting this to @code{nil} creates the rule to build this item, but does not
 include it in the @code{all:} rule.
 
@@ -2854,7 +2877,7 @@ Return a list of configuration variables from @var{THIS}.
 Use @var{CONFIGURATION} as the current configuration to query.
 @end deffn
 
-@node semantic-ede-proj-target-grammar, ede-proj-target-makefile-objectcode, ede-proj-target-makefile, Targets
+@node semantic-ede-proj-target-grammar
 @subsection semantic-ede-proj-target-grammar
 @tgindex semantic-ede-proj-target-grammar
 
@@ -2865,11 +2888,14 @@ Use @var{CONFIGURATION} as the current configuration to query.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
 @item semantic-ede-proj-target-grammar
 No children
@@ -2908,7 +2934,7 @@ Argument @var{THIS} is the target that should insert stuff.
 @end deffn
 
 
-@node ede-proj-target-makefile-objectcode, ede-proj-target-makefile-archive, semantic-ede-proj-target-grammar, Targets
+@node ede-proj-target-makefile-objectcode
 @subsection ede-proj-target-makefile-objectcode
 @tgindex ede-proj-target-makefile-objectcode
 
@@ -2919,16 +2945,19 @@ Argument @var{THIS} is the target that should insert stuff.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
 @item ede-proj-target-makefile-objectcode
 @table @asis
 @item Children:
-@w{@xref{ede-proj-target-makefile-archive},} @w{@xref{ede-proj-target-makefile-program}.}
+@xref{ede-proj-target-makefile-archive}, @xref{ede-proj-target-makefile-program}.
 @end table
 @end table
 @end table
@@ -2970,7 +2999,7 @@ Argument @var{THIS} is the target to get sources from.
 @end deffn
 
 
-@node ede-proj-target-makefile-archive, ede-proj-target-makefile-program, ede-proj-target-makefile-objectcode, Targets
+@node ede-proj-target-makefile-archive
 @subsection ede-proj-target-makefile-archive
 @tgindex ede-proj-target-makefile-archive
 
@@ -2981,13 +3010,17 @@ Argument @var{THIS} is the target to get sources from.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile-objectcode}.}
+@item ede-proj-target-makefile-objectcode
+@xref{ede-proj-target-makefile-objectcode}.
 @table @code
 @item ede-proj-target-makefile-archive
 No children
@@ -3013,7 +3046,7 @@ Makefile.am generator, so use it to add this important bin program.
 @end deffn
 
 
-@node ede-proj-target-makefile-program, ede-proj-target-makefile-shared-object, ede-proj-target-makefile-archive, Targets
+@node ede-proj-target-makefile-program
 @subsection ede-proj-target-makefile-program
 @tgindex ede-proj-target-makefile-program
 
@@ -3024,18 +3057,22 @@ Makefile.am generator, so use it to add this important bin program.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile-objectcode}.}
+@item ede-proj-target-makefile-objectcode
+@xref{ede-proj-target-makefile-objectcode}.
 @table @code
 @item ede-proj-target-makefile-program
 @table @asis
 @item Children:
-@w{@xref{ede-proj-target-makefile-shared-object}.}
+@xref{ede-proj-target-makefile-shared-object}.
 @end table
 @end table
 @end table
@@ -3092,7 +3129,7 @@ Insert bin_PROGRAMS variables needed by target @var{THIS}.
 @end deffn
 
 
-@node ede-proj-target-makefile-shared-object, ede-proj-target-elisp, ede-proj-target-makefile-program, Targets
+@node ede-proj-target-makefile-shared-object
 @subsection ede-proj-target-makefile-shared-object
 @tgindex ede-proj-target-makefile-shared-object
 
@@ -3103,15 +3140,20 @@ Insert bin_PROGRAMS variables needed by target @var{THIS}.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile-objectcode}.}
+@item ede-proj-target-makefile-objectcode
+@xref{ede-proj-target-makefile-objectcode}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile-program}.}
+@item ede-proj-target-makefile-program
+@xref{ede-proj-target-makefile-program}.
 @table @code
 @item ede-proj-target-makefile-shared-object
 No children
@@ -3152,7 +3194,7 @@ Makefile.am generator, so use it to add this important bin program.
 @end deffn
 
 
-@node ede-proj-target-elisp, ede-proj-target-elisp-autoloads, ede-proj-target-makefile-shared-object, Targets
+@node ede-proj-target-elisp
 @subsection ede-proj-target-elisp
 @tgindex ede-proj-target-elisp
 
@@ -3163,16 +3205,19 @@ Makefile.am generator, so use it to add this important bin program.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
 @item ede-proj-target-elisp
 @table @asis
 @item Children:
-@w{@xref{ede-proj-target-elisp-autoloads}.}
+@xref{ede-proj-target-elisp-autoloads}.
 @end table
 @end table
 @end table
@@ -3228,7 +3273,7 @@ There are standards in Elisp files specifying how the version string
 is found, such as a @code{-version} variable, or the standard header.
 @end deffn
 
-@node ede-proj-target-elisp-autoloads, ede-proj-target-makefile-miscelaneous, ede-proj-target-elisp, Targets
+@node ede-proj-target-elisp-autoloads
 @subsection ede-proj-target-elisp-autoloads
 @tgindex ede-proj-target-elisp-autoloads
 
@@ -3239,13 +3284,17 @@ is found, such as a @code{-version} variable, or the standard header.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
-@item @w{@xref{ede-proj-target-elisp}.}
+@item ede-proj-target-elisp
+@xref{ede-proj-target-elisp}.
 @table @code
 @item ede-proj-target-elisp-autoloads
 No children
@@ -3343,7 +3392,7 @@ sources variable.
 @end deffn
 
 
-@node ede-proj-target-makefile-miscelaneous, ede-proj-target-makefile-info, ede-proj-target-elisp-autoloads, Targets
+@node ede-proj-target-makefile-miscelaneous
 @subsection ede-proj-target-makefile-miscelaneous
 @tgindex ede-proj-target-makefile-miscelaneous
 
@@ -3354,11 +3403,14 @@ sources variable.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
 @item ede-proj-target-makefile-miscelaneous
 No children
@@ -3399,7 +3451,7 @@ Return a list of files which @var{THIS} target depends on.
 @end deffn
 
 
-@node ede-proj-target-makefile-info, ede-proj-target-scheme, ede-proj-target-makefile-miscelaneous, Targets
+@node ede-proj-target-makefile-info
 @subsection ede-proj-target-makefile-info
 @tgindex ede-proj-target-makefile-info
 
@@ -3410,11 +3462,14 @@ Return a list of files which @var{THIS} target depends on.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
-@item @w{@xref{ede-proj-target-makefile}.}
+@item ede-proj-target-makefile
+@xref{ede-proj-target-makefile}.
 @table @code
 @item ede-proj-target-makefile-info
 No children
@@ -3485,7 +3540,7 @@ Does the usual for Makefile mode, but splits source into two variables
 when working in Automake mode.
 @end deffn
 
-@node ede-proj-target-scheme, project-am-target, ede-proj-target-makefile-info, Targets
+@node ede-proj-target-scheme
 @subsection ede-proj-target-scheme
 @tgindex ede-proj-target-scheme
 
@@ -3496,9 +3551,11 @@ when working in Automake mode.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{ede-proj-target}.}
+@item ede-proj-target
+@xref{ede-proj-target}.
 @table @code
 @item ede-proj-target-scheme
 No children
@@ -3529,7 +3586,7 @@ Tweak the configure file (current buffer) to accommodate @var{THIS}.
 @end deffn
 
 
-@node project-am-target, project-am-objectcode, ede-proj-target-scheme, Targets
+@node project-am-target
 @subsection project-am-target
 @tgindex project-am-target
 
@@ -3540,12 +3597,13 @@ Tweak the configure file (current buffer) to accommodate @var{THIS}.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
 @item project-am-target
 @table @asis
 @item Children:
-@w{@xref{project-am-objectcode},} @w{project-am-header,} @w{@xref{project-am-lisp},} @w{@xref{project-am-texinfo},} @w{@xref{project-am-man}.}
+@xref{project-am-objectcode}, @w{project-am-header,} @xref{project-am-lisp}, @xref{project-am-texinfo}, @xref{project-am-man}.
 @end table
 @end table
 @end table
@@ -3564,10 +3622,10 @@ Run the current project in the debugger.
 @end deffn
 
 @deffn Method project-edit-file-target :AFTER obj
-Edit the target associated w/ this file.
+Edit the target associated with this file.
 @end deffn
 
-@node project-am-objectcode, project-am-program, project-am-target, Targets
+@node project-am-objectcode
 @subsection project-am-objectcode
 @tgindex project-am-objectcode
 
@@ -3578,14 +3636,16 @@ Edit the target associated w/ this file.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item project-am-objectcode
 @table @asis
 @item Children:
-@w{@xref{project-am-program},} @w{project-am-lib.}
+@xref{project-am-program}, @w{project-am-lib.}
 @end table
 @end table
 @end table
@@ -3612,7 +3672,7 @@ Default target to use when compiling an object code target.
 There are no default header files.
 @end deffn
 
-@node project-am-program, project-am-header-noinst, project-am-objectcode, Targets
+@node project-am-program
 @subsection project-am-program
 @tgindex project-am-program
 
@@ -3623,11 +3683,14 @@ There are no default header files.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
-@item @w{@xref{project-am-objectcode}.}
+@item project-am-objectcode
+@xref{project-am-objectcode}.
 @table @code
 @item project-am-program
 No children
@@ -3650,7 +3713,7 @@ Additional LD args.
 @end table
 @end table
 
-@node project-am-header-noinst, project-am-header-inst, project-am-program, Targets
+@node project-am-header-noinst
 @subsection project-am-header-noinst
 @tgindex project-am-header-noinst
 
@@ -3661,9 +3724,11 @@ Additional LD args.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item @w{project-am-header.}
 @table @code
@@ -3683,7 +3748,7 @@ No children
 Return the default macro to 'edit' for this object.
 @end deffn
 
-@node project-am-header-inst, project-am-lisp, project-am-header-noinst, Targets
+@node project-am-header-inst
 @subsection project-am-header-inst
 @tgindex project-am-header-inst
 
@@ -3694,9 +3759,11 @@ Return the default macro to 'edit' for this object.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item @w{project-am-header.}
 @table @code
@@ -3716,7 +3783,7 @@ No children
 Return the default macro to 'edit' for this object.
 @end deffn
 
-@node project-am-lisp, project-am-texinfo, project-am-header-inst, Targets
+@node project-am-lisp
 @subsection project-am-lisp
 @tgindex project-am-lisp
 
@@ -3727,9 +3794,11 @@ Return the default macro to 'edit' for this object.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item project-am-lisp
 No children
@@ -3746,7 +3815,7 @@ No children
 Return the default macro to 'edit' for this object.
 @end deffn
 
-@node project-am-texinfo, project-am-man, project-am-lisp, Targets
+@node project-am-texinfo
 @subsection project-am-texinfo
 @tgindex project-am-texinfo
 
@@ -3757,9 +3826,11 @@ Return the default macro to 'edit' for this object.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item project-am-texinfo
 No children
@@ -3797,7 +3868,7 @@ Documentation is not for object @var{THIS}, but is provided by @var{THIS} for ot
 files in the project.
 @end deffn
 
-@node project-am-man,  , project-am-texinfo, Targets
+@node project-am-man
 @comment  node-name,  next,  previous,  up
 @subsection project-am-man
 @tgindex project-am-man
@@ -3809,9 +3880,11 @@ files in the project.
 @table @code
 @item eieio-speedbar-directory-button
 @table @code
-@item @w{@xref{ede-target}.}
+@item ede-target
+@xref{ede-target}.
 @table @code
-@item @w{@xref{project-am-target}.}
+@item project-am-target
+@xref{project-am-target}.
 @table @code
 @item project-am-man
 No children
@@ -3828,7 +3901,7 @@ No children
 Return the default macro to 'edit' for this object type.
 @end deffn
 
-@node Sourcecode, Compilers, Targets, Extending EDE
+@node Sourcecode
 @section Sourcecode
 
 The source code type is an object designed to associated files with
@@ -3839,7 +3912,7 @@ targets.
 @end menu
 
 
-@node ede-sourcecode,  , Sourcecode, Sourcecode
+@node ede-sourcecode
 @subsection ede-sourcecode
 @scindex ede-sourcecode
 
@@ -3889,10 +3962,10 @@ themselves.
 Type: @code{boolean} @*
 Default Value: @code{nil}
 
-Non @code{nil} if this sourcecode type uses subdirectores.
-If sourcecode always lives near the target creating it, this should be nil.
-If sourcecode can, or typically lives in a subdirectory of the owning
-target, set this to t.
+Non-@code{nil} if this sourcecode type uses subdirectores.  If
+sourcecode always lives near the target creating it, this should be
+@code{nil}.  If sourcecode can, or typically lives in a subdirectory
+of the owning target, set this to @code{t}.
 
 @item :garbagepattern
 Type: @code{list} @*
@@ -3936,7 +4009,7 @@ Return non-@code{nil} if @var{THIS} will take @var{FILENAME} as an auxiliary .
 Return non-@code{nil} if @var{THIS} will take @var{FILENAME} as an auxiliary .
 @end deffn
 
-@node Compilers,  , Sourcecode, Extending EDE
+@node Compilers
 @section Compilers
 
 The compiler object is designed to associate source code with
@@ -3952,7 +4025,7 @@ compile commands.
 @end menu
 
 
-@node ede-compilation-program, ede-compiler, Compilers, Compilers
+@node ede-compilation-program
 @subsection ede-compilation-program
 @cmindex ede-compilation-program
 
@@ -3964,7 +4037,7 @@ compile commands.
 @item ede-compilation-program
 @table @asis
 @item Children:
-@w{@xref{ede-compiler},} @w{@xref{ede-linker}.}
+@xref{ede-compiler}, @xref{ede-linker}.
 @end table
 @end table
 @end table
@@ -4013,7 +4086,7 @@ Type: @code{list}
 
 The commands used to execute this compiler.
 The object which uses this compiler will place these commands after
-it's rule definition.
+its rule definition.
 
 @item :autoconf
 Type: @code{list} @*
@@ -4063,7 +4136,7 @@ Tweak the configure file (current buffer) to accommodate @var{THIS}.
 @end deffn
 
 
-@node ede-compiler, ede-object-compiler, ede-compilation-program, Compilers
+@node ede-compiler
 @subsection ede-compiler
 @cmindex ede-compiler
 
@@ -4072,12 +4145,13 @@ Tweak the configure file (current buffer) to accommodate @var{THIS}.
 @table @code
 @item eieio-instance-inheritor
 @table @code
-@item @w{@xref{ede-compilation-program}.}
+@item ede-compilation-program
+@xref{ede-compilation-program}.
 @table @code
 @item ede-compiler
 @table @asis
 @item Children:
-@w{@xref{ede-object-compiler},} @w{semantic-ede-grammar-compiler-class.}
+@xref{ede-object-compiler}, @w{semantic-ede-grammar-compiler-class.}
 @end table
 
 @end table
@@ -4125,7 +4199,7 @@ Type: @code{list}
 
 The commands used to execute this compiler.
 The object which uses this compiler will place these commands after
-it's rule definition.
+its rule definition.
 
 @item :objectextention
 Type: @code{string}
@@ -4171,7 +4245,7 @@ Return a string based on @var{THIS} representing a make object variable.
 @end deffn
 
 
-@node ede-object-compiler, ede-linker, ede-compiler, Compilers
+@node ede-object-compiler
 @subsection ede-object-compiler
 @cmindex ede-object-compiler
 
@@ -4180,9 +4254,11 @@ Return a string based on @var{THIS} representing a make object variable.
 @table @code
 @item eieio-instance-inheritor
 @table @code
-@item @w{@xref{ede-compilation-program}.}
+@item ede-compilation-program
+@xref{ede-compilation-program}.
 @table @code
-@item @w{@xref{ede-compiler}.}
+@item ede-compiler
+@xref{ede-compiler}.
 @table @code
 @item ede-object-compiler
 No children
@@ -4214,7 +4290,7 @@ A variable dedicated to dependency generation.
 Insert variables needed by the compiler @var{THIS}.
 @end deffn
 
-@node ede-linker,  , ede-object-compiler, Compilers
+@node ede-linker
 @subsection ede-linker
 @cmindex ede-linker
 
@@ -4223,7 +4299,8 @@ Insert variables needed by the compiler @var{THIS}.
 @table @code
 @item eieio-instance-inheritor
 @table @code
-@item @w{@xref{ede-compilation-program}.}
+@item ede-compilation-program
+@xref{ede-compilation-program}.
 @table @code
 @item ede-linker
 No children
@@ -4265,7 +4342,7 @@ Type: @code{list}
 
 The commands used to execute this compiler.
 The object which uses this compiler will place these commands after
-it's rule definition.
+its rule definition.
 
 @item :objectextention
 Type: @code{string}
@@ -4276,7 +4353,7 @@ For example, C code uses .o on unix, and Emacs Lisp uses .elc.
 @end table
 @end table
 
-@node GNU Free Documentation License,  , Extending EDE, Top
+@node GNU Free Documentation License
 @appendix GNU Free Documentation License
 @include doclicense.texi
 

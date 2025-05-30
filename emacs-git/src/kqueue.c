@@ -1,6 +1,6 @@
 /* Filesystem notifications support with kqueue API.
 
-Copyright (C) 2015-2017 Free Software Foundation, Inc.
+Copyright (C) 2015-2025 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
@@ -19,12 +19,10 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 
 #include <config.h>
 
-#ifdef HAVE_KQUEUE
-#include <stdio.h>
 #include <sys/types.h>
 #include <sys/event.h>
 #include <sys/time.h>
-#include <sys/file.h>
+#include <fcntl.h>
 #include "lisp.h"
 #include "keyboard.h"
 #include "process.h"
@@ -55,15 +53,15 @@ kqueue_directory_listing (Lisp_Object directory_files)
 
     result = Fcons
       (list5 (/* inode.  */
-	      Fnth (make_number (11), XCAR (dl)),
+	      Fnth (make_fixnum (11), XCAR (dl)),
 	      /* filename.  */
 	      XCAR (XCAR (dl)),
 	      /* last modification time.  */
-	      Fnth (make_number (6), XCAR (dl)),
+	      Fnth (make_fixnum (6), XCAR (dl)),
 	      /* last status change time.  */
-	      Fnth (make_number (7), XCAR (dl)),
+	      Fnth (make_fixnum (7), XCAR (dl)),
 	      /* size.  */
-	      Fnth (make_number (8), XCAR (dl))),
+	      Fnth (make_fixnum (8), XCAR (dl))),
        result);
   }
   return result;
@@ -78,7 +76,7 @@ kqueue_generate_event (Lisp_Object watch_object, Lisp_Object actions,
   struct input_event event;
 
   /* Check, whether all actions shall be monitored.  */
-  flags = Fnth (make_number (2), watch_object);
+  flags = Fnth (make_fixnum (2), watch_object);
   action = actions;
   do {
     if (NILP (action))
@@ -99,9 +97,9 @@ kqueue_generate_event (Lisp_Object watch_object, Lisp_Object actions,
     event.arg = list2 (Fcons (XCAR (watch_object),
 			      Fcons (actions,
 				     NILP (file1)
-				     ? Fcons (file, Qnil)
+				     ? list1 (file)
 				     : list2 (file, file1))),
-		       Fnth (make_number (3), watch_object));
+		       Fnth (make_fixnum (3), watch_object));
     kbd_buffer_store_event (&event);
   }
 }
@@ -121,7 +119,7 @@ kqueue_compare_dir_list (Lisp_Object watch_object)
   pending_dl = Qnil;
   deleted_dl = Qnil;
 
-  old_directory_files = Fnth (make_number (4), watch_object);
+  old_directory_files = Fnth (make_fixnum (4), watch_object);
   old_dl = kqueue_directory_listing (old_directory_files);
 
   /* When the directory is not accessible anymore, it has been deleted.  */
@@ -130,7 +128,7 @@ kqueue_compare_dir_list (Lisp_Object watch_object)
     return;
   }
   new_directory_files =
-    directory_files_internal (dir, Qnil, Qnil, Qnil, true, Qnil);
+    directory_files_internal (dir, Qnil, Qnil, Qnil, true, Qnil, Qnil);
   new_dl = kqueue_directory_listing (new_directory_files);
 
   /* Parse through the old list.  */
@@ -155,14 +153,14 @@ kqueue_compare_dir_list (Lisp_Object watch_object)
       if (strcmp (SSDATA (XCAR (XCDR (old_entry))),
 		  SSDATA (XCAR (XCDR (new_entry)))) == 0) {
 	/* Modification time has been changed, the file has been written.  */
-	if (NILP (Fequal (Fnth (make_number (2), old_entry),
-			  Fnth (make_number (2), new_entry))))
+	if (NILP (Fequal (Fnth (make_fixnum (2), old_entry),
+			  Fnth (make_fixnum (2), new_entry))))
 	  kqueue_generate_event
 	    (watch_object, Fcons (Qwrite, Qnil), XCAR (XCDR (old_entry)), Qnil);
 	/* Status change time has been changed, the file attributes
 	   have changed.  */
-	  if (NILP (Fequal (Fnth (make_number (3), old_entry),
-			    Fnth (make_number (3), new_entry))))
+	if (NILP (Fequal (Fnth (make_fixnum (3), old_entry),
+			  Fnth (make_fixnum (3), new_entry))))
 	  kqueue_generate_event
 	    (watch_object, Fcons (Qattrib, Qnil),
 	     XCAR (XCDR (old_entry)), Qnil);
@@ -233,8 +231,8 @@ kqueue_compare_dir_list (Lisp_Object watch_object)
       (watch_object, Fcons (Qcreate, Qnil), XCAR (XCDR (entry)), Qnil);
 
     /* Check size of that file.  */
-    Lisp_Object size = Fnth (make_number (4), entry);
-    if (FLOATP (size) || (XINT (size) > 0))
+    Lisp_Object size = Fnth (make_fixnum (4), entry);
+    if (FLOATP (size) || (XFIXNUM (size) > 0))
       kqueue_generate_event
 	(watch_object, Fcons (Qwrite, Qnil), XCAR (XCDR (entry)), Qnil);
 
@@ -270,7 +268,7 @@ kqueue_compare_dir_list (Lisp_Object watch_object)
     report_file_error ("Pending events list not empty", pending_dl);
 
   /* Replace old directory listing with the new one.  */
-  XSETCDR (Fnthcdr (make_number (3), watch_object),
+  XSETCDR (Fnthcdr (make_fixnum (3), watch_object),
 	   Fcons (new_directory_files, Qnil));
   return;
 }
@@ -293,7 +291,7 @@ kqueue_callback (int fd, void *data)
     }
 
     /* Determine descriptor and file name.  */
-    descriptor = make_number (kev.ident);
+    descriptor = make_fixnum (kev.ident);
     watch_object = assq_no_quit (descriptor, watch_list);
     if (CONSP (watch_object))
       file = XCAR (XCDR (watch_object));
@@ -306,7 +304,7 @@ kqueue_callback (int fd, void *data)
       actions = Fcons (Qdelete, actions);
     if (kev.fflags & NOTE_WRITE) {
       /* Check, whether this is a directory event.  */
-      if (NILP (Fnth (make_number (4), watch_object)))
+      if (NILP (Fnth (make_fixnum (4), watch_object)))
 	actions = Fcons (Qwrite, actions);
       else
 	kqueue_compare_dir_list (watch_object);
@@ -322,13 +320,16 @@ kqueue_callback (int fd, void *data)
        directory is monitored.  */
     if (kev.fflags & NOTE_RENAME)
       actions = Fcons (Qrename, actions);
+    if (kev.fflags & NOTE_REVOKE)
+      actions = Fcons (Qrevoke, actions);
 
     /* Create the event.  */
     if (! NILP (actions))
       kqueue_generate_event (watch_object, actions, file, Qnil);
 
-    /* Cancel monitor if file or directory is deleted or renamed.  */
-    if (kev.fflags & (NOTE_DELETE | NOTE_RENAME))
+    /* Cancel monitor if file or directory is deleted or renamed or
+       the file system is unmounted.  */
+    if (kev.fflags & (NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE))
       Fkqueue_rm_watch (descriptor);
   }
   return;
@@ -353,6 +354,7 @@ following symbols:
   `attrib' -- a FILE attribute was changed
   `link'   -- a FILE's link count was changed
   `rename' -- FILE was moved to FILE1
+  `revoke' -- FILE was unmounted
 
 When any event happens, Emacs will call the CALLBACK function passing
 it a single argument EVENT, which is of the form
@@ -395,11 +397,12 @@ only when the upper directory of the renamed file is watched.  */)
     maxfd = 256;
 
   /* We assume 50 file descriptors are sufficient for the rest of Emacs.  */
-  if ((maxfd - 50) < XINT (Flength (watch_list)))
+  ptrdiff_t watch_list_len = list_length (watch_list);
+  if (maxfd - 50 < watch_list_len)
     xsignal2
       (Qfile_notify_error,
        build_string ("File watching not possible, no file descriptor left"),
-       Flength (watch_list));
+       make_fixnum (watch_list_len));
 
   if (kqueuefd < 0)
     {
@@ -415,7 +418,7 @@ only when the upper directory of the renamed file is watched.  */)
     }
 
   /* Open file.  */
-  file = ENCODE_FILE (file);
+  Lisp_Object encoded_file = ENCODE_FILE (file);
   oflags = O_NONBLOCK;
 #if O_EVTONLY
   oflags |= O_EVTONLY;
@@ -427,7 +430,7 @@ only when the upper directory of the renamed file is watched.  */)
 #else
     oflags |= O_NOFOLLOW;
 #endif
-  fd = emacs_open (SSDATA (file), oflags, 0);
+  fd = emacs_open (SSDATA (encoded_file), oflags, 0);
   if (fd == -1)
     report_file_error ("File cannot be opened", file);
 
@@ -438,24 +441,32 @@ only when the upper directory of the renamed file is watched.  */)
   if (! NILP (Fmember (Qattrib, flags))) fflags |= NOTE_ATTRIB;
   if (! NILP (Fmember (Qlink, flags)))   fflags |= NOTE_LINK;
   if (! NILP (Fmember (Qrename, flags))) fflags |= NOTE_RENAME;
+  if (! NILP (Fmember (Qrevoke, flags))) fflags |= NOTE_REVOKE;
 
   /* Register event.  */
-  EV_SET (&kev, fd, EVFILT_VNODE, EV_ADD | EV_ENABLE | EV_CLEAR,
+  EV_SET (&kev, fd, EVFILT_VNODE, (EV_ADD
+#ifdef EV_ENABLE
+				   | EV_ENABLE
+#endif /* EV_ENABLE */
+				   | EV_CLEAR),
 	  fflags, 0, NULL);
 
-  if (kevent (kqueuefd, &kev, 1, NULL, 0, NULL) < 0) {
-    emacs_close (fd);
-    report_file_error ("Cannot watch file", file);
-  }
+  if (kevent (kqueuefd, &kev, 1, NULL, 0, NULL) < 0)
+    {
+      emacs_close (fd);
+      report_file_error ("Cannot watch file", file);
+    }
 
   /* Store watch object in watch list.  */
-  Lisp_Object watch_descriptor = make_number (fd);
+  Lisp_Object watch_descriptor = make_fixnum (fd);
   if (NILP (Ffile_directory_p (file)))
     watch_object = list4 (watch_descriptor, file, flags, callback);
-  else {
-    dir_list = directory_files_internal (file, Qnil, Qnil, Qnil, true, Qnil);
-    watch_object = list5 (watch_descriptor, file, flags, callback, dir_list);
-  }
+  else
+    {
+      dir_list = directory_files_internal (file, Qnil, Qnil, Qnil, true, Qnil,
+					   Qnil);
+      watch_object = list5 (watch_descriptor, file, flags, callback, dir_list);
+    }
   watch_list = Fcons (watch_object, watch_list);
 
   return watch_descriptor;
@@ -473,19 +484,20 @@ WATCH-DESCRIPTOR should be an object returned by `kqueue-add-watch'.  */)
     xsignal2 (Qfile_notify_error, build_string ("Not a watch descriptor"),
 	      watch_descriptor);
 
-  eassert (INTEGERP (watch_descriptor));
-  int fd = XINT (watch_descriptor);
+  eassert (FIXNUMP (watch_descriptor));
+  int fd = XFIXNUM (watch_descriptor);
   if ( fd >= 0)
     emacs_close (fd);
 
   /* Remove watch descriptor from watch list.  */
   watch_list = Fdelq (watch_object, watch_list);
 
-  if (NILP (watch_list) && (kqueuefd >= 0)) {
-    delete_read_fd (kqueuefd);
-    emacs_close (kqueuefd);
-    kqueuefd = -1;
-  }
+  if (NILP (watch_list) && (kqueuefd >= 0))
+    {
+      delete_read_fd (kqueuefd);
+      emacs_close (kqueuefd);
+      kqueuefd = -1;
+    }
 
   return Qt;
 }
@@ -526,13 +538,12 @@ syms_of_kqueue (void)
   DEFSYM (Qattrib, "attrib");	/* NOTE_ATTRIB  */
   DEFSYM (Qlink, "link");	/* NOTE_LINK  */
   DEFSYM (Qrename, "rename");	/* NOTE_RENAME  */
+  DEFSYM (Qrevoke, "revoke");	/* NOTE_REVOKE  */
 
   staticpro (&watch_list);
 
   Fprovide (intern_c_string ("kqueue"), Qnil);
 }
-
-#endif /* HAVE_KQUEUE  */
 
 /* PROBLEMS
    * https://bugs.launchpad.net/ubuntu/+source/libkqueue/+bug/1514837

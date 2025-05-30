@@ -1,6 +1,6 @@
 ;;; flymake-tests.el --- Test suite for flymake -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2025 Free Software Foundation, Inc.
 
 ;; Author: Eduard Wiebe <usenet@pusto.de>
 
@@ -23,7 +23,9 @@
 
 ;;; Code:
 (require 'ert)
+(require 'ert-x)
 (require 'flymake)
+(eval-when-compile (require 'subr-x)) ; string-trim
 
 (defvar flymake-tests-data-directory
   (expand-file-name "lisp/progmodes/flymake-resources"
@@ -37,7 +39,7 @@
 ;;
 ;;
 (defun flymake-tests--wait-for-backends ()
-  ;; Weirdness here...  http://debbugs.gnu.org/17647#25
+  ;; Weirdness here...  https://debbugs.gnu.org/17647#25
   ;; ... meaning `sleep-for', and even
   ;; `accept-process-output', won't suffice as ways to get
   ;; process filters and sentinels to run, though they do work
@@ -51,15 +53,15 @@
                                             (flymake-reporting-backends))
            while notdone
            unless noninteractive do (read-event "" nil 0.1)
-           do (sleep-for (+ 0.5 flymake-no-changes-timeout))
-           finally (when notdone (ert-fail
+           do (sleep-for (+ 0.5 (or flymake-no-changes-timeout 0)))
+           finally (when notdone (ert-skip
                                   (format "Some backends not reporting yet %s"
                                           notdone)))))
 
 (cl-defun flymake-tests--call-with-fixture (fn file
                                                &key (severity-predicate
                                                      nil sev-pred-supplied-p))
-  "Call FN after flymake setup in FILE, using `flymake-proc`.
+  "Call FN after flymake setup in FILE, using `flymake-proc'.
 SEVERITY-PREDICATE is used to setup
 `flymake-proc-diagnostic-type-pred'"
   (let* ((file (expand-file-name file flymake-tests-data-directory))
@@ -107,28 +109,45 @@ SEVERITY-PREDICATE is used to setup
     (should (eq 'flymake-warning
                 (face-at-point)))))
 
-(ert-deftest warning-predicate-rx-perl ()
-  "Test perl warning via regular expression predicate."
+(ert-deftest perl-backend ()
+  "Test the perl backend."
   (skip-unless (executable-find "perl"))
-  (flymake-tests--with-flymake
-      ("test.pl" :severity-predicate "^Scalar value")
+  (flymake-tests--with-flymake ("test.pl")
     (flymake-goto-next-error)
-    (should (eq 'flymake-warning
-                (face-at-point)))))
+    (should (eq 'flymake-warning (face-at-point)))
+    (goto-char (point-max))
+    (flymake-goto-prev-error)
+    (should (eq 'flymake-error (face-at-point)))))
 
-(ert-deftest warning-predicate-function-perl ()
-  "Test perl warning via function predicate."
-  (skip-unless (executable-find "perl"))
-  (flymake-tests--with-flymake
-      ("test.pl" :severity-predicate
-       (lambda (msg) (string-match "^Scalar value" msg)))
-    (flymake-goto-next-error)
-    (should (eq 'flymake-warning
-                (face-at-point)))))
+(defvar ruby-mode-hook)
+(ert-deftest ruby-backend ()
+  "Test the ruby backend."
+  (skip-unless (executable-find "ruby"))
+  ;; Some versions of ruby fail if HOME doesn't exist (bug#29187).
+  (ert-with-temp-directory  tempdir
+    :suffix "flymake-tests-ruby"
+    (let* ((process-environment (cons (format "HOME=%s" tempdir)
+                                      process-environment))
+           ;; And see https://debbugs.gnu.org/cgi/bugreport.cgi?bug=19657#20
+           ;; for this particular yuckiness
+           (abbreviated-home-dir nil)
+           (ruby-mode-hook
+            (lambda ()
+              (setq flymake-diagnostic-functions '(ruby-flymake-simple)))))
+      (flymake-tests--with-flymake ("test.rb")
+        (flymake-goto-next-error)
+        (should (eq 'flymake-warning (face-at-point)))
+        (flymake-goto-next-error)
+        (should (eq 'flymake-error (face-at-point)))))))
 
 (ert-deftest different-diagnostic-types ()
   "Test GCC warning via function predicate."
-  (skip-unless (and (executable-find "gcc") (executable-find "make")))
+  (skip-unless (and (executable-find "gcc")
+                    (not (ert-gcc-is-clang-p))
+                    (version<=
+                     "5" (string-trim
+                          (shell-command-to-string "gcc -dumpversion")))
+                    (executable-find "make")))
   (let ((flymake-wrap-around nil))
     (flymake-tests--with-flymake
         ("errors-and-warnings.c")
@@ -148,12 +167,15 @@ SEVERITY-PREDICATE is used to setup
 
 (ert-deftest included-c-header-files ()
   "Test inclusion of .h header files."
-  (skip-unless (and (executable-find "gcc") (executable-find "make")))
+  (skip-unless (and (executable-find "gcc")
+                    (not (ert-gcc-is-clang-p))
+                    (executable-find "make")))
   (let ((flymake-wrap-around nil))
     (flymake-tests--with-flymake
         ("some-problems.h")
       (flymake-goto-next-error)
-      (should (eq 'flymake-warning (face-at-point)))
+      ;; implicit-int was promoted from warning to error in GCC 14
+      (should (memq (face-at-point) '(flymake-warning flymake-error)))
       (flymake-goto-next-error)
       (should (eq 'flymake-error (face-at-point)))
       (should-error (flymake-goto-next-error nil nil t)))
@@ -175,7 +197,7 @@ SEVERITY-PREDICATE is used to setup
 
 (defun flymake-tests--diagnose-words
     (report-fn type words)
-  "Helper. Call REPORT-FN with diagnostics for WORDS in buffer."
+  "Helper.  Call REPORT-FN with diagnostics for WORDS in buffer."
   (funcall report-fn
            (cl-loop
             for word in words
@@ -192,6 +214,7 @@ SEVERITY-PREDICATE is used to setup
 
 (ert-deftest dummy-backends ()
   "Test many different kinds of backends."
+  (let ((debug-on-error nil))
   (with-temp-buffer
     (cl-letf
         (((symbol-function 'error-backend)
@@ -216,7 +239,7 @@ SEVERITY-PREDICATE is used to setup
           (lambda (_report-fn)
             ;; HACK: Shoosh log during tests
             (setq-local warning-minimum-log-level :emergency)
-            (error "crashed"))))
+            (error "Crashed"))))
       (insert "Lorem ipsum dolor sit amet, consectetur adipiscing
     elit, sed do eiusmod tempor incididunt ut labore et dolore
     manha aliqua. Ut enim ad minim veniam, quis nostrud
@@ -270,10 +293,10 @@ SEVERITY-PREDICATE is used to setup
         (should (eq 'flymake-warning (face-at-point))) ; dolor
         (flymake-goto-next-error)
         (should (eq 'flymake-error (face-at-point))) ; prognata
-        (should-error (flymake-goto-next-error nil nil t))))))
+        (should-error (flymake-goto-next-error nil nil t)))))))
 
 (ert-deftest recurrent-backend ()
-  "Test a backend that calls REPORT-FN multiple times"
+  "Test a backend that calls REPORT-FN multiple times."
   (with-temp-buffer
     (let (tick)
       (cl-letf
@@ -322,6 +345,38 @@ SEVERITY-PREDICATE is used to setup
           (should-error (flymake-goto-prev-error nil nil t))
           )))))
 
+(ert-deftest eob-region-and-trailing-newline ()
+  "`flymake-diag-region' at eob with varying trailing newlines."
+  (cl-flet ((diag-region-substring
+             (line col)
+             (pcase-let
+                  ((`(,a . ,b) (flymake-diag-region (current-buffer) line col)))
+                (buffer-substring a b))))
+    (with-temp-buffer
+      (insert "beg\nmmm\nend")
+      (should (equal
+               (diag-region-substring 3 3)
+               "d"))
+      (should (equal
+               (diag-region-substring 3 nil)
+               "end"))
+      (insert "\n")
+      (should (equal
+               (diag-region-substring 4 1)
+               "end"))
+      (should (equal
+               (diag-region-substring 4 nil)
+               "end"))
+      (insert "\n")
+      (should (equal
+               (diag-region-substring 5 1)
+               "\n"))
+      (should (equal
+               (diag-region-substring 5 nil)
+               "\n")))))
+
+
+
 (provide 'flymake-tests)
 
-;;; flymake.el ends here
+;;; flymake-tests.el ends here

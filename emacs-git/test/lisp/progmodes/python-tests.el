@@ -1,6 +1,6 @@
-;;; python-tests.el --- Test suite for python.el
+;;; python-tests.el --- Test suite for python.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2013-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2025 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -21,7 +21,9 @@
 
 ;;; Code:
 
+(require 'cl-extra)
 (require 'ert)
+(require 'ert-x)
 (require 'python)
 
 ;; Dependencies for testing:
@@ -42,23 +44,57 @@ always located at the beginning of buffer."
        (goto-char (point-min))
        ,@body)))
 
+(defun python-tests-shell-wait-for-prompt ()
+  "Wait for the prompt in the shell buffer."
+  (python-shell-with-shell-buffer
+    (while (not (python-util-comint-end-of-output-p))
+      (sit-for 0.1))))
+
+(defmacro python-tests-with-temp-buffer-with-shell (contents &rest body)
+  "Create a `python-mode' enabled temp buffer with CONTENTS and `run-python'.
+BODY is code to be executed within the temp buffer.  Point is
+always located at the beginning of buffer.  Native completion is
+turned off.  Shell buffer will be killed on exit."
+  (declare (indent 1) (debug t))
+  (let ((dir (make-symbol "dir")))
+    `(with-temp-buffer
+       (let ((python-indent-guess-indent-offset nil)
+             (python-shell-completion-native-enable nil))
+         (python-mode)
+         (unwind-protect
+             ;; Prevent test failures when Jedi is used as a completion
+             ;; backend, either directly or indirectly (e.g., via
+             ;; IPython).  Jedi needs to store cache, but the
+             ;; "/nonexistent" HOME directory is not writable.
+             (ert-with-temp-directory ,dir
+               (with-environment-variables (("XDG_CACHE_HOME" ,dir))
+                 (run-python nil t)
+                 (insert ,contents)
+                 (goto-char (point-min))
+                 (python-tests-shell-wait-for-prompt)
+                 ,@body))
+           (when (python-shell-get-buffer)
+             (python-shell-with-shell-buffer
+               (let (kill-buffer-hook kill-buffer-query-functions)
+                 (kill-buffer)))))))))
+
 (defmacro python-tests-with-temp-file (contents &rest body)
   "Create a `python-mode' enabled file with CONTENTS.
 BODY is code to be executed within the temp buffer.  Point is
 always located at the beginning of buffer."
   (declare (indent 1) (debug t))
   ;; temp-file never actually used for anything?
-  `(let* ((temp-file (make-temp-file "python-tests" nil ".py"))
-          (buffer (find-file-noselect temp-file))
-          (python-indent-guess-indent-offset nil))
-     (unwind-protect
-         (with-current-buffer buffer
-           (python-mode)
-           (insert ,contents)
-           (goto-char (point-min))
-           ,@body)
-       (and buffer (kill-buffer buffer))
-       (delete-file temp-file))))
+  `(ert-with-temp-file temp-file
+     :suffix "-python.py"
+     (let ((buffer (find-file-noselect temp-file))
+           (python-indent-guess-indent-offset nil))
+       (unwind-protect
+           (with-current-buffer buffer
+             (python-mode)
+             (insert ,contents)
+             (goto-char (point-min))
+             ,@body)
+         (and buffer (kill-buffer buffer))))))
 
 (defun python-tests-look-at (string &optional num restore-point)
   "Move point at beginning of STRING in the current buffer.
@@ -94,6 +130,19 @@ STRING, it is skipped so the next STRING occurrence is selected."
         found-point
       (and restore-point (goto-char starting-point)))))
 
+(defun python-tests-assert-faces (content faces)
+  "Assert that font faces for CONTENT are equal to FACES."
+  (python-tests-with-temp-buffer content
+    (font-lock-ensure nil nil)
+    (should (equal faces (python-tests-get-buffer-faces)))))
+
+(defun python-tests-get-buffer-faces ()
+  "Return a list of (position . face) for each face change positions."
+  (cl-loop for pos = (point-min)
+           then (next-single-property-change pos 'face)
+           while pos
+           collect (cons pos (get-text-property pos 'face))))
+
 (defun python-tests-self-insert (char-or-str)
   "Call `self-insert-command' for chars in CHAR-OR-STR."
   (let ((chars
@@ -118,7 +167,6 @@ Argument MIN and MAX delimit the region to be returned and
 default to `point-min' and `point-max' respectively."
   (let* ((min (or min (point-min)))
          (max (or max (point-max)))
-         (buffer (current-buffer))
          (buffer-contents (buffer-substring-no-properties min max))
          (overlays
           (sort (overlays-in min max)
@@ -134,6 +182,24 @@ default to `point-min' and `point-max' respectively."
                            (overlay-end overlay))))
       (buffer-substring-no-properties (point-min) (point-max)))))
 
+(defun python-tests-should-not-move (func &rest args)
+  "Assert that point does not move while calling FUNC with ARGS.
+Returns the value returned by FUNC."
+  (let ((pos (point))
+        (ret (apply func args)))
+    (should (= pos (point)))
+    ret))
+
+(defun python-virt-bin (&optional virt-root)
+  "Return the virtualenv bin dir, starting from VIRT-ROOT.
+If nil, VIRT-ROOT defaults to `python-shell-virtualenv-root'.
+The name of this directory depends on `system-type'."
+  (expand-file-name
+   (concat
+    (file-name-as-directory (or virt-root
+                                python-shell-virtualenv-root))
+    (if (eq system-type 'windows-nt) "Scripts" "bin"))))
+
 
 ;;; Tests for your tests, so you can test while you test.
 
@@ -144,7 +210,7 @@ default to `point-min' and `point-max' respectively."
 sed do eiusmod tempor incididunt ut labore et dolore magna
 aliqua."
    (let ((expected (save-excursion
-                     (dotimes (i 3)
+                     (dotimes (_ 3)
                        (re-search-forward "et" nil t))
                      (forward-char -2)
                      (point))))
@@ -153,7 +219,7 @@ aliqua."
      ;; one should be returned.
      (should (= (python-tests-look-at "et" 6 t) expected))
      ;; If already looking at STRING, it should skip it.
-     (dotimes (i 2) (re-search-forward "et"))
+     (dotimes (_ 2) (re-search-forward "et"))
      (forward-char -2)
      (should (= (python-tests-look-at "et") expected)))))
 
@@ -168,7 +234,7 @@ aliqua."
             (re-search-forward "et" nil t)
             (forward-char -2)
             (point))))
-     (dotimes (i 3)
+     (dotimes (_ 3)
        (re-search-forward "et" nil t))
      (should (= (python-tests-look-at "et" -3 t) expected))
      (should (= (python-tests-look-at "et" -6 t) expected)))))
@@ -182,9 +248,29 @@ aliqua."
 
 ;;; Font-lock and syntax
 
+(ert-deftest python-syntax-context-1 ()
+  (python-tests-with-temp-buffer
+   "
+# Comment
+s = 'Single Quoted String'
+t = '''Triple Quoted String'''
+p = (1 + 2)
+"
+   (python-tests-look-at "Comment")
+   (should (= (python-syntax-context 'comment) (pos-bol)))
+   (python-tests-look-at "Single")
+   (should (= (python-syntax-context 'string) (1- (point))))
+   (should (= (python-syntax-context 'single-quoted-string) (1- (point))))
+   (should-not (python-syntax-context 'triple-quoted-string))
+   (python-tests-look-at "Triple")
+   (should (= (python-syntax-context 'string) (1- (point))))
+   (should-not (python-syntax-context 'single-quoted-string))
+   (should (= (python-syntax-context 'triple-quoted-string) (1- (point))))
+   (python-tests-look-at "1 + 2")
+   (should (= (python-syntax-context 'paren) (1- (point))))))
+
 (ert-deftest python-syntax-after-python-backspace ()
   ;; `python-indent-dedent-line-backspace' garbles syntax
-  :expected-result :failed
   (python-tests-with-temp-buffer
       "\"\"\""
     (goto-char (point-max))
@@ -192,10 +278,441 @@ aliqua."
     (should (string= (buffer-string) "\"\""))
     (should (null (nth 3 (syntax-ppss))))))
 
+(ert-deftest python-font-lock-keywords-level-1-1 ()
+  (python-tests-assert-faces
+   "def func():"
+   '((1 . font-lock-keyword-face) (4)
+     (5 . font-lock-function-name-face) (9))))
+
+(ert-deftest python-font-lock-keywords-level-1-2 ()
+  "Invalid function name should not be font-locked."
+  (python-tests-assert-faces
+   "def 1func():"
+   '((1 . font-lock-keyword-face) (4))))
+
+(ert-deftest python-font-lock-assignment-statement-1 ()
+  (python-tests-assert-faces
+   "a, b, c = 1, 2, 3"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-variable-name-face) (5)
+     (7 . font-lock-variable-name-face) (8)
+     (9 . font-lock-operator-face) (10))))
+
+(ert-deftest python-font-lock-assignment-statement-2 ()
+  (python-tests-assert-faces
+   "a, *b, c = 1, 2, 3, 4, 5"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-operator-face)
+     (5 . font-lock-variable-name-face) (6)
+     (8 . font-lock-variable-name-face) (9)
+     (10 . font-lock-operator-face) (11))))
+
+(ert-deftest python-font-lock-assignment-statement-3 ()
+  (python-tests-assert-faces
+   "[a, b] = (1, 2)"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (5 . font-lock-variable-name-face) (6)
+     (8 . font-lock-operator-face) (9))))
+
+(ert-deftest python-font-lock-assignment-statement-4 ()
+  (python-tests-assert-faces
+   "(l[1], l[2]) = (10, 11)"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (8 . font-lock-variable-name-face) (9)
+     (14 . font-lock-operator-face) (15))))
+
+(ert-deftest python-font-lock-assignment-statement-5 ()
+  (python-tests-assert-faces
+   "(a, b, c, *d) = *x, y = 5, 6, 7, 8, 9"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (5 . font-lock-variable-name-face) (6)
+     (8 . font-lock-variable-name-face) (9)
+     (11 . font-lock-operator-face)
+     (12 . font-lock-variable-name-face) (13)
+     (15 . font-lock-operator-face) (16)
+     (17 . font-lock-operator-face)
+     (18 . font-lock-variable-name-face) (19)
+     (21 . font-lock-variable-name-face) (22)
+     (23 . font-lock-operator-face) (24))))
+
+(ert-deftest python-font-lock-assignment-statement-6 ()
+  (python-tests-assert-faces
+   "(a,) = 'foo',"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (6 . font-lock-operator-face) (7)
+     (8 . font-lock-string-face) (13))))
+
+(ert-deftest python-font-lock-assignment-statement-7 ()
+  (python-tests-assert-faces
+   "(*a,) = ['foo', 'bar', 'baz']"
+   '((1)
+     (2 . font-lock-operator-face)
+     (3 . font-lock-variable-name-face) (4)
+     (7 . font-lock-operator-face) (8)
+     (10 . font-lock-string-face) (15)
+     (17 . font-lock-string-face) (22)
+     (24 . font-lock-string-face) (29))))
+
+(ert-deftest python-font-lock-assignment-statement-8 ()
+  (python-tests-assert-faces
+   "d = D('a', ['b'], 'c')"
+   '((1 . font-lock-variable-name-face) (2)
+     (3 . font-lock-operator-face) (4)
+     (7 . font-lock-string-face) (10)
+     (13 . font-lock-string-face) (16)
+     (19 . font-lock-string-face) (22))))
+
+(ert-deftest python-font-lock-assignment-statement-9 ()
+  (python-tests-assert-faces
+   "d.x, d.y[0], *d.z = 'a', 'b', 'c', 'd', 'e'"
+   '((1)
+     (3 . font-lock-variable-name-face) (4)
+     (8 . font-lock-variable-name-face) (9)
+     (14 . font-lock-operator-face) (15)
+     (17 . font-lock-variable-name-face) (18)
+     (19 . font-lock-operator-face) (20)
+     (21 . font-lock-string-face) (24)
+     (26 . font-lock-string-face) (29)
+     (31 . font-lock-string-face) (34)
+     (36 . font-lock-string-face) (39)
+     (41 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-assignment-statement-10 ()
+  (python-tests-assert-faces
+   "a: int = 5"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-builtin-face) (7)
+     (8 . font-lock-operator-face) (9))))
+
+(ert-deftest python-font-lock-assignment-statement-11 ()
+  (python-tests-assert-faces
+   "b: Tuple[Optional[int], Union[Sequence[str], str]] = (None, 'foo')"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-type-face) (9)
+     (10 . font-lock-type-face) (18)
+     (19 . font-lock-builtin-face) (22)
+     (25 . font-lock-type-face) (30)
+     (31 . font-lock-type-face) (39)
+     (40 . font-lock-builtin-face) (43)
+     (46 . font-lock-builtin-face) (49)
+     (52 . font-lock-operator-face) (53)
+     (55 . font-lock-constant-face) (59)
+     (61 . font-lock-string-face) (66))))
+
+(ert-deftest python-font-lock-assignment-statement-12 ()
+  (python-tests-assert-faces
+   "c: Collection = {1, 2, 3}"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-type-face) (14)
+     (15 . font-lock-operator-face) (16))))
+
+(ert-deftest python-font-lock-assignment-statement-13 ()
+  (python-tests-assert-faces
+   "d: Mapping[int, str] = {1: 'bar', 2: 'baz'}"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-type-face) (11)
+     (12 . font-lock-builtin-face) (15)
+     (17 . font-lock-builtin-face) (20)
+     (22 . font-lock-operator-face) (23)
+     (28 . font-lock-string-face) (33)
+     (38 . font-lock-string-face) (43))))
+
+(ert-deftest python-font-lock-assignment-statement-14 ()
+  (python-tests-assert-faces
+   "(a) = 5; (b) = 6"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (5 . font-lock-operator-face) (6)
+     (11 . font-lock-variable-name-face) (12)
+     (14 . font-lock-operator-face) (15))))
+
+(ert-deftest python-font-lock-assignment-statement-15 ()
+  (python-tests-assert-faces
+   "[a] = 5,; [b] = 6,"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (5 . font-lock-operator-face) (6)
+     (12 . font-lock-variable-name-face) (13)
+     (15 . font-lock-operator-face) (16))))
+
+(ert-deftest python-font-lock-assignment-statement-16 ()
+  (python-tests-assert-faces
+   "[*a] = 5, 6; [*b] = 7, 8"
+   '((1)
+     (2 . font-lock-operator-face)
+     (3 . font-lock-variable-name-face) (4)
+     (6 . font-lock-operator-face) (7)
+     (15 . font-lock-operator-face)
+     (16 . font-lock-variable-name-face) (17)
+     (19 . font-lock-operator-face) (20))))
+
+(ert-deftest python-font-lock-assignment-statement-17 ()
+  (python-tests-assert-faces
+   "(a) = (b) = 1"
+   '((1)
+     (2 . font-lock-variable-name-face) (3)
+     (5 . font-lock-operator-face) (6)
+     (8 . font-lock-variable-name-face) (9)
+     (11 . font-lock-operator-face) (12))))
+
+(ert-deftest python-font-lock-assignment-statement-18 ()
+  (python-tests-assert-faces
+   "CustomInt = int
+
+def f(x: CustomInt) -> CustomInt:
+    y = x + 1
+    ys: Sequence[CustomInt] = [y, y + 1]
+    res: CustomInt = sum(ys) + 1
+    return res
+"
+   '((1 . font-lock-variable-name-face) (10)
+     (11 . font-lock-operator-face) (12)
+     (13 . font-lock-builtin-face) (16)
+     (18 . font-lock-keyword-face) (21)
+     (22 . font-lock-function-name-face) (23)
+     (38 . font-lock-operator-face) (40)
+     (56 . font-lock-variable-name-face) (57)
+     (58 . font-lock-operator-face) (59)
+     (62 . font-lock-operator-face) (63)
+     (70 . font-lock-variable-name-face) (72)
+     (74 . font-lock-type-face) (82)
+     (83 . font-lock-type-face) (92)
+     (94 . font-lock-operator-face) (95)
+     (102 . font-lock-operator-face) (103)
+     (111 . font-lock-variable-name-face) (114)
+     (116 . font-lock-type-face) (125)
+     (126 . font-lock-operator-face) (127)
+     (128 . font-lock-builtin-face) (131)
+     (136 . font-lock-operator-face) (137)
+     (144 . font-lock-keyword-face) (150))))
+
+(ert-deftest python-font-lock-assignment-statement-19 ()
+  (python-tests-assert-faces
+   "a: List[List[CustomInt], List[CustomInt]] = []"
+   '((1 . font-lock-variable-name-face) (2)
+     (4 . font-lock-type-face) (8)
+     (9 . font-lock-type-face) (13)
+     (14 . font-lock-type-face) (23)
+     (26 . font-lock-type-face) (30)
+     (31 . font-lock-type-face) (40)
+     (43 . font-lock-operator-face) (44))))
+
+(ert-deftest python-font-lock-assignment-statement-20 ()
+  (python-tests-assert-faces
+   "a = b = c = 1"
+   '((1 . font-lock-variable-name-face) (2)
+     (3 . font-lock-operator-face) (4)
+     (5 . font-lock-variable-name-face) (6)
+     (7 . font-lock-operator-face) (8)
+     (9 . font-lock-variable-name-face) (10)
+     (11 . font-lock-operator-face) (12))))
+
+(ert-deftest python-font-lock-operator-1 ()
+  (python-tests-assert-faces
+   "1 << 2 ** 3 == +4%-5|~6&7^8%9"
+   '((1)
+     (3 . font-lock-operator-face) (5)
+     (8 . font-lock-operator-face) (10)
+     (13 . font-lock-operator-face) (15)
+     (16 . font-lock-operator-face) (17)
+     (18 . font-lock-operator-face) (20)
+     (21 . font-lock-operator-face) (23)
+     (24 . font-lock-operator-face) (25)
+     (26 . font-lock-operator-face) (27)
+     (28 . font-lock-operator-face) (29))))
+
+(ert-deftest python-font-lock-operator-2 ()
+  "Keyword operators are font-locked as keywords."
+  (python-tests-assert-faces
+   "is_ is None"
+   '((1)
+     (5 . font-lock-keyword-face) (7)
+     (8 . font-lock-constant-face))))
+
+(ert-deftest python-font-lock-escape-sequence-string-newline ()
+  (python-tests-assert-faces
+   "'\\n'
+\"\\n\"
+f'\\n'
+f\"\\n\"
+u'\\n'
+u\"\\n\""
+   '((1 . font-lock-doc-face)
+     (2 . font-lock-constant-face)
+     (4 . font-lock-doc-face) (5)
+     (6 . font-lock-doc-face)
+     (7 . font-lock-constant-face)
+     (9 . font-lock-doc-face) (10)
+     (12 . font-lock-string-face)
+     (13 . font-lock-constant-face)
+     (15 . font-lock-string-face) (16)
+     (18 . font-lock-string-face)
+     (19 . font-lock-constant-face)
+     (21 . font-lock-string-face) (22)
+     (24 . font-lock-string-face)
+     (25 . font-lock-constant-face)
+     (27 . font-lock-string-face) (28)
+     (30 . font-lock-string-face)
+     (31 . font-lock-constant-face)
+     (33 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-escape-sequence-multiline-string ()
+  (python-tests-assert-faces
+   (let ((escape-sequences "\\x12 \123 \\n \\u1234 \\U00010348 \\N{Plus-Minus Sign}"))
+     (cl-loop for string-prefix in '("" "f" "rf" "fr" "r" "rb" "br" "b")
+              concat (cl-loop for quote-string in '("\"\"\"" "'''")
+                              concat (concat string-prefix
+                                             quote-string
+                                             escape-sequences
+                                             quote-string
+                                             "\n"))))
+   '((1 . font-lock-doc-face)
+     (4 . font-lock-constant-face)
+     (8 . font-lock-doc-face)
+     (11 . font-lock-constant-face)
+     (13 . font-lock-doc-face)
+     (14 . font-lock-constant-face)
+     (20 . font-lock-doc-face)
+     (21 . font-lock-constant-face)
+     (31 . font-lock-doc-face)
+     (32 . font-lock-constant-face)
+     (51 . font-lock-doc-face) (54)
+     (55 . font-lock-doc-face)
+     (58 . font-lock-constant-face)
+     (62 . font-lock-doc-face)
+     (65 . font-lock-constant-face)
+     (67 . font-lock-doc-face)
+     (68 . font-lock-constant-face)
+     (74 . font-lock-doc-face)
+     (75 . font-lock-constant-face)
+     (85 . font-lock-doc-face)
+     (86 . font-lock-constant-face)
+     (105 . font-lock-doc-face) (108)
+     (110 . font-lock-string-face)
+     (113 . font-lock-constant-face)
+     (117 . font-lock-string-face)
+     (120 . font-lock-constant-face)
+     (122 . font-lock-string-face)
+     (123 . font-lock-constant-face)
+     (129 . font-lock-string-face)
+     (130 . font-lock-constant-face)
+     (140 . font-lock-string-face)
+     (141 . font-lock-constant-face)
+     (160 . font-lock-string-face) (163)
+     (165 . font-lock-string-face)
+     (168 . font-lock-constant-face)
+     (172 . font-lock-string-face)
+     (175 . font-lock-constant-face)
+     (177 . font-lock-string-face)
+     (178 . font-lock-constant-face)
+     (184 . font-lock-string-face)
+     (185 . font-lock-constant-face)
+     (195 . font-lock-string-face)
+     (196 . font-lock-constant-face)
+     (215 . font-lock-string-face) (218)
+     (221 . font-lock-string-face) (254)
+     (259 . font-lock-operator-face) (260)
+     (271 . font-lock-string-face) (274)
+     (277 . font-lock-string-face) (310)
+     (315 . font-lock-operator-face) (316)
+     (327 . font-lock-string-face) (330)
+     (333 . font-lock-string-face) (366)
+     (371 . font-lock-operator-face) (372)
+     (383 . font-lock-string-face) (386)
+     (389 . font-lock-string-face) (422)
+     (427 . font-lock-operator-face) (428)
+     (439 . font-lock-string-face) (442)
+     (444 . font-lock-string-face) (497)
+     (499 . font-lock-string-face) (552)
+     (555 . font-lock-string-face) (608)
+     (611 . font-lock-string-face) (664)
+     (667 . font-lock-string-face) (720)
+     (723 . font-lock-string-face) (776)
+     (778 . font-lock-string-face)
+     (781 . font-lock-constant-face)
+     (785 . font-lock-string-face)
+     (788 . font-lock-constant-face)
+     (790 . font-lock-string-face) (831)
+     (833 . font-lock-string-face)
+     (836 . font-lock-constant-face)
+     (840 . font-lock-string-face)
+     (843 . font-lock-constant-face)
+     (845 . font-lock-string-face) (886))))
+
+(ert-deftest python-font-lock-escape-sequence-bytes-newline ()
+  (python-tests-assert-faces
+   "b'\\n'
+b\"\\n\""
+   '((1)
+     (2 . font-lock-string-face)
+     (3 . font-lock-constant-face)
+     (5 . font-lock-string-face) (6)
+     (8 . font-lock-string-face)
+     (9 . font-lock-constant-face)
+     (11 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-escape-sequence-hex-octal ()
+  (python-tests-assert-faces
+   "b'\\x12 \\777 \\1\\23'
+'\\x12 \\777 \\1\\23'"
+   '((1)
+     (2 . font-lock-string-face)
+     (3 . font-lock-constant-face)
+     (7 . font-lock-string-face)
+     (8 . font-lock-constant-face)
+     (12 . font-lock-string-face)
+     (13 . font-lock-constant-face)
+     (18 . font-lock-string-face) (19)
+     (20 . font-lock-string-face)
+     (21 . font-lock-constant-face)
+     (25 . font-lock-string-face)
+     (26 . font-lock-constant-face)
+     (30 . font-lock-string-face)
+     (31 . font-lock-constant-face)
+     (36 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-escape-sequence-unicode ()
+  (python-tests-assert-faces
+   "b'\\u1234 \\U00010348 \\N{Plus-Minus Sign}'
+'\\u1234 \\U00010348 \\N{Plus-Minus Sign}'"
+   '((1)
+     (2 . font-lock-string-face) (41)
+     (42 . font-lock-string-face)
+     (43 . font-lock-constant-face)
+     (49 . font-lock-string-face)
+     (50 . font-lock-constant-face)
+     (60 . font-lock-string-face)
+     (61 . font-lock-constant-face)
+     (80 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-raw-escape-sequence ()
+  (python-tests-assert-faces
+   "rb'\\x12 \123 \\n'
+r'\\x12 \123 \\n \\u1234 \\U00010348 \\N{Plus-Minus Sign}'"
+   '((1)
+     (3 . font-lock-string-face) (14)
+     (16 . font-lock-string-face))))
+
+(ert-deftest python-font-lock-string-literal-concatenation ()
+  "Test for bug#45897."
+  (python-tests-assert-faces
+   "x = \"hello\"\"\"
+y = \"confused\""
+   '((1 . font-lock-variable-name-face) (2)
+     (3 . font-lock-operator-face) (4)
+     (5 . font-lock-string-face) (14)
+     (15 . font-lock-variable-name-face) (16)
+     (17 . font-lock-operator-face) (18)
+     (19 . font-lock-string-face))))
+
 
 ;;; Indentation
 
-;; See: http://www.python.org/dev/peps/pep-0008/#indentation
+;; See: https://www.python.org/dev/peps/pep-0008/#indentation
 
 (ert-deftest python-indent-pep8-1 ()
   "First pep8 case."
@@ -233,7 +750,7 @@ def long_function_name(
    (should (= (python-indent-calculate-indentation) 8))
    (python-tests-look-at "var_four):")
    (should (eq (car (python-indent-context))
-               :inside-paren-newline-start-from-block))
+               :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 8))
    (python-tests-look-at "print (var_one)")
    (should (eq (car (python-indent-context))
@@ -257,8 +774,21 @@ foo = long_function_name(
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
    (should (= (python-indent-calculate-indentation) 4))
    (python-tests-look-at "var_three, var_four)")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
-   (should (= (python-indent-calculate-indentation) 4))))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
+   (should (= (python-indent-calculate-indentation) 2))))
+
+(ert-deftest python-indent-hanging-close-paren ()
+  "Like first pep8 case, but with hanging close paren." ;; See Bug#20742.
+  (python-tests-with-temp-buffer
+   "\
+foo = long_function_name(var_one, var_two,
+                         var_three, var_four
+                         )
+"
+   (should (= (python-indent-calculate-indentation) 0))
+   (python-tests-look-at ")")
+   (should (eq (car (python-indent-context)) :inside-paren-at-closing-paren))
+   (should (= (python-indent-calculate-indentation) 25))))
 
 (ert-deftest python-indent-base-case ()
   "Check base case does not trigger errors."
@@ -317,7 +847,7 @@ def func(arg):
     # I don't do much
     return arg
     # This comment is badly indented because the user forced so.
-    # At this line python.el wont dedent, user is always right.
+    # At this line python.el won't dedent, user is always right.
 
 comment_wins_over_ender = True
 
@@ -336,7 +866,7 @@ comment_wins_over_ender = True
    ;; The return keyword do make indentation lose a level...
    (should (= (python-indent-calculate-indentation) 0))
    ;; ...but the current indentation was forced by the user.
-   (python-tests-look-at "# At this line python.el wont dedent")
+   (python-tests-look-at "# At this line python.el won't dedent")
    (should (eq (car (python-indent-context)) :after-comment))
    (should (= (python-indent-calculate-indentation) 4))
    ;; Should behave the same for blank lines: potentially a comment.
@@ -401,7 +931,7 @@ data = {
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
    (should (= (python-indent-calculate-indentation) 4))
    (python-tests-look-at "{")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 4))
    (python-tests-look-at "'objlist': [")
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
@@ -413,20 +943,20 @@ data = {
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
    (should (= (python-indent-calculate-indentation) 16))
    (python-tests-look-at "'name': 'first',")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 16))
    (python-tests-look-at "},")
    (should (eq (car (python-indent-context))
                :inside-paren-at-closing-nested-paren))
    (should (= (python-indent-calculate-indentation) 12))
    (python-tests-look-at "{")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 12))
    (python-tests-look-at "'pk': 2,")
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
    (should (= (python-indent-calculate-indentation) 16))
    (python-tests-look-at "'name': 'second',")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 16))
    (python-tests-look-at "}")
    (should (eq (car (python-indent-context))
@@ -470,7 +1000,7 @@ data = {'key': {
    (should (eq (car (python-indent-context)) :inside-paren))
    (should (= (python-indent-calculate-indentation) 9))
    (python-tests-look-at "{'pk': 2,")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 8))
    (python-tests-look-at "'name': 'second'}")
    (should (eq (car (python-indent-context)) :inside-paren))
@@ -503,10 +1033,10 @@ data = ('these',
    (should (eq (car (python-indent-context)) :inside-paren))
    (should (= (python-indent-calculate-indentation) 8))
    (forward-line 1)
-   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 8))
    (forward-line 1)
-   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 8))))
 
 (ert-deftest python-indent-inside-paren-4 ()
@@ -536,7 +1066,7 @@ while ((not some_condition) and
    (should (eq (car (python-indent-context)) :no-indent))
    (should (= (python-indent-calculate-indentation) 0))
    (forward-line 1)
-   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (eq (car (python-indent-context)) :inside-paren-from-block))
    (should (= (python-indent-calculate-indentation) 7))
    (forward-line 1)
    (should (eq (car (python-indent-context)) :after-block-start))
@@ -560,7 +1090,7 @@ CHOICES = (('some', 'choice'),
    (should (eq (car (python-indent-context)) :inside-paren))
    (should (= (python-indent-calculate-indentation) 11))
    (forward-line 1)
-   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 11))))
 
 (ert-deftest python-indent-inside-paren-7 ()
@@ -570,6 +1100,183 @@ CHOICES = (('some', 'choice'),
    (goto-char (point-max))
    ;; This signals an error if the test fails
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))))
+
+(ert-deftest python-indent-inside-paren-8 ()
+  "Test for Bug#63959."
+  (python-tests-with-temp-buffer
+   "
+for a in [  # comment
+          'some',  # Manually indented.
+          'thing']:  # Respect indentation of the previous line.
+"
+   (python-tests-look-at "for a in [  # comment")
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context))
+               :inside-paren-newline-start-from-block))
+   (should (= (python-indent-calculate-indentation) 8))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
+   (should (= (python-indent-calculate-indentation) 10))))
+
+(ert-deftest python-indent-inside-paren-9 ()
+  "Test `:inside-paren-continuation-line'."
+  (python-tests-with-temp-buffer
+   "
+a = (((
+    1, 2),
+      3),  # Do not respect the indentation of the previous line
+     4)  # Do not respect the indentation of the previous line
+b = ((
+        1, 2),  # Manually indented
+     3,  # Do not respect the indentation of the previous line
+     4,  # Respect the indentation of the previous line
+        5,  # Manually indented
+        6)  # Respect the indentation of the previous line
+"
+   (python-tests-look-at "a = (((")
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (= (python-indent-calculate-indentation) 4))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (= (python-indent-calculate-indentation) 6))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (= (python-indent-calculate-indentation) 5))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :after-line))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (= (python-indent-calculate-indentation) 4))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (= (python-indent-calculate-indentation) 5))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
+   (should (= (python-indent-calculate-indentation) 5))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
+   (should (= (python-indent-calculate-indentation) 5))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
+   (should (= (python-indent-calculate-indentation) 8))))
+
+(ert-deftest python-indent-inside-paren-block-1 ()
+  "`python-indent-block-paren-deeper' set to nil (default).
+See Bug#62696."
+  (python-tests-with-temp-buffer
+   "
+if ('VALUE' in my_unnecessarily_long_dictionary and
+    some_other_long_condition_case):
+    do_something()
+elif (some_case or
+      another_case):
+    do_another()
+"
+   (python-tests-look-at "if")
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-from-block))
+   (should (= (python-indent-calculate-indentation) 4))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 4))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :at-dedenter-block-start))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-from-block))
+   (should (= (python-indent-calculate-indentation) 6))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 4))))
+
+(ert-deftest python-indent-inside-paren-block-2 ()
+  "`python-indent-block-paren-deeper' set to t.
+See Bug#62696."
+  (python-tests-with-temp-buffer
+   "
+if ('VALUE' in my_unnecessarily_long_dictionary and
+        some_other_long_condition_case):
+    do_something()
+elif (some_case or
+      another_case):
+    do_another()
+"
+   (let ((python-indent-block-paren-deeper t))
+     (python-tests-look-at "if")
+     (should (eq (car (python-indent-context)) :no-indent))
+     (should (= (python-indent-calculate-indentation) 0))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :inside-paren-from-block))
+     (should (= (python-indent-calculate-indentation) 8))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :after-block-start))
+     (should (= (python-indent-calculate-indentation) 4))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :at-dedenter-block-start))
+     (should (= (python-indent-calculate-indentation) 0))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :inside-paren-from-block))
+     (should (= (python-indent-calculate-indentation) 6))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :after-block-start))
+     (should (= (python-indent-calculate-indentation) 4)))))
+
+(ert-deftest python-indent-inside-paren-block-3 ()
+  "With backslash.  `python-indent-block-paren-deeper' set to nil (default).
+See Bug#62696."
+  (python-tests-with-temp-buffer
+   "
+if 'VALUE' in my_uncessarily_long_dictionary and\\
+   (some_other_long_condition_case or
+    another_case):
+    do_something()
+"
+   (python-tests-look-at "if")
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (forward-line 1)
+   (should (eq (car (python-indent-context))
+               :after-backslash-block-continuation))
+   (should (= (python-indent-calculate-indentation) 3))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :inside-paren-from-block))
+   (should (= (python-indent-calculate-indentation) 4))
+   (forward-line 1)
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 4))))
+
+(ert-deftest python-indent-inside-paren-block-4 ()
+  "With backslash.  `python-indent-block-paren-deeper' set to t.
+See Bug#62696."
+  (python-tests-with-temp-buffer
+   "
+if 'VALUE' in my_uncessarily_long_dictionary and\\
+   (some_other_long_condition_case or
+        another_case):
+    do_something()
+"
+   (let ((python-indent-block-paren-deeper t))
+     (python-tests-look-at "if")
+     (should (eq (car (python-indent-context)) :no-indent))
+     (should (= (python-indent-calculate-indentation) 0))
+     (forward-line 1)
+     (should (eq (car (python-indent-context))
+                 :after-backslash-block-continuation))
+     (should (= (python-indent-calculate-indentation) 3))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :inside-paren-from-block))
+     (should (= (python-indent-calculate-indentation) 8))
+     (forward-line 1)
+     (should (eq (car (python-indent-context)) :after-block-start))
+     (should (= (python-indent-calculate-indentation) 4)))))
 
 (ert-deftest python-indent-after-block-1 ()
   "The most simple after-block case that shouldn't fail."
@@ -696,7 +1403,7 @@ objects = Thing.objects.all() \\
    (should (eq (car (python-indent-context)) :inside-paren-newline-start))
    (should (= (python-indent-calculate-indentation) 27))
    (python-tests-look-at "status='bought'")
-   (should (eq (car (python-indent-context)) :inside-paren-newline-start))
+   (should (eq (car (python-indent-context)) :inside-paren-continuation-line))
    (should (= (python-indent-calculate-indentation) 27))
    (python-tests-look-at ") \\")
    (should (eq (car (python-indent-context)) :inside-paren-at-closing-paren))
@@ -779,6 +1486,25 @@ def delete_all_things():
    (should (eq (car (python-indent-context))
                :after-backslash-dotted-continuation))
    (should (= (python-indent-calculate-indentation) 16))))
+
+(ert-deftest python-indent-after-backslash-6 ()
+  "Backslash continuation from for block."
+  (python-tests-with-temp-buffer
+   "
+for long_variable_name \\
+        in (1, 2):
+    print(long_variable_name)
+"
+   (python-tests-look-at "for long_variable_name \\")
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (python-tests-look-at "in (1, 2):")
+   (should (eq (car (python-indent-context))
+               :after-backslash-block-continuation))
+   (should (= (python-indent-calculate-indentation) 8))
+   (python-tests-look-at "print(long_variable_name)")
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 4))))
 
 (ert-deftest python-indent-block-enders-1 ()
   "Test de-indentation for pass keyword."
@@ -921,6 +1647,35 @@ if save:
    (python-indent-line t)
    (should (= (python-indent-calculate-indentation t) 8))))
 
+(ert-deftest python-indent-dedenters-comment-else ()
+  "Test de-indentation for the else keyword with comments before it."
+  (python-tests-with-temp-buffer
+   "
+if save:
+    try:
+        write_to_disk(data)
+    except IOError:
+        msg = 'Error saving to disk'
+        message(msg)
+        logger.exception(msg)
+    except Exception:
+        if hide_details:
+            logger.exception('Unhandled exception')
+        # comment
+            else
+    finally:
+        data.free()
+"
+   (python-tests-look-at "else\n")
+   (should (eq (car (python-indent-context)) :at-dedenter-block-start))
+   (should (= (python-indent-calculate-indentation) 8))
+   (python-indent-line t)
+   (should (= (python-indent-calculate-indentation t) 4))
+   (python-indent-line t)
+   (should (= (python-indent-calculate-indentation t) 0))
+   (python-indent-line t)
+   (should (= (python-indent-calculate-indentation t) 8))))
+
 (ert-deftest python-indent-dedenters-3 ()
   "Test de-indentation for the except keyword."
   (python-tests-with-temp-buffer
@@ -1019,7 +1774,7 @@ a == 4):
    (should (= (python-indent-calculate-indentation) 0))
    (should (= (python-indent-calculate-indentation t) 0))
    (python-tests-look-at "a == 4):\n")
-   (should (eq (car (python-indent-context)) :inside-paren))
+   (should (eq (car (python-indent-context)) :inside-paren-from-block))
    (should (= (python-indent-calculate-indentation) 6))
    (python-indent-line)
    (should (= (python-indent-calculate-indentation t) 4))
@@ -1027,6 +1782,21 @@ a == 4):
    (should (= (python-indent-calculate-indentation t) 0))
    (python-indent-line t)
    (should (= (python-indent-calculate-indentation t) 6))))
+
+(ert-deftest python-indent-dedenters-9 ()
+  "Test de-indentation for the case keyword."
+  (python-tests-with-temp-buffer
+   "
+match a:
+    case 1:
+        print(1)
+        case 2
+"
+   (python-tests-look-at "case 2")
+   (should (eq (car (python-indent-context)) :at-dedenter-block-start))
+   (should (= (python-indent-calculate-indentation) 4))
+   (python-indent-line t)
+   (should (= (python-indent-calculate-indentation t) 4))))
 
 (ert-deftest python-indent-inside-string-1 ()
   "Test indentation for strings."
@@ -1109,6 +1879,37 @@ def fn(a, b, c=True):
    (should (eq (car (python-indent-context)) :inside-string))
    (should (= (python-indent-calculate-indentation) 4))))
 
+(ert-deftest python-indent-electric-comma-inside-multiline-string ()
+  "Test indentation ...."
+  (python-tests-with-temp-buffer
+   "
+a = (
+    '''\
+- foo,
+- bar
+'''
+"
+   (python-tests-look-at "- bar")
+   (should (eq (car (python-indent-context)) :inside-string))
+   (goto-char (pos-eol))
+   (python-tests-self-insert ",")
+   (should (= (current-indentation) 0))))
+
+(ert-deftest python-indent-electric-comma-after-multiline-string ()
+  "Test indentation ...."
+  (python-tests-with-temp-buffer
+   "
+a = (
+    '''\
+- foo,
+- bar'''
+"
+   (python-tests-look-at "- bar'''")
+   (should (eq (car (python-indent-context)) :inside-string))
+   (goto-char (pos-eol))
+   (python-tests-self-insert ",")
+   (should (= (current-indentation) 0))))
+
 (ert-deftest python-indent-electric-colon-1 ()
   "Test indentation case from Bug#18228."
   (python-tests-with-temp-buffer
@@ -1119,7 +1920,7 @@ def a():
 def b()
 "
    (python-tests-look-at "def b()")
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (python-tests-self-insert ":")
    (should (= (current-indentation) 0))))
 
@@ -1130,10 +1931,13 @@ def b()
 if do:
     something()
     else
+outside
 "
    (python-tests-look-at "else")
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (python-tests-self-insert ":")
+   (should (= (current-indentation) 0))
+   (python-tests-look-at "outside")
    (should (= (current-indentation) 0))))
 
 (ert-deftest python-indent-electric-colon-3 ()
@@ -1147,7 +1951,7 @@ if do:
           that)
 "
    (python-tests-look-at "that)")
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (python-tests-self-insert ":")
    (python-tests-look-at "elif" -1)
    (should (= (current-indentation) 0))
@@ -1172,7 +1976,7 @@ def f():
 else
 "
    (python-tests-look-at "else")
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (python-tests-self-insert ":")
    (python-tests-look-at "else" -1)
    (should (= (current-indentation) 4))))
@@ -1293,6 +2097,143 @@ this is an arbitrarily
      (should (string= (buffer-substring-no-properties (point-min) (point-max))
                       expected)))))
 
+(ert-deftest python-indent-after-match-block ()
+  "Test PEP634 match."
+  (python-tests-with-temp-buffer
+   "
+match foo:
+"
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (goto-char (point-max))
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 4))))
+
+(ert-deftest python-indent-after-case-block ()
+  "Test PEP634 case."
+  (python-tests-with-temp-buffer
+   "
+match foo:
+    case 1:
+"
+   (should (eq (car (python-indent-context)) :no-indent))
+   (should (= (python-indent-calculate-indentation) 0))
+   (goto-char (point-max))
+   (should (eq (car (python-indent-context)) :after-block-start))
+   (should (= (python-indent-calculate-indentation) 8))))
+
+(ert-deftest python-indent-after-re-match ()
+  "Test BUG 62031 regression."
+  (python-tests-with-temp-buffer
+   "
+def test_re(string):
+    if re.match('^[a-c]+$', string):
+        print('yes')
+    else:
+    "
+   (python-tests-look-at "else:")
+   (should (= (python-indent-calculate-indentation) 4))))
+
+(ert-deftest python-indent-after-bare-match ()
+  "Test BUG 62031 regression."
+  (python-tests-with-temp-buffer
+   "
+from re import match
+
+def test_re(string):
+    if match('^[a-c]+$', string):
+        print('yes')
+    else:
+    "
+   (python-tests-look-at "else:")
+   (should (= (python-indent-calculate-indentation) 4))))
+
+(ert-deftest python-indent-badly-indented-block-end ()
+  "Test BUG 65870 regression."
+  (python-tests-with-temp-buffer
+   "
+return
+"
+   (goto-char (point-max))
+   (should (= (python-indent-calculate-indentation) 0))))
+
+
+;;; Filling
+
+(ert-deftest python-auto-fill-docstring ()
+  (python-tests-with-temp-buffer
+   "\
+def some_function(arg1,
+                  arg2):
+    \"\"\"
+    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+   (auto-fill-mode +1)
+   (goto-char (point-max))
+   (newline)
+   (search-backward "Lorem")
+   (let ((docindent (current-indentation)))
+     (forward-line 1)
+     (should (= docindent (current-indentation))))))
+
+(ert-deftest python-fill-docstring ()
+  (python-tests-with-temp-buffer
+   "\
+r'''aaa
+
+this is a test this is a test this is a test this is a test this is a test this is a test.
+'''"
+   (search-forward "test.")
+   (fill-paragraph)
+   (should (= (current-indentation) 0))))
+
+(ert-deftest python-fill-paragraph-single-quoted-string-1 ()
+  "Single quoted string should not be filled."
+  (let ((contents "
+s = 'abc def ghi jkl mno pqr stu vwx yz'
+")
+        (fill-column 20))
+    (python-tests-with-temp-buffer
+     contents
+     (python-tests-look-at "abc")
+     (fill-paragraph)
+     (should (string= (buffer-substring-no-properties (point-min) (point-max))
+                      contents)))))
+
+(ert-deftest python-fill-paragraph-single-quoted-string-2 ()
+  "Ensure no fill is performed after the end of the single quoted string."
+  (let ((contents "
+s1 = 'abc'
+s2 = 'def'
+"))
+    (python-tests-with-temp-buffer
+     contents
+     (python-tests-look-at "abc")
+     (fill-paragraph)
+     (should (string= (buffer-substring-no-properties (point-min) (point-max))
+                      contents)))))
+
+(ert-deftest python-fill-paragraph-triple-quoted-string-1 ()
+  "Triple quoted string should be filled."
+  (let ((contents "
+s = '''abc def ghi jkl mno pqr stu vwx yz'''
+")
+        (expected "
+s = '''abc def ghi
+jkl mno pqr stu vwx
+yz'''
+")
+        (fill-column 20))
+    (dolist (look-at '("'''abc" "z'''"))
+      (dolist (offset '(0 1 2 3))
+        (python-tests-with-temp-buffer
+         contents
+         (python-tests-look-at look-at)
+         (forward-char offset)
+         (fill-paragraph)
+         (should (string=
+                  (buffer-substring-no-properties (point-min) (point-max))
+                  expected)))))))
+
 
 ;;; Mark
 
@@ -1378,7 +2319,7 @@ class C:
          (expected-mark-beginning-position
           (progn
             (python-tests-look-at "def __init__(self):")
-            (1- (line-beginning-position))))
+            (1- (pos-bol))))
          (expected-mark-end-position-1
           (save-excursion
             (python-tests-look-at "self.b = 'b'")
@@ -1435,13 +2376,64 @@ class C:
           (progn
             (python-tests-look-at "def fun(self):")
             (python-tests-look-at "(self):")
-            (1- (line-beginning-position))))
+            (1- (pos-bol))))
          (expected-mark-end-position
           (save-excursion
             (python-tests-look-at "return self.b")
             (forward-line)
             (point))))
      ;; Should select B.fun, despite point is inside the defun symbol.
+     (python-mark-defun 1)
+     (should (= (point) expected-mark-beginning-position))
+     (should (= (marker-position (mark-marker))
+                expected-mark-end-position)))))
+
+(ert-deftest python-mark-defun-4 ()
+  "Test `python-mark-defun' with nested functions."
+  (python-tests-with-temp-buffer
+   "
+def foo(x):
+    def bar():
+        return x
+    if True:
+        return bar
+"
+   (let ((expected-mark-beginning-position
+          (progn
+            (python-tests-look-at "def foo(x):")
+            (1- (pos-bol))))
+         (expected-mark-end-position (point-max)))
+     (python-tests-look-at "return bar")
+     (python-mark-defun 1)
+     (should (= (point) expected-mark-beginning-position))
+     (should (= (marker-position (mark-marker))
+                expected-mark-end-position)))))
+
+(ert-deftest python-mark-defun-5 ()
+  "Test `python-mark-defun' with point inside backslash escaped defun."
+  (python-tests-with-temp-buffer
+   "
+def \\
+        foo(x):
+    return x
+"
+   (let ((transient-mark-mode t)
+         (expected-mark-beginning-position
+          (progn
+            (python-tests-look-at "def ")
+            (1- (pos-bol))))
+         (expected-mark-end-position
+          (save-excursion
+            (python-tests-look-at "return x")
+            (forward-line)
+            (point))))
+     (python-tests-look-at "def ")
+     (python-mark-defun 1)
+     (should (= (point) expected-mark-beginning-position))
+     (should (= (marker-position (mark-marker))
+                expected-mark-end-position))
+     (deactivate-mark)
+     (python-tests-look-at "foo(x)")
      (python-mark-defun 1)
      (should (= (point) expected-mark-beginning-position))
      (should (= (marker-position (mark-marker))
@@ -1473,12 +2465,20 @@ def decoratorFunctionWithArguments(arg1, arg2, arg3):
         return wrapped_f
     return wwrap
 "
-   (python-tests-look-at "return wrap")
+   (python-tests-look-at "return wwrap")
    (should (= (save-excursion
                 (python-nav-beginning-of-defun)
                 (point))
               (save-excursion
-                (python-tests-look-at "def wrapped_f(*args):" -1)
+                (python-tests-look-at "def decoratorFunctionWithArguments" -1)
+                (beginning-of-line)
+                (point))))
+   (python-tests-look-at "return wrap" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def wwrap(f):" -1)
                 (beginning-of-line)
                 (point))))
    (python-tests-look-at "def wrapped_f(*args):" -1)
@@ -1512,6 +2512,9 @@ class C(object):
         def a():
             pass
 
+        if True:
+            return a
+
     def c(self):
         pass
 "
@@ -1524,7 +2527,25 @@ class C(object):
                 (python-tests-look-at "def m(self):" -1)
                 (beginning-of-line)
                 (point))))
+   ;; Nested defuns should be skipped.
+   (forward-line -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def m(self):" -1)
+                (beginning-of-line)
+                (point))))
    ;; Defuns on same levels should be respected.
+   (python-tests-look-at "if True:" -1)
+   (forward-line -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def a():" -1)
+                (beginning-of-line)
+                (point))))
    (python-tests-look-at "def a():" -1)
    (should (= (save-excursion
                 (python-nav-beginning-of-defun)
@@ -1533,8 +2554,16 @@ class C(object):
                 (python-tests-look-at "def b():" -1)
                 (beginning-of-line)
                 (point))))
-   ;; Jump to a top level defun.
+   ;; Jump to an upper level defun.
    (python-tests-look-at "def b():" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def m(self):" -1)
+                (beginning-of-line)
+                (point))))
+   (forward-line -1)
    (should (= (save-excursion
                 (python-nav-beginning-of-defun)
                 (point))
@@ -1572,6 +2601,93 @@ class C(object):
                 (beginning-of-line)
                 (point))))))
 
+(ert-deftest python-nav-beginning-of-defun-4 ()
+  (python-tests-with-temp-buffer
+   "
+def a():
+    pass
+
+def \\
+        b():
+    return 0
+
+def c():
+    pass
+"
+   (python-tests-look-at "def c():")
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\" -1)
+                (beginning-of-line)
+                (point))))
+   (python-tests-look-at "return 0" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\" -1)
+                (beginning-of-line)
+                (point))))
+   (python-tests-look-at "b():" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\" -1)
+                (beginning-of-line)
+                (point))))
+   (python-tests-look-at "def a():" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun -1)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\")
+                (beginning-of-line)
+                (point))))))
+
+(ert-deftest python-nav-beginning-of-defun-5 ()
+  (python-tests-with-temp-buffer
+   "
+class C:
+
+    def \\
+            m(self):
+        pass
+"
+   (python-tests-look-at "m(self):")
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\" -1)
+                (beginning-of-line)
+                (point))))
+   (python-tests-look-at "class C:" -1)
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun -1)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def \\")
+                (beginning-of-line)
+                (point))))))
+
+(ert-deftest python-nav-beginning-of-defun-6 ()
+  (python-tests-with-temp-buffer
+   "
+class C:
+    def foo(self):
+        pass
+"
+   (python-tests-look-at "self")
+   (should (= (save-excursion
+                (python-nav-beginning-of-defun)
+                (point))
+              (save-excursion
+                (beginning-of-line)
+                (point))))))
+
 (ert-deftest python-nav-end-of-defun-1 ()
   (python-tests-with-temp-buffer
    "
@@ -1605,12 +2721,25 @@ class C(object):
                 (point))))
    (should (= (save-excursion
                 (python-tests-look-at "def b():")
+                (forward-line -1)
+                (python-nav-end-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def c(self):")
+                (forward-line -1)
+                (point))))
+   (should (= (save-excursion
+                (python-tests-look-at "def b():")
                 (python-nav-end-of-defun)
                 (point))
               (save-excursion
                 (python-tests-look-at "def b():")
                 (forward-line 2)
                 (point))))
+   (should (not (save-excursion
+                  (python-tests-look-at "def a():")
+                  (forward-line -1)
+                  (python-nav-end-of-defun))))
    (should (= (save-excursion
                 (python-tests-look-at "def c(self):")
                 (python-nav-end-of-defun)
@@ -1659,21 +2788,55 @@ def decoratorFunctionWithArguments(arg1, arg2, arg3):
                 (point))
               (save-excursion
                 (python-tests-look-at "return wwrap")
-                (line-beginning-position))))
+                (pos-bol))))
    (should (= (save-excursion
                 (python-tests-look-at "def wrapped_f(*args):")
                 (python-nav-end-of-defun)
                 (point))
               (save-excursion
                 (python-tests-look-at "return wrapped_f")
-                (line-beginning-position))))
+                (pos-bol))))
    (should (= (save-excursion
                 (python-tests-look-at "f(*args)")
                 (python-nav-end-of-defun)
                 (point))
               (save-excursion
                 (python-tests-look-at "return wrapped_f")
-                (line-beginning-position))))))
+                (pos-bol))))))
+
+(ert-deftest python-nav-end-of-defun-3 ()
+  (python-tests-with-temp-buffer
+   "
+def \\
+        a():
+    return 0
+"
+   (should (= (save-excursion
+                (python-tests-look-at "def \\")
+                (python-nav-end-of-defun)
+                (point))
+              (save-excursion
+                (point-max))))))
+
+(ert-deftest python-end-of-defun-1 ()
+  (python-tests-with-temp-buffer
+   "
+class C:
+    def a(self
+          ):
+        pass
+
+    def b(self):
+        pass
+"
+   (should (= (save-excursion
+                (python-tests-look-at "def a")
+                (end-of-defun)
+                (point))
+              (save-excursion
+                (python-tests-look-at "def b")
+                (forward-line -1)
+                (point))))))
 
 (ert-deftest python-nav-backward-defun-1 ()
   (python-tests-with-temp-buffer
@@ -1773,6 +2936,18 @@ class A(object):
      (should (not (python-nav-backward-defun)))
      (should (= point (point))))))
 
+(ert-deftest python-nav-backward-defun-4 ()
+  (python-tests-with-temp-buffer
+   "
+def \\
+        a():
+    return 0
+"
+   (goto-char (point-max))
+   (should (= (save-excursion (python-nav-backward-defun))
+              (python-tests-look-at "def \\" -1)))
+   (should (not (python-nav-backward-defun)))))
+
 (ert-deftest python-nav-forward-defun-1 ()
   (python-tests-with-temp-buffer
    "
@@ -1871,6 +3046,18 @@ class A(object):
      (should (not (python-nav-forward-defun)))
      (should (= point (point))))))
 
+(ert-deftest python-nav-forward-defun-4 ()
+  (python-tests-with-temp-buffer
+   "
+def \\
+        a():
+    return 0
+"
+   (goto-char (point-min))
+   (should (= (save-excursion (python-nav-forward-defun))
+              (python-tests-look-at "():")))
+   (should (not (python-nav-forward-defun)))))
+
 (ert-deftest python-nav-beginning-of-statement-1 ()
   (python-tests-with-temp-buffer
    "
@@ -1948,14 +3135,14 @@ string
                 (point))
               (save-excursion
                 (python-tests-look-at "789")
-                (line-end-position))))
+                (pos-eol))))
    (python-tests-look-at "v2 =")
    (should (= (save-excursion
                 (python-nav-end-of-statement)
                 (point))
               (save-excursion
                 (python-tests-look-at "value4)")
-                (line-end-position))))
+                (pos-eol))))
    (python-tests-look-at "v3 =")
    (should (= (save-excursion
                 (python-nav-end-of-statement)
@@ -1963,7 +3150,7 @@ string
               (save-excursion
                 (python-tests-look-at
                  "'continue previous line')")
-                (line-end-position))))
+                (pos-eol))))
    (python-tests-look-at "v4 =")
    (should (= (save-excursion
                 (python-nav-end-of-statement)
@@ -1972,6 +3159,42 @@ string
                 (goto-char (point-max))
                 (python-util-forward-comment -1)
                 (point))))))
+
+(ert-deftest python-nav-end-of-statement-2 ()
+  "Test the string overlap assertion (Bug#30964)."
+  (python-tests-with-temp-buffer
+   "'\n''\n"
+   (python-nav-end-of-statement)))
+
+(ert-deftest python-nav-end-of-statement-3 ()
+  "Test unmatched quotes (Bug#58780)."
+  (python-tests-with-temp-buffer
+   "
+' \"\"\"
+v = 1
+"
+   (python-tests-look-at "v =")
+   (should (= (save-excursion
+                (python-nav-end-of-statement)
+                (point))
+              (save-excursion
+                (point-max))))))
+
+(ert-deftest python-nav-end-of-statement-4 ()
+  (python-tests-with-temp-buffer
+   "
+abc = 'a\\
+b\\
+c'
+d = '''d'''
+"
+   (python-tests-look-at "b\\")
+   (should (= (save-excursion
+                (python-nav-end-of-statement)
+                (point))
+              (save-excursion
+                (python-tests-look-at "c'")
+                (pos-eol))))))
 
 (ert-deftest python-nav-forward-statement-1 ()
   (python-tests-with-temp-buffer
@@ -2122,6 +3345,28 @@ def decoratorFunctionWithArguments(arg1, arg2, arg3):
                 (point))
               (python-tests-look-at "def wwrap(f):" -1)))))
 
+(ert-deftest python-nav-beginning-of-block-2 ()
+  (python-tests-with-temp-buffer
+   "
+if True:
+
+    pass
+if False:
+    # comment
+    pass
+"
+   (python-tests-look-at "if True:")
+   (forward-line)
+   (should (= (save-excursion
+                (python-nav-beginning-of-block)
+                (point))
+              (python-tests-look-at "if True:" -1)))
+   (python-tests-look-at "# comment")
+   (should (= (save-excursion
+                (python-nav-beginning-of-block)
+                (point))
+              (python-tests-look-at "if False:" -1)))))
+
 (ert-deftest python-nav-end-of-block-1 ()
   (python-tests-with-temp-buffer
    "
@@ -2159,21 +3404,33 @@ def decoratorFunctionWithArguments(arg1, arg2, arg3):
                 (point))
               (save-excursion
                 (python-tests-look-at "return wrapped_f")
-                (line-end-position))))
+                (pos-eol))))
    (end-of-line)
    (should (= (save-excursion
                 (python-nav-end-of-block)
                 (point))
               (save-excursion
                 (python-tests-look-at "return wrapped_f")
-                (line-end-position))))
+                (pos-eol))))
    (python-tests-look-at "f(*args)")
    (should (= (save-excursion
                 (python-nav-end-of-block)
                 (point))
               (save-excursion
                 (python-tests-look-at "print 'After f(*args)'")
-                (line-end-position))))))
+                (pos-eol))))))
+
+(ert-deftest python-nav-end-of-block-2 ()
+  "Ensure that `python-nav-end-of-block' does not enter an infinite loop."
+  (python-tests-with-temp-buffer
+   "def
+    =''
+ '
+\"\"\"\"\"\"
+ #
+''
+"
+   (python-nav-end-of-block)))
 
 (ert-deftest python-nav-forward-block-1 ()
   "This also accounts as a test for `python-nav-backward-block'."
@@ -2216,6 +3473,22 @@ if request.user.is_authenticated():
    (should (= (save-excursion (python-nav-forward-block -10))
               (python-tests-look-at
                "if request.user.is_authenticated():" -1)))))
+
+(ert-deftest python-nav-forward-block-2 ()
+  (python-tests-with-temp-buffer
+   "
+if True:
+    pass
+"
+   (python-tests-look-at "if True:")
+   (should (not (save-excursion (python-nav-forward-block))))
+   (should (not (save-excursion (python-nav-forward-block -1))))
+   (forward-char)
+   (should (not (save-excursion (python-nav-forward-block))))
+   (should (= (save-excursion (python-nav-forward-block -1))
+              (progn
+                (end-of-line)
+                (python-tests-look-at "if True:" -1))))))
 
 (ert-deftest python-nav-forward-sexp-1 ()
   (python-tests-with-temp-buffer
@@ -2435,11 +3708,11 @@ if x:
 \tabcdefg
 "
      (python-tests-look-at "abcdefg")
-     (goto-char (line-end-position))
+     (goto-char (pos-eol))
      (call-interactively #'python-indent-dedent-line-backspace)
      (should
       (string= (buffer-substring-no-properties
-                (line-beginning-position) (line-end-position))
+                (pos-bol) (pos-eol))
                "\tabcdef")))))
 
 (ert-deftest python-indent-dedent-line-backspace-3 ()
@@ -2452,27 +3725,27 @@ if x:
 \t abcdefg
 "
      (python-tests-look-at "abcdefg")
-     (goto-char (line-end-position))
+     (goto-char (pos-eol))
      (call-interactively #'python-indent-dedent-line-backspace)
      (should
       (string= (buffer-substring-no-properties
-                (line-beginning-position) (line-end-position))
+                (pos-bol) (pos-eol))
                "\t abcdef"))
      (back-to-indentation)
      (call-interactively #'python-indent-dedent-line-backspace)
      (should
       (string= (buffer-substring-no-properties
-                (line-beginning-position) (line-end-position))
+                (pos-bol) (pos-eol))
                "\tabcdef"))
      (call-interactively #'python-indent-dedent-line-backspace)
      (should
       (string= (buffer-substring-no-properties
-                (line-beginning-position) (line-end-position))
+                (pos-bol) (pos-eol))
                "    abcdef"))
      (call-interactively #'python-indent-dedent-line-backspace)
      (should
       (string= (buffer-substring-no-properties
-                (line-beginning-position) (line-end-position))
+                (pos-bol) (pos-eol))
                "abcdef")))))
 
 (ert-deftest python-bob-infloop-avoid ()
@@ -2485,7 +3758,78 @@ if x:
 
 ;;; Shell integration
 
-(defvar python-tests-shell-interpreter "python")
+(defvar python-tests-shell-interpreters nil
+  "List of Python interpreter information.
+Set this variable to nil to rescan interpreters.")
+
+(defmacro python-tests-with-shell-interpreter (pred &rest body)
+  "Bind `python-shell-interpreter' and execute BODY.
+`python-shell-interpreter' is bound to the result of calling
+`python-tests-get-shell-interpreter' with PRED argument.  The calling
+ERT is skipped if `python-tests-get-shell-interpreter' returned nil."
+  `(let ((python-shell-interpreter
+          (python-tests-get-shell-interpreter ,pred)))
+     (skip-unless python-shell-interpreter)
+     ,@body))
+
+(defmacro python-tests-with-temp-buffer-with-shell-interpreter
+    (pred contents &rest body)
+  "Variant of `python-tests-with-temp-buffer-with-shell'.
+It binds `python-shell-interpreter' to the result of calling
+`python-tests-get-shell-interpreter' with PRED argument, and calls
+`python-tests-with-temp-buffer-with-shell' with CONTENTS and BODY."
+  `(python-tests-with-shell-interpreter
+    ,pred
+    (python-tests-with-temp-buffer-with-shell ,contents ,@body)))
+
+(defun python-tests-get-shell-interpreter (&optional pred)
+  "Get the shell interpreter.
+If an optional PRED is specified, an interpreter is selected that
+matches the predicate.  PRED must return the absolute file name if the
+condition is met.  If env string EMACS_PYTHON_INTERPRETER exists, use it
+as preferred one."
+  (unless python-tests-shell-interpreters
+    (setq python-tests-shell-interpreters
+          (if-let ((interpreter (getenv "EMACS_PYTHON_INTERPRETER")))
+              (if-let ((info (python-tests--get-interpreter-info interpreter)))
+                  (list info)
+                (error "Couldn't find EMACS_PYTHON_INTERPRETER(%s) in path"
+                       interpreter))
+            ;; Use the same order as for the default value of
+            ;; `python-shell-interpreter'.
+            (delq nil (mapcar #'python-tests--get-interpreter-info
+                              '("python3" "python" "python2"))))))
+  (cl-some (or pred #'car) python-tests-shell-interpreters))
+
+(defun python-tests--get-interpreter-info (name)
+  "Get Python interpreter information specified by NAME.
+The information returned is a cons cell consisting of the file path and
+the version string."
+  (when-let ((interpreter (executable-find name)))
+    (with-temp-buffer
+      (and (equal (call-process interpreter nil t nil "--version") 0)
+           (goto-char (point-min))
+           (looking-at
+            (rx (seq "Python" (+ space) (group (+ (any digit ?.))))))
+           (cons interpreter (match-string-no-properties 1))))))
+
+(defun python-tests-interpreter-3-p (info)
+  "Return the absolute file name if the interpreter major version in INFO is 3.
+This function is intended to be used as the PRED argument of
+`python-tests-get-shell-interpreter'."
+  (when (string= (car (split-string (cdr info) "\\.")) "3")
+    (car info)))
+
+(defun python-tests-interpreter-2-6-higher-p (info)
+  "Check if the interpreter major version in INFO is 2.6 or higher.
+This function is intended to be used as the PRED argument of
+`python-tests-get-shell-interpreter'."
+  (let* ((version (split-string (cdr info) "\\."))
+         (major (string-to-number (car version)))
+         (minor (string-to-number (cadr version))))
+    (when (or (>= major 3)
+              (and (= major 2) (>= minor 6)))
+      (car info))))
 
 (ert-deftest python-shell-get-process-name-1 ()
   "Check process name calculation sans `buffer-file-name'."
@@ -2543,58 +3887,59 @@ if x:
   "Test `python-shell-process-environment' modification."
   (let* ((python-shell-process-environment
           '("TESTVAR1=value1" "TESTVAR2=value2"))
-         (process-environment (python-shell-calculate-process-environment)))
-    (should (equal (getenv "TESTVAR1") "value1"))
-    (should (equal (getenv "TESTVAR2") "value2"))))
+         (env (python-shell--calculate-process-environment)))
+    (should (equal (getenv-internal "TESTVAR1" env) "value1"))
+    (should (equal (getenv-internal "TESTVAR2" env) "value2"))))
 
 (ert-deftest python-shell-calculate-process-environment-2 ()
   "Test `python-shell-extra-pythonpaths' modification."
   (let* ((process-environment process-environment)
-         (original-pythonpath (setenv "PYTHONPATH" "/path0"))
+         (_original-pythonpath (setenv "PYTHONPATH" "/path0"))
          (python-shell-extra-pythonpaths '("/path1" "/path2"))
-         (process-environment (python-shell-calculate-process-environment)))
-    (should (equal (getenv "PYTHONPATH")
+         (env (python-shell--calculate-process-environment)))
+    (should (equal (getenv-internal "PYTHONPATH" env)
                    (concat "/path1" path-separator
                            "/path2" path-separator "/path0")))))
 
 (ert-deftest python-shell-calculate-process-environment-3 ()
   "Test `python-shell-virtualenv-root' modification."
   (let* ((python-shell-virtualenv-root "/env")
-         (process-environment
+         (env
           (let ((process-environment process-environment))
             (setenv "PYTHONHOME" "/home")
             (setenv "VIRTUAL_ENV")
-            (python-shell-calculate-process-environment))))
-    (should (not (getenv "PYTHONHOME")))
-    (should (string= (getenv "VIRTUAL_ENV") "/env"))))
+            (python-shell--calculate-process-environment))))
+    (should (member "PYTHONHOME" env))
+    (should (string= (getenv-internal "VIRTUAL_ENV" env) "/env"))))
 
 (ert-deftest python-shell-calculate-process-environment-4 ()
   "Test PYTHONUNBUFFERED when `python-shell-unbuffered' is non-nil."
   (let* ((python-shell-unbuffered t)
-         (process-environment
+         (env
           (let ((process-environment process-environment))
             (setenv "PYTHONUNBUFFERED")
-            (python-shell-calculate-process-environment))))
-    (should (string= (getenv "PYTHONUNBUFFERED") "1"))))
+            (python-shell--calculate-process-environment))))
+    (should (string= (getenv-internal "PYTHONUNBUFFERED" env) "1"))))
 
 (ert-deftest python-shell-calculate-process-environment-5 ()
   "Test PYTHONUNBUFFERED when `python-shell-unbuffered' is nil."
   (let* ((python-shell-unbuffered nil)
-         (process-environment
+         (env
           (let ((process-environment process-environment))
             (setenv "PYTHONUNBUFFERED")
-            (python-shell-calculate-process-environment))))
-    (should (not (getenv "PYTHONUNBUFFERED")))))
+            (python-shell--calculate-process-environment))))
+    (should (not (getenv-internal "PYTHONUNBUFFERED" env)))))
 
 (ert-deftest python-shell-calculate-process-environment-6 ()
   "Test PYTHONUNBUFFERED=1 when `python-shell-unbuffered' is nil."
   (let* ((python-shell-unbuffered nil)
-         (process-environment
+         (env
           (let ((process-environment process-environment))
             (setenv "PYTHONUNBUFFERED" "1")
-            (python-shell-calculate-process-environment))))
+            (append (python-shell--calculate-process-environment)
+                    process-environment))))
     ;; User default settings must remain untouched:
-    (should (string= (getenv "PYTHONUNBUFFERED") "1"))))
+    (should (string= (getenv-internal "PYTHONUNBUFFERED" env) "1"))))
 
 (ert-deftest python-shell-calculate-process-environment-7 ()
   "Test no side-effects on `process-environment'."
@@ -2604,7 +3949,7 @@ if x:
          (python-shell-unbuffered t)
          (python-shell-extra-pythonpaths'("/path1" "/path2"))
          (original-process-environment (copy-sequence process-environment)))
-    (python-shell-calculate-process-environment)
+    (python-shell--calculate-process-environment)
     (should (equal process-environment original-process-environment))))
 
 (ert-deftest python-shell-calculate-process-environment-8 ()
@@ -2617,7 +3962,7 @@ if x:
          (python-shell-extra-pythonpaths'("/path1" "/path2"))
          (original-process-environment
           (copy-sequence tramp-remote-process-environment)))
-    (python-shell-calculate-process-environment)
+    (python-shell--calculate-process-environment)
     (should (equal tramp-remote-process-environment original-process-environment))))
 
 (ert-deftest python-shell-calculate-exec-path-1 ()
@@ -2633,7 +3978,7 @@ if x:
          (python-shell-virtualenv-root "/env")
          (new-exec-path (python-shell-calculate-exec-path)))
     (should (equal new-exec-path
-                   (list (expand-file-name "/env/bin") "/path0")))))
+                   (list (python-virt-bin) "/path0")))))
 
 (ert-deftest python-shell-calculate-exec-path-3 ()
   "Test complete `python-shell-virtualenv-root' modification."
@@ -2642,7 +3987,7 @@ if x:
          (python-shell-virtualenv-root "/env")
          (new-exec-path (python-shell-calculate-exec-path)))
     (should (equal new-exec-path
-                   (list (expand-file-name "/env/bin")
+                   (list (python-virt-bin)
                          "/path1" "/path2" "/path0")))))
 
 (ert-deftest python-shell-calculate-exec-path-4 ()
@@ -2653,7 +3998,7 @@ if x:
          (python-shell-virtualenv-root "/env")
          (new-exec-path (python-shell-calculate-exec-path)))
     (should (equal new-exec-path
-                   (list (expand-file-name "/env/bin")
+                   (list (python-virt-bin)
                          "/path1" "/path2" "/path0")))))
 
 (ert-deftest python-shell-calculate-exec-path-5 ()
@@ -2683,11 +4028,26 @@ if x:
          (python-shell-virtualenv-root "/env"))
     (python-shell-with-environment
      (should (equal exec-path
-                    (list (expand-file-name "/env/bin")
+                    (list (python-virt-bin)
                           "/path1" "/path2" "/path0")))
       (should (not (getenv "PYTHONHOME")))
       (should (string= (getenv "VIRTUAL_ENV") "/env")))
     (should (equal exec-path original-exec-path))))
+
+(defun python--tests-process-env-canonical (pe)
+  ;; `process-environment' can contain various entries for the same
+  ;; var, and the first in the list hides the others.
+  (let ((process-environment '()))
+    (dolist (x (reverse pe))
+      (if (string-match "=" x)
+          (setenv (substring x 0 (match-beginning 0))
+                  (substring x (match-end 0)))
+        (setenv x nil)))
+    process-environment))
+
+(defun python--tests-process-env-eql (pe1 pe2)
+  (equal (python--tests-process-env-canonical pe1)
+         (python--tests-process-env-canonical pe2)))
 
 (ert-deftest python-shell-with-environment-2 ()
   "Test environment with remote `default-directory'."
@@ -2695,17 +4055,22 @@ if x:
          (python-shell-remote-exec-path '("/remote1" "/remote2"))
          (python-shell-exec-path '("/path1" "/path2"))
          (tramp-remote-process-environment '("EMACS=t"))
-         (original-process-environment (copy-sequence tramp-remote-process-environment))
+         (original-process-environment
+          (copy-sequence tramp-remote-process-environment))
          (python-shell-virtualenv-root "/env"))
     (python-shell-with-environment
       (should (equal (python-shell-calculate-exec-path)
-                     (list (expand-file-name "/env/bin")
+                     (list (python-virt-bin)
                            "/path1" "/path2" "/remote1" "/remote2")))
-      (let ((process-environment (python-shell-calculate-process-environment)))
+      (let ((process-environment
+             (append (python-shell--calculate-process-environment)
+                     tramp-remote-process-environment)))
         (should (not (getenv "PYTHONHOME")))
         (should (string= (getenv "VIRTUAL_ENV") "/env"))
-        (should (equal tramp-remote-process-environment process-environment))))
-    (should (equal tramp-remote-process-environment original-process-environment))))
+        (should (python--tests-process-env-eql
+                 tramp-remote-process-environment process-environment))))
+    (should (equal tramp-remote-process-environment
+                   original-process-environment))))
 
 (ert-deftest python-shell-with-environment-3 ()
   "Test `python-shell-with-environment' is idempotent."
@@ -2714,70 +4079,71 @@ if x:
          (python-shell-virtualenv-root "/home/user/env")
          (single-call
           (python-shell-with-environment
-            (list exec-path process-environment)))
+            (list exec-path
+                  (python--tests-process-env-canonical process-environment))))
          (nested-call
           (python-shell-with-environment
             (python-shell-with-environment
-              (list exec-path process-environment)))))
+              (list exec-path
+                    (python--tests-process-env-canonical
+                     process-environment))))))
     (should (equal single-call nested-call))))
 
 (ert-deftest python-shell-make-comint-1 ()
   "Check comint creation for global shell buffer."
-  (skip-unless (executable-find python-tests-shell-interpreter))
   ;; The interpreter can get killed too quickly to allow it to clean
   ;; up the tempfiles that the default python-shell-setup-codes create,
   ;; so it leaves tempfiles behind, which is a minor irritation.
-  (let* ((python-shell-setup-codes nil)
-         (python-shell-interpreter
-          (executable-find python-tests-shell-interpreter))
-         (proc-name (python-shell-get-process-name nil))
-         (shell-buffer
-          (python-tests-with-temp-buffer
-           "" (python-shell-make-comint
-               (python-shell-calculate-command) proc-name)))
-         (process (get-buffer-process shell-buffer)))
-    (unwind-protect
-        (progn
-          (set-process-query-on-exit-flag process nil)
-          (should (process-live-p process))
-          (with-current-buffer shell-buffer
-            (should (eq major-mode 'inferior-python-mode))
-            (should (string= (buffer-name) (format "*%s*" proc-name)))))
-      (kill-buffer shell-buffer))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((python-shell-setup-codes nil)
+          (proc-name (python-shell-get-process-name nil))
+          (shell-buffer
+           (python-tests-with-temp-buffer
+            "" (python-shell-make-comint
+                (python-shell-calculate-command) proc-name)))
+          (process (get-buffer-process shell-buffer)))
+     (unwind-protect
+         (progn
+           (set-process-query-on-exit-flag process nil)
+           (should (process-live-p process))
+           (with-current-buffer shell-buffer
+             (should (eq major-mode 'inferior-python-mode))
+             (should (string= (buffer-name) (format "*%s*" proc-name)))))
+       (kill-buffer shell-buffer)))))
 
 (ert-deftest python-shell-make-comint-2 ()
   "Check comint creation for internal shell buffer."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((python-shell-setup-codes nil)
-         (python-shell-interpreter
-          (executable-find python-tests-shell-interpreter))
-         (proc-name (python-shell-internal-get-process-name))
-         (shell-buffer
-          (python-tests-with-temp-buffer
-           "" (python-shell-make-comint
-               (python-shell-calculate-command) proc-name nil t)))
-         (process (get-buffer-process shell-buffer)))
-    (unwind-protect
-        (progn
-          (set-process-query-on-exit-flag process nil)
-          (should (process-live-p process))
-          (with-current-buffer shell-buffer
-            (should (eq major-mode 'inferior-python-mode))
-            (should (string= (buffer-name) (format " *%s*" proc-name)))))
-      (kill-buffer shell-buffer))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((python-shell-setup-codes nil)
+          (proc-name (python-shell-internal-get-process-name))
+          (shell-buffer
+           (python-tests-with-temp-buffer
+            "" (python-shell-make-comint
+                (python-shell-calculate-command) proc-name nil t)))
+          (process (get-buffer-process shell-buffer)))
+     (unwind-protect
+         (progn
+           (set-process-query-on-exit-flag process nil)
+           (should (process-live-p process))
+           (with-current-buffer shell-buffer
+             (should (eq major-mode 'inferior-python-mode))
+             (should (string= (buffer-name) (format " *%s*" proc-name)))))
+       (kill-buffer shell-buffer)))))
 
 (ert-deftest python-shell-make-comint-3 ()
   "Check comint creation with overridden python interpreter and args.
 The command passed to `python-shell-make-comint' as argument must
 locally override global values set in `python-shell-interpreter'
 and `python-shell-interpreter-args' in the new shell buffer."
-  (skip-unless (executable-find python-tests-shell-interpreter))
+  (skip-unless (python-tests-get-shell-interpreter))
   (let* ((python-shell-setup-codes nil)
          (python-shell-interpreter "interpreter")
          (python-shell-interpreter-args "--some-args")
          (proc-name (python-shell-get-process-name nil))
          (interpreter-override
-          (concat (executable-find python-tests-shell-interpreter) " " "-i"))
+          (concat (python-tests-get-shell-interpreter) " " "-i"))
          (shell-buffer
           (python-tests-with-temp-buffer
            "" (python-shell-make-comint interpreter-override proc-name nil)))
@@ -2790,64 +4156,62 @@ and `python-shell-interpreter-args' in the new shell buffer."
             (should (eq major-mode 'inferior-python-mode))
             (should (file-equal-p
                      python-shell-interpreter
-                     (executable-find python-tests-shell-interpreter)))
+                     (python-tests-get-shell-interpreter)))
             (should (string= python-shell-interpreter-args "-i"))))
       (kill-buffer shell-buffer))))
 
 (ert-deftest python-shell-make-comint-4 ()
   "Check shell calculated prompts regexps are set."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((process-environment process-environment)
-         (python-shell-setup-codes nil)
-         (python-shell-interpreter
-          (executable-find python-tests-shell-interpreter))
-         (python-shell-interpreter-args "-i")
-         (python-shell--prompt-calculated-input-regexp nil)
-         (python-shell--prompt-calculated-output-regexp nil)
-         (python-shell-prompt-detect-enabled t)
-         (python-shell-prompt-input-regexps '("extralargeinputprompt" "sml"))
-         (python-shell-prompt-output-regexps '("extralargeoutputprompt" "sml"))
-         (python-shell-prompt-regexp "in")
-         (python-shell-prompt-block-regexp "block")
-         (python-shell-prompt-pdb-regexp "pdf")
-         (python-shell-prompt-output-regexp "output")
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = 'py> '\n"
-                               "sys.ps2 = '..> '\n"
-                               "sys.ps3 = 'out '\n"))
-         (startup-file (python-shell--save-temp-file startup-code))
-         (proc-name (python-shell-get-process-name nil))
-         (shell-buffer
-          (progn
-            (setenv "PYTHONSTARTUP" startup-file)
-            (python-tests-with-temp-buffer
-             "" (python-shell-make-comint
-                 (python-shell-calculate-command) proc-name nil))))
-         (process (get-buffer-process shell-buffer)))
-    (unwind-protect
-        (progn
-          (set-process-query-on-exit-flag process nil)
-          (should (process-live-p process))
-          (with-current-buffer shell-buffer
-            (should (eq major-mode 'inferior-python-mode))
-            (should (string=
-                     python-shell--prompt-calculated-input-regexp
-                     (concat "^\\(extralargeinputprompt\\|\\.\\.> \\|"
-                             "block\\|py> \\|pdf\\|sml\\|in\\)")))
-            (should (string=
-                     python-shell--prompt-calculated-output-regexp
-                     "^\\(extralargeoutputprompt\\|output\\|out \\|sml\\)"))))
-      (delete-file startup-file)
-      (kill-buffer shell-buffer))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((process-environment process-environment)
+          (python-shell-setup-codes nil)
+          (python-shell-interpreter-args "-i")
+          (python-shell--prompt-calculated-input-regexp nil)
+          (python-shell--prompt-calculated-output-regexp nil)
+          (python-shell-prompt-detect-enabled t)
+          (python-shell-prompt-input-regexps '("extralargeinputprompt" "sml"))
+          (python-shell-prompt-output-regexps '("extralargeoutputprompt" "sml"))
+          (python-shell-prompt-regexp "in")
+          (python-shell-prompt-block-regexp "block")
+          (python-shell-prompt-pdb-regexp "pdf")
+          (python-shell-prompt-output-regexp "output")
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = 'py> '\n"
+                                "sys.ps2 = '..> '\n"
+                                "sys.ps3 = 'out '\n"))
+          (startup-file (python-shell--save-temp-file startup-code))
+          (proc-name (python-shell-get-process-name nil))
+          (shell-buffer
+           (progn
+             (setenv "PYTHONSTARTUP" startup-file)
+             (python-tests-with-temp-buffer
+              "" (python-shell-make-comint
+                  (python-shell-calculate-command) proc-name nil))))
+          (process (get-buffer-process shell-buffer)))
+     (unwind-protect
+         (progn
+           (set-process-query-on-exit-flag process nil)
+           (should (process-live-p process))
+           (with-current-buffer shell-buffer
+             (should (eq major-mode 'inferior-python-mode))
+             (should (string=
+                      python-shell--prompt-calculated-input-regexp
+                      (concat "^\\(extralargeinputprompt\\|\\.\\.> \\|"
+                              "block\\|py> \\|pdf\\|sml\\|in\\)")))
+             (should (string=
+                      python-shell--prompt-calculated-output-regexp
+                      "^\\(extralargeoutputprompt\\|output\\|out \\|sml\\)"))))
+       (delete-file startup-file)
+       (kill-buffer shell-buffer)))))
 
 (ert-deftest python-shell-get-process-1 ()
   "Check dedicated shell process preference over global."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (python-tests-with-temp-file
-      ""
+  (python-tests-with-shell-interpreter
+   nil
+   (python-tests-with-temp-file
+    ""
     (let* ((python-shell-setup-codes nil)
-           (python-shell-interpreter
-            (executable-find python-tests-shell-interpreter))
            (global-proc-name (python-shell-get-process-name nil))
            (dedicated-proc-name (python-shell-get-process-name t))
            (global-shell-buffer
@@ -2871,129 +4235,151 @@ and `python-shell-interpreter-args' in the new shell buffer."
             ;; No buffer available.
             (should (not (python-shell-get-process))))
         (ignore-errors (kill-buffer global-shell-buffer))
-        (ignore-errors (kill-buffer dedicated-shell-buffer))))))
+        (ignore-errors (kill-buffer dedicated-shell-buffer)))))))
 
 (ert-deftest python-shell-internal-get-or-create-process-1 ()
   "Check internal shell process creation fallback."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (python-tests-with-temp-file
-   ""
-   (should (not (process-live-p (python-shell-internal-get-process-name))))
-   (let* ((python-shell-interpreter
-           (executable-find python-tests-shell-interpreter))
-          (internal-process-name (python-shell-internal-get-process-name))
-          (internal-process (python-shell-internal-get-or-create-process))
-          (internal-shell-buffer (process-buffer internal-process)))
-     (unwind-protect
-         (progn
-           (set-process-query-on-exit-flag internal-process nil)
-           (should (equal (process-name internal-process)
-                          internal-process-name))
-           (should (equal internal-process
-                          (python-shell-internal-get-or-create-process)))
-           ;; Assert the internal process is not a user process
-           (should (not (python-shell-get-process)))
-           (kill-buffer internal-shell-buffer))
-       (ignore-errors (kill-buffer internal-shell-buffer))))))
+  (python-tests-with-shell-interpreter
+   nil
+   (python-tests-with-temp-file
+    ""
+    (should (not (process-live-p (python-shell-internal-get-process-name))))
+    (let* ((internal-process-name (python-shell-internal-get-process-name))
+           (internal-process (python-shell-internal-get-or-create-process))
+           (internal-shell-buffer (process-buffer internal-process)))
+      (unwind-protect
+          (progn
+            (set-process-query-on-exit-flag internal-process nil)
+            (should (equal (process-name internal-process)
+                           internal-process-name))
+            (should (equal internal-process
+                           (python-shell-internal-get-or-create-process)))
+            ;; Assert the internal process is not a user process
+            (should (not (python-shell-get-process)))
+            (kill-buffer internal-shell-buffer))
+        (ignore-errors (kill-buffer internal-shell-buffer)))))))
 
 (ert-deftest python-shell-prompt-detect-1 ()
   "Check prompt autodetection."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let ((process-environment process-environment))
-    ;; Ensure no startup file is enabled
-    (setenv "PYTHONSTARTUP" "")
-    (should python-shell-prompt-detect-enabled)
-    (should (equal (python-shell-prompt-detect) '(">>> " "... " "")))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let ((process-environment process-environment))
+     ;; Ensure no startup file is enabled
+     (setenv "PYTHONSTARTUP" "")
+     (should python-shell-prompt-detect-enabled)
+     (should (equal (python-shell-prompt-detect) '(">>> " "... " ""))))))
 
 (ert-deftest python-shell-prompt-detect-2 ()
   "Check prompt autodetection with startup file.  Bug#17370."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((process-environment process-environment)
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = 'py> '\n"
-                               "sys.ps2 = '..> '\n"
-                               "sys.ps3 = 'out '\n"))
-         (startup-file (python-shell--save-temp-file startup-code)))
-    (unwind-protect
-        (progn
-          ;; Ensure startup file is enabled
-          (setenv "PYTHONSTARTUP" startup-file)
-          (should python-shell-prompt-detect-enabled)
-          (should (equal (python-shell-prompt-detect) '("py> " "..> " "out "))))
-      (ignore-errors (delete-file startup-file)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((process-environment process-environment)
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = 'py> '\n"
+                                "sys.ps2 = '..> '\n"
+                                "sys.ps3 = 'out '\n"))
+          (startup-file (python-shell--save-temp-file startup-code)))
+     (unwind-protect
+         (progn
+           ;; Ensure startup file is enabled
+           (setenv "PYTHONSTARTUP" startup-file)
+           (should python-shell-prompt-detect-enabled)
+           (should (equal (python-shell-prompt-detect) '("py> " "..> " "out "))))
+       (ignore-errors (delete-file startup-file))))))
 
 (ert-deftest python-shell-prompt-detect-3 ()
   "Check prompts are not autodetected when feature is disabled."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let ((process-environment process-environment)
-        (python-shell-prompt-detect-enabled nil))
-    ;; Ensure no startup file is enabled
-    (should (not python-shell-prompt-detect-enabled))
-    (should (not (python-shell-prompt-detect)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let ((process-environment process-environment)
+         (python-shell-prompt-detect-enabled nil))
+     ;; Ensure no startup file is enabled
+     (should (not python-shell-prompt-detect-enabled))
+     (should (not (python-shell-prompt-detect))))))
 
 (ert-deftest python-shell-prompt-detect-4 ()
   "Check warning is shown when detection fails."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((process-environment process-environment)
-         ;; Trigger failure by removing prompts in the startup file
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = ''\n"
-                               "sys.ps2 = ''\n"
-                               "sys.ps3 = ''\n"))
-         (startup-file (python-shell--save-temp-file startup-code)))
-    (unwind-protect
-        (progn
-          (kill-buffer (get-buffer-create "*Warnings*"))
-          (should (not (get-buffer "*Warnings*")))
-          (setenv "PYTHONSTARTUP" startup-file)
-          (should python-shell-prompt-detect-failure-warning)
-          (should python-shell-prompt-detect-enabled)
-          (should (not (python-shell-prompt-detect)))
-          (should (get-buffer "*Warnings*")))
-      (ignore-errors (delete-file startup-file)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((process-environment process-environment)
+          ;; Trigger failure by removing prompts in the startup file
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = ''\n"
+                                "sys.ps2 = ''\n"
+                                "sys.ps3 = ''\n"))
+          (startup-file (python-shell--save-temp-file startup-code)))
+     (unwind-protect
+         (progn
+           (kill-buffer (get-buffer-create "*Warnings*"))
+           (should (not (get-buffer "*Warnings*")))
+           (setenv "PYTHONSTARTUP" startup-file)
+           (should python-shell-prompt-detect-failure-warning)
+           (should python-shell-prompt-detect-enabled)
+           (should (not (python-shell-prompt-detect)))
+           (should (get-buffer "*Warnings*")))
+       (ignore-errors (delete-file startup-file))))))
 
 (ert-deftest python-shell-prompt-detect-5 ()
   "Check disabled warnings are not shown when detection fails."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((process-environment process-environment)
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = ''\n"
-                               "sys.ps2 = ''\n"
-                               "sys.ps3 = ''\n"))
-         (startup-file (python-shell--save-temp-file startup-code))
-         (python-shell-prompt-detect-failure-warning nil))
-    (unwind-protect
-        (progn
-          (kill-buffer (get-buffer-create "*Warnings*"))
-          (should (not (get-buffer "*Warnings*")))
-          (setenv "PYTHONSTARTUP" startup-file)
-          (should (not python-shell-prompt-detect-failure-warning))
-          (should python-shell-prompt-detect-enabled)
-          (should (not (python-shell-prompt-detect)))
-          (should (not (get-buffer "*Warnings*"))))
-      (ignore-errors (delete-file startup-file)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((process-environment process-environment)
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = ''\n"
+                                "sys.ps2 = ''\n"
+                                "sys.ps3 = ''\n"))
+          (startup-file (python-shell--save-temp-file startup-code))
+          (python-shell-prompt-detect-failure-warning nil))
+     (unwind-protect
+         (progn
+           (kill-buffer (get-buffer-create "*Warnings*"))
+           (should (not (get-buffer "*Warnings*")))
+           (setenv "PYTHONSTARTUP" startup-file)
+           (should (not python-shell-prompt-detect-failure-warning))
+           (should python-shell-prompt-detect-enabled)
+           (should (not (python-shell-prompt-detect)))
+           (should (not (get-buffer "*Warnings*"))))
+       (ignore-errors (delete-file startup-file))))))
 
 (ert-deftest python-shell-prompt-detect-6 ()
   "Warnings are not shown when detection is disabled."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((process-environment process-environment)
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = ''\n"
-                               "sys.ps2 = ''\n"
-                               "sys.ps3 = ''\n"))
-         (startup-file (python-shell--save-temp-file startup-code))
-         (python-shell-prompt-detect-failure-warning t)
-         (python-shell-prompt-detect-enabled nil))
-    (unwind-protect
-        (progn
-          (kill-buffer (get-buffer-create "*Warnings*"))
-          (should (not (get-buffer "*Warnings*")))
-          (setenv "PYTHONSTARTUP" startup-file)
-          (should python-shell-prompt-detect-failure-warning)
-          (should (not python-shell-prompt-detect-enabled))
-          (should (not (python-shell-prompt-detect)))
-          (should (not (get-buffer "*Warnings*"))))
-      (ignore-errors (delete-file startup-file)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((process-environment process-environment)
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = ''\n"
+                                "sys.ps2 = ''\n"
+                                "sys.ps3 = ''\n"))
+          (startup-file (python-shell--save-temp-file startup-code))
+          (python-shell-prompt-detect-failure-warning t)
+          (python-shell-prompt-detect-enabled nil))
+     (unwind-protect
+         (progn
+           (kill-buffer (get-buffer-create "*Warnings*"))
+           (should (not (get-buffer "*Warnings*")))
+           (setenv "PYTHONSTARTUP" startup-file)
+           (should python-shell-prompt-detect-failure-warning)
+           (should (not python-shell-prompt-detect-enabled))
+           (should (not (python-shell-prompt-detect)))
+           (should (not (get-buffer "*Warnings*"))))
+       (ignore-errors (delete-file startup-file))))))
+
+(ert-deftest python-shell-prompt-detect-7 ()
+  "Check prompt autodetection with escape sequences.  Bug#71440."
+  (python-tests-with-shell-interpreter
+   #'python-tests-interpreter-2-6-higher-p
+   (let* ((process-environment process-environment)
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = '\033[32mpy> \033[0m'\n"
+                                "sys.ps2 = '\033[32m..> \033[0m'\n"
+                                "sys.ps3 = '\033[32mout \033[0m'\n"))
+          (startup-file (python-shell--save-temp-file startup-code)))
+     (unwind-protect
+         (progn
+           (setenv "PYTHONSTARTUP" startup-file)
+           (should python-shell-prompt-detect-enabled)
+           (should (equal (python-shell-prompt-detect) '("py> " "..> " "out "))))
+       (ignore-errors (delete-file startup-file))))))
 
 (ert-deftest python-shell-prompt-validate-regexps-1 ()
   "Check `python-shell-prompt-input-regexps' are validated."
@@ -3139,31 +4525,32 @@ and `python-shell-interpreter-args' in the new shell buffer."
 
 (ert-deftest python-shell-prompt-set-calculated-regexps-6 ()
   "Check detected prompts are included `regexp-quote'd."
-  (skip-unless (executable-find python-tests-shell-interpreter))
-  (let* ((python-shell-prompt-input-regexps '(""))
-         (python-shell-prompt-output-regexps '(""))
-         (python-shell-prompt-regexp "")
-         (python-shell-prompt-block-regexp "")
-         (python-shell-prompt-pdb-regexp "")
-         (python-shell-prompt-output-regexp "")
-         (python-shell--prompt-calculated-input-regexp nil)
-         (python-shell--prompt-calculated-output-regexp nil)
-         (python-shell-prompt-detect-enabled t)
-         (process-environment process-environment)
-         (startup-code (concat "import sys\n"
-                               "sys.ps1 = 'p.> '\n"
-                               "sys.ps2 = '..> '\n"
-                               "sys.ps3 = 'o.t '\n"))
-         (startup-file (python-shell--save-temp-file startup-code)))
-    (unwind-protect
-        (progn
-          (setenv "PYTHONSTARTUP" startup-file)
-          (python-shell-prompt-set-calculated-regexps)
-          (should (string= python-shell--prompt-calculated-input-regexp
-                           "^\\(\\.\\.> \\|p\\.> \\|\\)"))
-          (should (string= python-shell--prompt-calculated-output-regexp
-                           "^\\(o\\.t \\|\\)")))
-      (ignore-errors (delete-file startup-file)))))
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((python-shell-prompt-input-regexps '(""))
+          (python-shell-prompt-output-regexps '(""))
+          (python-shell-prompt-regexp "")
+          (python-shell-prompt-block-regexp "")
+          (python-shell-prompt-pdb-regexp "")
+          (python-shell-prompt-output-regexp "")
+          (python-shell--prompt-calculated-input-regexp nil)
+          (python-shell--prompt-calculated-output-regexp nil)
+          (python-shell-prompt-detect-enabled t)
+          (process-environment process-environment)
+          (startup-code (concat "import sys\n"
+                                "sys.ps1 = 'p.> '\n"
+                                "sys.ps2 = '..> '\n"
+                                "sys.ps3 = 'o.t '\n"))
+          (startup-file (python-shell--save-temp-file startup-code)))
+     (unwind-protect
+         (progn
+           (setenv "PYTHONSTARTUP" startup-file)
+           (python-shell-prompt-set-calculated-regexps)
+           (should (string= python-shell--prompt-calculated-input-regexp
+                            "^\\(\\.\\.> \\|p\\.> \\|\\)"))
+           (should (string= python-shell--prompt-calculated-output-regexp
+                            "^\\(o\\.t \\|\\)")))
+       (ignore-errors (delete-file startup-file))))))
 
 (ert-deftest python-shell-buffer-substring-1 ()
   "Selecting a substring of the whole buffer must match its contents."
@@ -3177,7 +4564,8 @@ class Bar(models.Model):
     pass
 "
    (should (string= (buffer-string)
-                    (python-shell-buffer-substring (point-min) (point-max))))))
+                    (python-tests-should-not-move
+                     #'python-shell-buffer-substring (point-min) (point-max))))))
 
 (ert-deftest python-shell-buffer-substring-2 ()
   "Main block should be removed if NOMAIN is non-nil."
@@ -3193,7 +4581,8 @@ if __name__ == \"__main__\":
     foo = Foo()
     print (foo)
 "
-   (should (string= (python-shell-buffer-substring (point-min) (point-max) t)
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring (point-min) (point-max) t)
                     "
 class Foo(models.Model):
     pass
@@ -3220,7 +4609,8 @@ if __name__ == \"__main__\":
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring (point-min) (point-max) t)
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring (point-min) (point-max) t)
                     "
 class Foo(models.Model):
     pass
@@ -3248,7 +4638,8 @@ if __name__ == \"__main__\":
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "class Foo(models.Model):")
                      (progn (python-nav-forward-sexp) (point)))
                     "# -*- coding: latin-1 -*-
@@ -3271,7 +4662,8 @@ if __name__ == \"__main__\":
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "class Bar(models.Model):")
                      (progn (python-nav-forward-sexp) (point)))
                     "# -*- coding: latin-1 -*-
@@ -3302,7 +4694,8 @@ if __name__ == \"__main__\":
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "# coding: latin-1")
                      (python-tests-look-at "if __name__ == \"__main__\":"))
                     "# -*- coding: latin-1 -*-
@@ -3329,7 +4722,8 @@ if __name__ == \"__main__\":
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "# coding: latin-1")
                      (python-tests-look-at "if __name__ == \"__main__\":"))
                     "# -*- coding: utf-8 -*-
@@ -3349,7 +4743,8 @@ class Foo(models.Model):
 class Foo(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring (point-min) (point-max))
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring (point-min) (point-max))
                     "# coding: utf-8
 
 
@@ -3368,7 +4763,8 @@ class Foo(models.Model):
 class Bar(models.Model):
     pass
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (point-min)
                      (python-tests-look-at "class Bar(models.Model):"))
                     "# coding: utf-8
@@ -3385,13 +4781,11 @@ class Foo(models.Model):
 def foo():
     print ('a')
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "print ('a')")
                      (point-max))
-                    "if True:
-
-    print ('a')
-"))))
+                    "# -*- coding: utf-8 -*-\nif True:\n    print ('a')\n\n"))))
 
 (ert-deftest python-shell-buffer-substring-11 ()
   "Check substring from partial block and point within indentation."
@@ -3400,16 +4794,14 @@ def foo():
 def foo():
     print ('a')
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (progn
                        (python-tests-look-at "print ('a')")
                        (backward-char 1)
                        (point))
                      (point-max))
-                    "if True:
-
-    print ('a')
-"))))
+                    "# -*- coding: utf-8 -*-\nif True:\n    print ('a')\n\n"))))
 
 (ert-deftest python-shell-buffer-substring-12 ()
   "Check substring from partial block and point in whitespace."
@@ -3421,16 +4813,91 @@ def foo():
 
     print ('a')
 "
-   (should (string= (python-shell-buffer-substring
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
                      (python-tests-look-at "# Whitespace")
                      (point-max))
-                    "if True:
+                    "# -*- coding: utf-8 -*-\n\nif True:\n        # Whitespace\n\n    print ('a')\n\n"))))
 
+(ert-deftest python-shell-buffer-substring-13 ()
+  "Check substring from indented single statement."
+  (python-tests-with-temp-buffer
+   "
+def foo():
+    a = 1
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "a = 1")
+                     (pos-eol))
+                    "# -*- coding: utf-8 -*-\n\na = 1"))))
 
-        # Whitespace
+(ert-deftest python-shell-buffer-substring-14 ()
+  "Check substring from indented single statement spanning multiple lines."
+  (python-tests-with-temp-buffer
+   "
+def foo():
+    a = \"\"\"Some
+    string\"\"\"
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "a = \"\"\"Some")
+                     (pos-eol 2))
+                    "# -*- coding: utf-8 -*-\n\na = \"\"\"Some\n    string\"\"\""))))
 
-    print ('a')
-"))))
+(ert-deftest python-shell-buffer-substring-15 ()
+  "Check substring from partial statement."
+  (python-tests-with-temp-buffer
+   "
+def foo():
+    a = 1
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "    a = 1")
+                     (python-tests-look-at " = 1"))
+                    "# -*- coding: utf-8 -*-\n\na"))))
+
+(ert-deftest python-shell-buffer-substring-16 ()
+  "Check substring from partial statement."
+  (python-tests-with-temp-buffer
+   "
+def foo():
+    a = 1
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "1")
+                     (1+ (point)))
+                    "# -*- coding: utf-8 -*-\n\n1"))))
+
+(ert-deftest python-shell-buffer-substring-17 ()
+  "Check substring from multiline string."
+  (python-tests-with-temp-buffer
+   "
+def foo():
+    s = \"\"\"
+    a = 1
+    b = 2
+\"\"\"
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "a = 1")
+                     (python-tests-look-at "\"\"\""))
+                    "# -*- coding: utf-8 -*-\n\nif True:\n    a = 1\n    b = 2\n\n"))))
+
+(ert-deftest python-shell-buffer-substring-18 ()
+  "Check substring from the part of the first line."
+  (python-tests-with-temp-buffer
+   "s = 'test'
+"
+   (should (string= (python-tests-should-not-move
+                     #'python-shell-buffer-substring
+                     (python-tests-look-at "'test'")
+                     (pos-eol))
+                    "'test'"))))
 
 
 
@@ -3441,13 +4908,294 @@ def foo():
          (python-shell-interpreter "/some/path/to/bin/pypy"))
     (should (python-shell-completion-native-interpreter-disabled-p))))
 
+(ert-deftest python-shell-completion-at-point-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   ""
+   (python-shell-with-shell-buffer
+     (skip-unless python-shell-readline-completer-delims)
+     (insert "import abc")
+     (comint-send-input)
+     (python-tests-shell-wait-for-prompt)
+     (insert "abc.")
+     (should (nth 2 (python-shell-completion-at-point)))
+     (end-of-line 0)
+     (should-not (nth 2 (python-shell-completion-at-point))))))
 
+(ert-deftest python-shell-completion-at-point-native-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   ""
+   (python-shell-completion-native-turn-on)
+   (python-shell-with-shell-buffer
+     (skip-unless python-shell-readline-completer-delims)
+     (insert "import abc")
+     (comint-send-input)
+     (python-tests-shell-wait-for-prompt)
+     (insert "abc.")
+     (should (nth 2 (python-shell-completion-at-point)))
+     (end-of-line 0)
+     (should-not (nth 2 (python-shell-completion-at-point))))))
+
+(defun python-tests--completion-module ()
+  "Check if modules can be completed in Python shell."
+  (insert "import datet")
+  (completion-at-point)
+  (beginning-of-line)
+  (should (looking-at-p "import datetime"))
+  (kill-line)
+  (insert "from datet")
+  (completion-at-point)
+  (beginning-of-line)
+  (should (looking-at-p "from datetime"))
+  (end-of-line)
+  (insert " import timed")
+  (completion-at-point)
+  (beginning-of-line)
+  (should (looking-at-p "from datetime import timedelta"))
+  (kill-line))
+
+(defun python-tests--completion-parameters ()
+  "Check if parameters can be completed in Python shell."
+  (insert "import re")
+  (comint-send-input)
+  (python-tests-shell-wait-for-prompt)
+  (insert "re.split('b', 'abc', maxs")
+  (completion-at-point)
+  (should (string= "re.split('b', 'abc', maxsplit="
+                   (buffer-substring (line-beginning-position) (point))))
+  (insert "0, ")
+  (should (python-shell-completion-at-point))
+  ;; Test if cache is used.
+  (cl-letf (((symbol-function 'python-shell-completion-get-completions)
+             'ignore)
+            ((symbol-function 'python-shell-completion-native-get-completions)
+             'ignore))
+    (insert "fla")
+    (completion-at-point)
+    (should (string= "re.split('b', 'abc', maxsplit=0, flags="
+                     (buffer-substring (line-beginning-position) (point)))))
+  (beginning-of-line)
+  (kill-line))
+
+(defun python-tests--completion-extra-context ()
+  "Check if extra context is used for completion."
+  (insert "re.split('b', 'abc',")
+  (comint-send-input)
+  (python-tests-shell-wait-for-prompt)
+  (insert "maxs")
+  (completion-at-point)
+  (should (string= "maxsplit="
+                   (buffer-substring (line-beginning-position) (point))))
+  (insert "0)")
+  (comint-send-input)
+  (python-tests-shell-wait-for-prompt)
+  (insert "from re import (")
+  (comint-send-input)
+  (python-tests-shell-wait-for-prompt)
+  (insert "IGN")
+  (completion-at-point)
+  (should (string= "IGNORECASE"
+                   (buffer-substring (line-beginning-position) (point)))))
+
+(defun python-tests--pythonstartup-file ()
+  "Return Jedi readline setup file if PYTHONSTARTUP is not set."
+  (or (getenv "PYTHONSTARTUP")
+      (with-temp-buffer
+        (if (eql 0 (call-process python-shell-interpreter
+                                 nil t nil "-m" "jedi" "repl"))
+            (string-trim (buffer-string))
+          ""))))
+
+(ert-deftest python-shell-completion-at-point-jedi-completer ()
+  "Check if Python shell completion works when Jedi completer is used."
+  (python-tests-with-shell-interpreter
+   nil
+   (with-environment-variables
+       (("PYTHONSTARTUP" (python-tests--pythonstartup-file)))
+     (python-tests-with-temp-buffer-with-shell
+      ""
+      (python-shell-with-shell-buffer
+        (skip-unless (string= python-shell-readline-completer-delims ""))
+        (python-shell-completion-native-turn-off)
+        (python-tests--completion-module)
+        (python-tests--completion-parameters)
+        (python-shell-completion-native-turn-on)
+        (python-tests--completion-module)
+        (python-tests--completion-parameters)
+        (python-tests--completion-extra-context))))))
+
+(ert-deftest python-shell-completion-at-point-ipython ()
+  "Check if Python shell completion works for IPython."
+  (let ((python-shell-interpreter "ipython")
+        (python-shell-interpreter-args "-i --simple-prompt"))
+    (skip-unless
+     (and
+      (executable-find python-shell-interpreter)
+      (eql (call-process python-shell-interpreter nil nil nil "--version") 0)))
+    (with-environment-variables
+        (("PYTHONSTARTUP" (python-tests--pythonstartup-file)))
+      (python-tests-with-temp-buffer-with-shell
+       ""
+       (python-shell-with-shell-buffer
+         (python-shell-completion-native-turn-off)
+         (python-tests--completion-module)
+         (python-tests--completion-parameters)
+         (python-shell-completion-native-turn-on)
+         (skip-unless (string= python-shell-readline-completer-delims ""))
+         (python-tests--completion-module)
+         (python-tests--completion-parameters)
+         (python-tests--completion-extra-context))))))
 
 
 ;;; PDB Track integration
 
 
 ;;; Symbol completion
+
+(ert-deftest python-completion-at-point-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (goto-char (point-max))
+     (insert "abc.")
+     (should (completion-at-point))
+     (insert "A")
+     (should (completion-at-point)))))
+
+(ert-deftest python-completion-at-point-2 ()
+  "Should work regardless of the point in the Shell buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (python-shell-with-shell-buffer
+       (goto-char (point-min)))
+     (goto-char (point-max))
+     (insert "abc.")
+     (should (completion-at-point)))))
+
+(ert-deftest python-completion-at-point-pdb-1 ()
+  "Should not complete PDB commands in Python buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import pdb
+
+pdb.set_trace()
+print('Hello')
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (goto-char (point-max))
+     (insert "u")
+     (should-not (nth 2 (python-completion-at-point))))))
+
+(ert-deftest python-completion-at-point-while-running-1 ()
+  "Should not try to complete when a program is running in the Shell buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import time
+
+time.sleep(3)
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-send-buffer)
+     (goto-char (point-max))
+     (insert "time.")
+     (should-not (with-timeout (1 t) (completion-at-point))))))
+
+(ert-deftest python-completion-at-point-native-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-completion-native-turn-on)
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (goto-char (point-max))
+     (insert "abc.")
+     (should (completion-at-point))
+     (insert "A")
+     (should (completion-at-point)))))
+
+(ert-deftest python-completion-at-point-native-2 ()
+  "Should work regardless of the point in the Shell buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-completion-native-turn-on)
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (python-shell-with-shell-buffer
+       (goto-char (point-min)))
+     (goto-char (point-max))
+     (insert "abc.")
+     (should (completion-at-point)))))
+
+(ert-deftest python-completion-at-point-native-with-ffap-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-completion-native-turn-on)
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (goto-char (point-max))
+     (insert "abc.")
+     ;; This is called when FFAP is enabled and a find-file function is called.
+     (python-ffap-module-path "abc.")
+     (should (completion-at-point)))))
+
+(ert-deftest python-completion-at-point-native-with-eldoc-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   (when (eq system-type 'darwin) #'python-tests-interpreter-3-p)
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-with-shell-buffer
+       (skip-unless python-shell-readline-completer-delims))
+     (python-shell-completion-native-turn-on)
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (goto-char (point-max))
+     (insert "abc.")
+     ;; This is called by idle-timer when ElDoc is enabled.
+     (python-eldoc-function)
+     (should (completion-at-point)))))
 
 
 ;;; Fill paragraph
@@ -3458,11 +5206,36 @@ def foo():
 
 ;;; FFAP
 
+(ert-deftest python-ffap-module-path-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import abc
+"
+   (let ((inhibit-message t))
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (should (file-exists-p (python-ffap-module-path "abc"))))))
+
+(ert-deftest python-ffap-module-path-while-running-1 ()
+  "Should not get module path when a program is running in the Shell buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import abc
+import time
+
+time.sleep(3)
+"
+   (let ((inhibit-message t))
+     (python-shell-send-buffer)
+     (should-not (with-timeout (1 t) (python-ffap-module-path "abc"))))))
+
 
 ;;; Code check
 
 
-;;; Eldoc
+;;; ElDoc
 
 (ert-deftest python-eldoc--get-symbol-at-point-1 ()
   "Test paren handling."
@@ -3473,11 +5246,11 @@ map(codecs.open('somefile'
 "
    (python-tests-look-at "ap(xx")
    (should (string= (python-eldoc--get-symbol-at-point) "map"))
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (should (string= (python-eldoc--get-symbol-at-point) "map"))
    (python-tests-look-at "('somefile'")
    (should (string= (python-eldoc--get-symbol-at-point) "map"))
-   (goto-char (line-end-position))
+   (goto-char (pos-eol))
    (should (string= (python-eldoc--get-symbol-at-point) "codecs.open"))))
 
 (ert-deftest python-eldoc--get-symbol-at-point-2 ()
@@ -3520,6 +5293,32 @@ some_symbol   some_other_symbol
    (python-tests-look-at "  some_other_symbol")
    (should (string= (python-eldoc--get-symbol-at-point)
                     "some_symbol"))))
+
+(ert-deftest python-eldoc--get-doc-at-point-1 ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import time
+"
+   (let ((inhibit-message t))
+     (python-shell-send-buffer)
+     (python-tests-shell-wait-for-prompt)
+     (python-tests-look-at "time")
+     (should (python-eldoc--get-doc-at-point)))))
+
+(ert-deftest python-eldoc--get-doc-at-point-while-running-1 ()
+  "Should not get documentation when a program is running in the Shell buffer."
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "
+import time
+
+time.sleep(3)
+"
+   (let ((inhibit-message t))
+     (python-shell-send-buffer)
+     (python-tests-look-at "time")
+     (should-not (with-timeout (1 t) (python-eldoc--get-doc-at-point))))))
 
 
 ;;; Imenu
@@ -3875,6 +5674,20 @@ def decoratorFunctionWithArguments(arg1, arg2, arg3):
    (should (string= (python-info-current-defun t)
                     "def decoratorFunctionWithArguments"))))
 
+(ert-deftest python-info-current-defun-4 ()
+  "Ensure unmatched quotes do not cause hang (Bug#58780)."
+  (python-tests-with-temp-buffer
+   "
+def func():
+    ' \"\"\"
+    v = 1
+"
+   (python-tests-look-at "v = 1")
+   (should (string= (python-info-current-defun)
+                    "func"))
+   (should (string= (python-info-current-defun t)
+                    "def func"))))
+
 (ert-deftest python-info-current-symbol-1 ()
   (python-tests-with-temp-buffer
    "
@@ -3990,7 +5803,7 @@ def long_function_name(
    (should (not (python-info-beginning-of-statement-p)))
    (python-tests-look-at "print (var_one)")
    (should (python-info-beginning-of-statement-p))
-   (goto-char (line-beginning-position))
+   (goto-char (pos-bol))
    (should (not (python-info-beginning-of-statement-p)))))
 
 (ert-deftest python-info-beginning-of-statement-p-2 ()
@@ -4010,7 +5823,7 @@ if width == 0 and height == 0 and \\
    (should (not (python-info-beginning-of-statement-p)))
    (python-tests-look-at "raise ValueError(")
    (should (python-info-beginning-of-statement-p))
-   (goto-char (line-beginning-position))
+   (goto-char (pos-bol))
    (should (not (python-info-beginning-of-statement-p)))))
 
 (ert-deftest python-info-end-of-statement-p-1 ()
@@ -4435,6 +6248,43 @@ else:
      (equal (list (python-tests-look-at "else:" -1 t))
             (python-info-dedenter-opening-block-positions)))))
 
+(ert-deftest python-info-dedenter-opening-block-positions-6 ()
+  "Test multiline block start."
+  (python-tests-with-temp-buffer
+   "
+def func():
+    if (
+        cond1 or
+        cond2
+    ):
+        something()
+        else
+"
+   (python-tests-look-at "else\n")
+   (should
+    (equal (list (python-tests-look-at "if (" -1 t))
+           (python-info-dedenter-opening-block-positions)))))
+
+(ert-deftest python-info-dedenter-opening-block-positions-7 ()
+  "Test case blocks."
+  (python-tests-with-temp-buffer
+   "
+match a:
+    case 1:
+        match b:
+            case 2:
+                something()
+            case 3:
+"
+   (python-tests-look-at "case 1:")
+   (should-not (python-info-dedenter-opening-block-positions))
+   (python-tests-look-at "case 2:")
+   (should-not (python-info-dedenter-opening-block-positions))
+   (python-tests-look-at "case 3:")
+   (should (equal (list (python-tests-look-at "case 2:" -1 t)
+                        (python-tests-look-at "case 1:" -1 t))
+                  (python-info-dedenter-opening-block-positions)))))
+
 (ert-deftest python-info-dedenter-opening-block-message-1 ()
   "Test dedenters inside strings are ignored."
   (python-tests-with-temp-buffer
@@ -4619,6 +6469,24 @@ elif b:
                  (back-to-indentation)
                  (point))
                (python-info-dedenter-statement-p)))))
+
+(ert-deftest python-info-dedenter-statement-p-6 ()
+  "Test case keyword."
+  (python-tests-with-temp-buffer
+      "
+match a:  # Comment
+    case 1:
+        match b:
+            case 2:
+                something()
+            case 3:
+"
+    (python-tests-look-at "case 1:")
+    (should-not (python-info-dedenter-statement-p))
+    (python-tests-look-at "case 2:")
+    (should-not (python-info-dedenter-statement-p))
+    (python-tests-look-at "case 3:")
+    (should (= (point) (python-info-dedenter-statement-p)))))
 
 (ert-deftest python-info-line-ends-backslash-p-1 ()
   (python-tests-with-temp-buffer
@@ -4828,6 +6696,69 @@ def decorat0r(deff):
    (python-tests-look-at "deff()")
    (should (not (python-info-looking-at-beginning-of-defun)))))
 
+(ert-deftest python-info-looking-at-beginning-of-defun-2 ()
+  (python-tests-with-temp-buffer
+   "
+def \\
+        foo(arg):
+    pass
+"
+   (python-tests-look-at "def \\")
+   (should (python-info-looking-at-beginning-of-defun))
+   (should (python-info-looking-at-beginning-of-defun nil t))
+   (python-tests-look-at "foo(arg):")
+   (should (not (python-info-looking-at-beginning-of-defun)))
+   (should (python-info-looking-at-beginning-of-defun nil t))
+   (python-tests-look-at "pass")
+   (should (not (python-info-looking-at-beginning-of-defun)))
+   (should (not (python-info-looking-at-beginning-of-defun nil t)))))
+
+(ert-deftest python-info-looking-at-beginning-of-defun-3 ()
+  (python-tests-with-temp-buffer
+   "
+def foo(arg=\"default\"):  # Comment
+    pass
+"
+   (python-tests-look-at "arg")
+   (should (python-info-looking-at-beginning-of-defun))
+   (python-tests-look-at "default")
+   (should (python-info-looking-at-beginning-of-defun))
+   (python-tests-look-at "Comment")
+   (should (python-info-looking-at-beginning-of-defun))))
+
+(ert-deftest python-info-looking-at-beginning-of-block-1 ()
+  (python-tests-with-temp-buffer
+   "
+def f():
+    if True:
+        pass
+    l = [x * 2
+         for x in range(5)
+         if x < 3]
+# if False:
+\"\"\"
+if 0:
+\"\"\"
+"
+   (python-tests-look-at "def f():")
+   (should (python-info-looking-at-beginning-of-block))
+   (forward-char)
+   (should (not (python-info-looking-at-beginning-of-block)))
+   (python-tests-look-at "if True:")
+   (should (python-info-looking-at-beginning-of-block))
+   (forward-char)
+   (should (not (python-info-looking-at-beginning-of-block)))
+   (beginning-of-line)
+   (should (python-info-looking-at-beginning-of-block))
+   (python-tests-look-at "for x")
+   (should (not (python-info-looking-at-beginning-of-block)))
+   (python-tests-look-at "if x < 3")
+   (should (not (python-info-looking-at-beginning-of-block)))
+   (python-tests-look-at "if False:")
+   (should (not (python-info-looking-at-beginning-of-block)))
+   (python-tests-look-at "if 0:")
+   (should (not (python-info-looking-at-beginning-of-block)))))
+
 (ert-deftest python-info-current-line-comment-p-1 ()
   (python-tests-with-temp-buffer
    "
@@ -4991,6 +6922,77 @@ class Class:
    (should (python-info-docstring-p))
    (python-tests-look-at "'''Not a method docstring.'''")
    (should (not (python-info-docstring-p)))))
+
+(ert-deftest python-info-docstring-p-7 ()
+  "Test string in a dictionary."
+  (python-tests-with-temp-buffer
+   "
+{'Not a docstring': 1}
+'Also not a docstring'
+"
+   (python-tests-look-at "Not a docstring")
+   (should-not (python-info-docstring-p))
+   (python-tests-look-at "Also not a docstring")
+   (should-not (python-info-docstring-p))))
+
+(ert-deftest python-info-docstring-p-8 ()
+  "Test string in the 2nd line of a buffer."
+  (python-tests-with-temp-buffer
+   "import sys
+'''Not a docstring.'''
+"
+   (python-tests-look-at "Not a docstring")
+   (should-not (python-info-docstring-p))))
+
+(ert-deftest python-info-triple-quoted-string-p-1 ()
+  "Test triple quoted string."
+  (python-tests-with-temp-buffer
+   "
+t = '''Triple'''
+"
+   (python-tests-look-at " '''Triple")
+   (should-not
+    (python-tests-should-not-move
+     #'python-info-triple-quoted-string-p))
+   (forward-char)
+   (let ((start-pos (+ (point) 2))
+         (eol (pos-eol)))
+     (while (< (point) eol)
+       (should (= (python-tests-should-not-move
+                   #'python-info-triple-quoted-string-p)
+                  start-pos))
+       (forward-char)))
+   (dolist (pos `(,(point) ,(point-min) ,(point-max)))
+     (goto-char pos)
+     (should-not
+      (python-tests-should-not-move
+       #'python-info-triple-quoted-string-p)))))
+
+(ert-deftest python-info-triple-quoted-string-p-2 ()
+  "Test empty triple quoted string."
+  (python-tests-with-temp-buffer
+   "
+e = ''''''
+"
+   (python-tests-look-at "''''''")
+   (let ((start-pos (+ (point) 2))
+         (eol (pos-eol)))
+     (while (< (point) eol)
+       (should (= (python-tests-should-not-move
+                   #'python-info-triple-quoted-string-p)
+                  start-pos))
+       (forward-char)))))
+
+(ert-deftest python-info-triple-quoted-string-p-3 ()
+  "Test single quoted string."
+  (python-tests-with-temp-buffer
+   "
+s = 'Single'
+"
+   (while (< (point) (point-max))
+     (should-not (python-tests-should-not-move
+                  #'python-info-triple-quoted-string-p))
+     (forward-char))))
 
 (ert-deftest python-info-encoding-from-cookie-1 ()
   "Should detect it on first line."
@@ -5192,7 +7194,7 @@ urlpatterns = patterns('',
            (should (= (current-indentation) 23))))
       (or eim (electric-indent-mode -1)))))
 
-(ert-deftest python-triple-quote-pairing ()
+(ert-deftest python-triple-double-quote-pairing ()
   (let ((epm electric-pair-mode))
     (unwind-protect
         (progn
@@ -5217,6 +7219,33 @@ urlpatterns = patterns('',
            (should (= (point) (1- (point-max))))
            (should (string= (buffer-string)
                             "\"\n\"\"\"\n"))))
+      (or epm (electric-pair-mode -1)))))
+
+(ert-deftest python-triple-single-quote-pairing ()
+  (let ((epm electric-pair-mode))
+    (unwind-protect
+        (progn
+          (python-tests-with-temp-buffer
+           "''\n"
+           (or epm (electric-pair-mode 1))
+           (goto-char (1- (point-max)))
+           (python-tests-self-insert ?')
+           (should (string= (buffer-string)
+                            "''''''\n"))
+           (should (= (point) 4)))
+          (python-tests-with-temp-buffer
+           "\n"
+           (python-tests-self-insert (list ?' ?' ?'))
+           (should (string= (buffer-string)
+                            "''''''\n"))
+           (should (= (point) 4)))
+          (python-tests-with-temp-buffer
+           "'\n''\n"
+           (goto-char (1- (point-max)))
+           (python-tests-self-insert ?')
+           (should (= (point) (1- (point-max))))
+           (should (string= (buffer-string)
+                            "'\n'''\n"))))
       (or epm (electric-pair-mode -1)))))
 
 
@@ -5254,8 +7283,11 @@ class SomeClass:
 class SomeClass:
 
     def __init__(self, arg, kwarg=1):
+
     def filter(self, nums):
-    def __str__(self):"))))
+
+    def __str__(self):
+"))))
       (or enabled (hs-minor-mode -1)))))
 
 (ert-deftest python-hideshow-hide-levels-2 ()
@@ -5301,17 +7333,204 @@ class SomeClass:
 "))))
       (or enabled (hs-minor-mode -1)))))
 
+(ert-deftest python-hideshow-hide-levels-3 ()
+  "Should hide all blocks."
+  (python-tests-with-temp-buffer
+   "
+def f():
+    if 0:
+        l = [i for i in range(5)
+             if i < 3]
+        abc = o.match(1, 2, 3)
+
+def g():
+    pass
+"
+   (hs-minor-mode 1)
+   (hs-hide-level 1)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+def f():
+
+def g():
+"))))
+
+(ert-deftest python-hideshow-hide-levels-4 ()
+  "Should hide 2nd level block."
+  (python-tests-with-temp-buffer
+   "
+def f():
+    if 0:
+        l = [i for i in range(5)
+             if i < 3]
+        abc = o.match(1, 2, 3)
+
+def g():
+    pass
+"
+   (hs-minor-mode 1)
+   (hs-hide-level 2)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+def f():
+    if 0:
+
+def g():
+    pass
+"))))
+
+(ert-deftest python-hideshow-hide-all-1 ()
+  "Should hide all blocks."
+  (python-tests-with-temp-buffer
+   "if 0:
+
+    aaa
+    l = [i for i in range(5)
+         if i < 3]
+    ccc
+    abc = o.match(1, 2, 3)
+    ddd
+
+def f():
+    pass
+"
+   (hs-minor-mode 1)
+   (hs-hide-all)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "if 0:
+
+def f():
+"))))
+
+(ert-deftest python-hideshow-hide-all-2 ()
+  "Should hide comments."
+  (python-tests-with-temp-buffer
+   "
+# Multi line
+# comment
+
+\"\"\"
+# Multi line
+# string
+\"\"\"
+"
+   (hs-minor-mode 1)
+   (hs-hide-all)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+# Multi line
+
+\"\"\"
+# Multi line
+# string
+\"\"\"
+"))))
+
+(ert-deftest python-hideshow-hide-all-3 ()
+  "Should not hide comments when `hs-hide-comments-when-hiding-all' is nil."
+  (python-tests-with-temp-buffer
+   "
+# Multi line
+# comment
+
+\"\"\"
+# Multi line
+# string
+\"\"\"
+"
+   (hs-minor-mode 1)
+   (let ((hs-hide-comments-when-hiding-all nil))
+     (hs-hide-all))
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+# Multi line
+# comment
+
+\"\"\"
+# Multi line
+# string
+\"\"\"
+"))))
+
+(ert-deftest python-hideshow-hide-block-1 ()
+  "Should hide current block."
+  (python-tests-with-temp-buffer
+   "
+if 0:
+
+    aaa
+    l = [i for i in range(5)
+         if i < 3]
+    ccc
+    abc = o.match(1, 2, 3)
+    ddd
+
+def f():
+    pass
+"
+   (hs-minor-mode 1)
+   (python-tests-look-at "ddd")
+   (forward-line)
+   (hs-hide-block)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+if 0:
+
+def f():
+    pass
+"))))
+
+
+(ert-deftest python-hideshow-hide-block-2 ()
+  "Should hide the comment at the end of the block."
+  (python-tests-with-temp-buffer
+   "
+def f():
+    a = 1  # Comment
+"
+   (hs-minor-mode 1)
+   (python-tests-look-at "def")
+   (hs-hide-block)
+   (should
+    (string=
+     (python-tests-visible-string)
+     "
+def f():
+"))))
+
 
 (ert-deftest python-tests--python-nav-end-of-statement--infloop ()
   "Checks that `python-nav-end-of-statement' doesn't infloop in a
 buffer with overlapping strings."
+  ;; FIXME: The treatment of strings has changed in the mean time, and the
+  ;; test below now neither signals an error nor inf-loops.
+  ;; The description of the problem it's trying to catch is not clear enough
+  ;; to be able to see if the underlying problem is really fixed, sadly.
+  ;; E.g. I don't know what is meant by "overlap", really.
+  :tags '(:unstable)
   (python-tests-with-temp-buffer "''' '\n''' ' '\n"
     (syntax-propertize (point-max))
     ;; Create a situation where strings nominally overlap.  This
     ;; shouldn't happen in practice, but apparently it can happen when
     ;; a package calls `syntax-ppss' in a narrowed buffer during JIT
     ;; lock.
+    ;; FIXME: 4-5 is the SPC right after the opening triple quotes: why
+    ;; put a string-fence syntax on it?
     (put-text-property 4 5 'syntax-table (string-to-syntax "|"))
+    ;; FIXME: 8-9 is the middle quote in the closing triple quotes:
+    ;; it shouldn't have any syntax-table property to remove anyway!
     (remove-text-properties 8 9 '(syntax-table nil))
     (goto-char 4)
     (setq-local syntax-propertize-function nil)
@@ -5321,11 +7540,413 @@ buffer with overlapping strings."
                     (python-nav-end-of-statement)))
     (should (eolp))))
 
+;; Interactively, `run-python' focuses the buffer running the
+;; interpreter.
+(ert-deftest python-tests--run-python-selects-window ()
+  "Test for bug#31398.  See also bug#44421 and bug#52380."
+  (python-tests-with-shell-interpreter
+   nil
+   (let* ((buffer (process-buffer (run-python nil nil 'show)))
+          (window (get-buffer-window buffer)))
+     ;; We look at `selected-window' rather than `current-buffer'
+     ;; because as `(elisp)Current buffer' says, the latter will only
+     ;; be synchronized with the former when returning to the "command
+     ;; loop"; until then, `current-buffer' can change arbitrarily.
+     (should (eq window (selected-window)))
+     (pop-to-buffer (other-buffer))
+     (run-python nil nil 'show)
+     (should (eq window (selected-window))))))
+
+(ert-deftest python-tests--fill-long-first-line ()
+  (should
+   (equal
+    (with-temp-buffer
+      (insert "def asdf():
+    \"\"\"123 123 123 123 123 123 123 123 123 123 123 123 123 SHOULDBEWRAPPED 123 123 123 123
+
+    \"\"\"
+    a = 1
+")
+      (python-mode)
+      (goto-char (point-min))
+      (forward-line 1)
+      (end-of-line)
+      (fill-paragraph)
+      (buffer-substring-no-properties (point-min) (point-max)))
+    "def asdf():
+    \"\"\"123 123 123 123 123 123 123 123 123 123 123 123 123
+    SHOULDBEWRAPPED 123 123 123 123
+
+    \"\"\"
+    a = 1
+")))
+
+
+;;; Flymake
+
+(ert-deftest python-tests--flymake-command-output-pattern ()
+  (pcase-let ((`(,patt ,line ,col ,type ,msg)
+               python-flymake-command-output-pattern))
+    ;; Pyflakes output as of version 2.4.0
+    (let ((output "<stdin>:12:34 'a.b.c as d' imported but unused"))
+      (string-match patt output)
+      (should (equal (match-string line output) "12"))
+      (when col (should (equal (match-string col output) "34")))
+      (should (equal (match-string msg output)
+                     "'a.b.c as d' imported but unused")))
+    ;; Flake8 output as of version 4.0.1
+    (let ((output "stdin:12:34: F401 'a.b.c as d' imported but unused"))
+      (string-match patt output)
+      (should (equal (match-string line output) "12"))
+      (when col (should (equal (match-string col output) "34")))
+      (when type (should (equal (match-string type output) "F401")))
+      (should (equal (match-string msg output)
+                     (if type
+                         "'a.b.c as d' imported but unused"
+                       "F401 'a.b.c as d' imported but unused"))))
+    ;; Pylint output as of version 2.14.5
+    (let ((output "stdin:12:34: W0611: Unused import a.b.c (unused-import)"))
+      (string-match patt output)
+      (should (equal (match-string line output) "12"))
+      (when col (should (equal (match-string col output) "34")))
+      (when type (should (equal (match-string type output) "W0611")))
+      (should (equal (match-string msg output)
+                     (if type
+                         "Unused import a.b.c (unused-import)"
+                       "W0611: Unused import a.b.c (unused-import)"))))))
+
+(ert-deftest python-test--shell-send-block ()
+  (python-tests-with-temp-buffer-with-shell-interpreter
+   nil
+   "print('current 0')
+for x in range(1,3):
+    print('current %s' % x)
+print('current 3')"
+   (goto-char (point-min))
+   (should-error (python-shell-send-block) :type 'user-error)
+   (forward-line)
+   (python-shell-send-block t) ;; send block with header
+   (python-tests-shell-wait-for-prompt)
+   (python-shell-with-shell-buffer
+     (goto-char (point-min))
+     (should-not (re-search-forward "current 0" nil t))
+     (should (re-search-forward "current 1" nil t))
+     (should (re-search-forward "current 2" nil t))
+     (should-not (re-search-forward "current 3" nil t)))
+   (forward-line)
+   (python-shell-send-block) ;; send block body only
+   (python-tests-shell-wait-for-prompt)
+   (python-shell-with-shell-buffer
+     ;; should only 1 line output from the block body
+     (should (re-search-forward "current"))
+     (should (looking-at " 2"))
+     (should-not (re-search-forward "current" nil t)))))
+
+;;; python-ts-mode font-lock tests
+
+(defmacro python-ts-tests-with-temp-buffer (contents &rest body)
+  "Create a `python-ts-mode' enabled temp buffer with CONTENTS.
+BODY is code to be executed within the temp buffer.  Point is
+always located at the beginning of buffer."
+  (declare (indent 1) (debug t))
+  `(with-temp-buffer
+     (skip-unless (treesit-ready-p 'python))
+     (require 'python)
+     (let ((python-indent-guess-indent-offset nil))
+       (python-ts-mode)
+       (setopt treesit-font-lock-level 3)
+       (insert ,contents)
+       (font-lock-ensure)
+       (goto-char (point-min))
+       ,@body)))
+
+(ert-deftest python-ts-mode-compound-keywords-face ()
+  (dolist (test '("is not" "not in"))
+    (python-ts-tests-with-temp-buffer
+     (concat "t " test " t")
+     (forward-to-word 1)
+     (should (eq (face-at-point) font-lock-keyword-face))
+     (forward-to-word 1)
+     (should (eq (face-at-point) font-lock-keyword-face)))))
+
+(ert-deftest python-ts-mode-named-assignment-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "var := 3"
+   (should (eq (face-at-point) font-lock-variable-name-face))))
+
+(ert-deftest python-ts-mode-assignment-face-2 ()
+  (python-ts-tests-with-temp-buffer
+   "var, *rest = call()"
+   (dolist (test '("var" "rest"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-variable-name-face))))
+
+  (python-ts-tests-with-temp-buffer
+   "def func(*args):"
+   (dolist (test '("args"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-variable-name-face))))))
+
+(ert-deftest python-ts-mode-nested-types-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "def func(v:dict[ list[ tuple[str] ], int | None] | None):"
+   (dolist (test '("dict" "list" "tuple" "str" "int" "None" "None"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-union-types-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "def f(val: tuple[tuple, list[Lvl1 | Lvl2[Lvl3[Lvl4[Lvl5 | None]], Lvl2]]]):"
+   (dolist (test '("tuple" "tuple" "list" "Lvl1" "Lvl2" "Lvl3" "Lvl4" "Lvl5" "None" "Lvl2"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-union-types-face-2 ()
+  (python-ts-tests-with-temp-buffer
+   "def f(val: Type0 | Type1[Type2, pack0.Type3] | pack1.pack2.Type4 | None):"
+   (dolist (test '("Type0" "Type1" "Type2" "Type3" "Type4" "None"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))
+
+   (goto-char (point-min))
+   (dolist (test '("pack0" "pack1" "pack2"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))))
+
+(ert-deftest python-ts-mode-types-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "def f(val: Callable[[Type0], (Type1, Type2)]):"
+   (search-forward "val")
+   (goto-char (match-beginning 0))
+   (should (eq (face-at-point) font-lock-variable-name-face))
+   (dolist (test '("Callable" "Type0" "Type1" "Type2"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-types-face-2 ()
+  (python-ts-tests-with-temp-buffer
+   "def annot3(val:pack0.Type0)->pack1.pack2.pack3.Type1:"
+   (dolist (test '("Type0" "Type1"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))
+   (goto-char (point-min))
+   (dolist (test '("pack0" "pack1" "pack2" "pack3"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))))
+
+(ert-deftest python-ts-mode-types-face-3 ()
+  (python-ts-tests-with-temp-buffer
+   "def annot3(val:collections.abc.Iterator[Type0]):"
+   (dolist (test '("Iterator" "Type0"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))
+   (goto-char (point-min))
+   (dolist (test '("collections" "abc"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))))
+
+(ert-deftest python-ts-mode-isinstance-type-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "isinstance(var1, pkg.Type0)
+    isinstance(var2, (str, dict, Type1, type(None)))
+    isinstance(var3, my_type())"
+
+   (dolist (test '("var1" "pkg" "var2" "type" "None" "var3" "my_type"))
+     (let ((case-fold-search nil))
+       (search-forward test))
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))
+
+   (goto-char (point-min))
+   (dolist (test '("Type0" "str" "dict" "Type1"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-isinstance-type-face-2 ()
+  (python-ts-tests-with-temp-buffer
+   "issubclass(mytype, int|list|collections.abc.Iterable)"
+   (dolist (test '("int" "list" "Iterable"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-isinstance-type-face-3 ()
+  (python-ts-tests-with-temp-buffer
+   "issubclass(mytype, typevar1)
+    isinstance(mytype, (Type1, typevar2, tuple, abc.Coll))
+    isinstance(mytype, pkg0.Type2|self.typevar3|typevar4)"
+
+   (dolist (test '("typevar1" "typevar2" "pkg0" "self" "typevar3" "typevar4"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))
+
+   (goto-char (point-min))
+   (dolist (test '("Type1" "tuple" "Coll" "Type2"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-superclass-type-face ()
+  (python-ts-tests-with-temp-buffer
+   "class Temp(Base1, pack0.Base2,  Sequence[T1, T2]):"
+
+   (dolist (test '("Base1" "Base2" "Sequence" "T1" "T2"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))
+
+   (goto-char (point-min))
+   (dolist (test '("pack0"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))))
+
+(ert-deftest python-ts-mode-class-patterns-face ()
+  (python-ts-tests-with-temp-buffer
+   "match tt:
+        case str():
+            pass
+        case [Type0() | bytes(b) | pack0.pack1.Type1()]:
+            pass
+        case {'i': int(i), 'f': float() as f}:
+            pass"
+
+   (dolist (test '("str" "Type0" "bytes" "Type1" "int" "float"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))
+
+   (goto-char (point-min))
+   (dolist (test '("pack0" "pack1"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-type-face))))))
+
+(ert-deftest python-ts-mode-dotted-decorator-face-1 ()
+  (python-ts-tests-with-temp-buffer
+   "@pytest.mark.skip
+    @pytest.mark.skip(reason='msg')
+    def test():"
+
+   (dolist (test '("pytest" "mark" "skip" "pytest" "mark" "skip"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-dotted-decorator-face-2 ()
+  (python-ts-tests-with-temp-buffer
+   "@pytest.mark.skip(reason='msg')
+    def test():"
+
+   (setopt treesit-font-lock-level 4)
+   (dolist (test '("pytest" "mark" "skip"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-type-face)))))
+
+(ert-deftest python-ts-mode-builtin-call-face ()
+  (python-ts-tests-with-temp-buffer
+   "all()"
+   ;; enable 'function' feature from 4th level
+   (setopt treesit-font-lock-level 4)
+   (should (eq (face-at-point) font-lock-builtin-face))))
+
+(ert-deftest python-ts-mode-interpolation-nested-string ()
+  (python-ts-tests-with-temp-buffer
+   "t = f\"beg {True + 'string'}\""
+
+   (search-forward "True")
+   (goto-char (match-beginning 0))
+   (should (eq (face-at-point) font-lock-constant-face))
+
+   (goto-char (point-min))
+   (dolist (test '("f" "{" "+" "}"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-string-face))))
+
+
+   (goto-char (point-min))
+   (dolist (test '("beg" "'string'" "\""))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-string-face)))))
+
+(ert-deftest python-ts-mode-level-fontification-wo-interpolation ()
+  (python-ts-tests-with-temp-buffer
+   "t = f\"beg {True + var}\""
+
+   (setopt treesit-font-lock-level 2)
+   (search-forward "f")
+   (goto-char (match-beginning 0))
+   (should (not (eq (face-at-point) font-lock-string-face)))
+
+   (dolist (test '("\"" "beg" "{" "True" "var" "}" "\""))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-string-face)))))
+
+(ert-deftest python-ts-mode-disabled-string-interpolation ()
+  (python-ts-tests-with-temp-buffer
+   "t = f\"beg {True + var}\""
+
+   (unwind-protect
+       (progn
+         (setf (nth 2 treesit-font-lock-feature-list)
+               (remq 'string-interpolation (nth 2 treesit-font-lock-feature-list)))
+         (setopt treesit-font-lock-level 3)
+
+         (search-forward "f")
+         (goto-char (match-beginning 0))
+         (should (not (eq (face-at-point) font-lock-string-face)))
+
+         (dolist (test '("\"" "beg" "{" "True" "var" "}" "\""))
+           (search-forward test)
+           (goto-char (match-beginning 0))
+           (should (eq (face-at-point) font-lock-string-face))))
+
+    (setf (nth 2 treesit-font-lock-feature-list)
+          (append (nth 2 treesit-font-lock-feature-list) '(string-interpolation))))))
+
+(ert-deftest python-ts-mode-interpolation-doc-string ()
+  (python-ts-tests-with-temp-buffer
+   "f\"\"\"beg {'s1' + True + 's2'} end\"\"\""
+
+   (search-forward "True")
+   (goto-char (match-beginning 0))
+   (should (eq (face-at-point) font-lock-constant-face))
+
+   (goto-char (point-min))
+   (dolist (test '("f" "{" "+" "}"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (not (eq (face-at-point) font-lock-string-face))))
+
+   (goto-char (point-min))
+   (dolist (test '("\"\"\"" "beg" "end" "\"\"\""))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-doc-face)))
+
+   (goto-char (point-min))
+   (dolist (test '("'s1'" "'s2'"))
+     (search-forward test)
+     (goto-char (match-beginning 0))
+     (should (eq (face-at-point) font-lock-string-face)))))
 
 (provide 'python-tests)
-
-;; Local Variables:
-;; indent-tabs-mode: nil
-;; End:
 
 ;;; python-tests.el ends here

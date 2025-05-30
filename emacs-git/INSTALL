@@ -1,14 +1,19 @@
 GNU Emacs Installation Guide
-Copyright (C) 1992, 1994, 1996-1997, 2000-2017 Free Software Foundation,
+Copyright (C) 1992, 1994, 1996-1997, 2000-2025 Free Software Foundation,
 Inc.
 See the end of the file for license conditions.
 
 
-This file contains general information on building GNU Emacs.
-For more information specific to the MS-Windows, GNUstep/macOS, and
-MS-DOS ports, also read the files nt/INSTALL, nextstep/INSTALL, and
-msdos/INSTALL.  For information about building from a repository checkout
-(rather than a release), also read the file INSTALL.REPO.
+This file contains general information on building GNU Emacs.  If you
+are building an Emacs release tarball on a Unix or a GNU system, the
+instructions in this file should be sufficient.  For other
+configurations, we have additional specialized files:
+
+  . INSTALL.REPO if you build from a Git checkout
+  . nt/INSTALL if you build for MS-Windows
+  . nextstep/INSTALL if you build for GNUstep/macOS
+  . java/INSTALL if you build for Android
+  . msdos/INSTALL if you build for MS-DOS
 
 
 BASIC INSTALLATION
@@ -34,11 +39,12 @@ some of the steps manually.  The more detailed description in the other
 sections of this guide will help you do that, so please refer to those
 sections if you need to.
 
-  1. Unpacking the Emacs 25 release requires about 200 MB of free
-  disk space.  Building Emacs uses about another 200 MB of space.
-  The final installed Emacs uses about 150 MB of disk space.
-  This includes the space-saving that comes from automatically
-  compressing the Lisp source files on installation.
+  1.  Obtain and unpack the Emacs release, with commands like this:
+
+		 wget https://ftp.gnu.org/gnu/emacs/emacs-VERSION.tar.xz
+		 tar -xf emacs-VERSION.tar.xz
+
+      where VERSION is the Emacs version number.
 
   2a. 'cd' to the directory where you unpacked Emacs and invoke the
       'configure' script:
@@ -52,6 +58,15 @@ sections if you need to.
 		 SOURCE-DIR/configure
 
       where SOURCE-DIR is the top-level Emacs source directory.
+
+  2c. If you don't have write access to the default directory where
+      Emacs and its data files will be installed, specify an alternative
+      installation directory:
+
+		 ./configure --prefix=/SOME/OTHER/DIRECTORY
+
+      where /SOME/OTHER/DIRECTORY is a directory writable by your user,
+      for example, a subdirectory of your home directory.
 
   3. When 'configure' finishes, it prints several lines of details
      about the system configuration.  Read those details carefully
@@ -81,13 +96,17 @@ sections if you need to.
 
 		 src/emacs -Q
 
+     To test Emacs further (intended mostly to help developers):
+
+		 make check
+
   6. Assuming that the program 'src/emacs' starts and displays its
      opening screen, you can install the program and its auxiliary
      files into their installation directories:
 
 		 make install
 
-  You are now ready to use Emacs.  If you wish to conserve disk space,
+  You are now ready to use Emacs.  If you wish to conserve space,
   you may remove the program binaries and object files from the
   directory where you built Emacs:
 
@@ -104,24 +123,34 @@ sections if you need to.
   (provided you have the 'gzip' program) those installed Lisp source (.el)
   files that have corresponding .elc versions, as well as the Info files.
 
+  You can read a brief summary about common make targets:
+
+                make help
+
 
 ADDITIONAL DISTRIBUTION FILES
 
 * Complex Text Layout support libraries
 
-On GNU and Unix systems, Emacs needs the optional libraries "m17n-db",
-"libm17n-flt", "libotf" to correctly display such complex scripts as
-Indic and Khmer, and also for scripts that require Arabic shaping
-support (Arabic and Farsi).  On some systems, particularly GNU/Linux,
-these libraries may be already present or available as additional
-packages.  Note that if there is a separate 'dev' or 'devel' package,
-for use at compilation time rather than run time, you will need that
-as well as the corresponding run time package; typically the dev
-package will contain header files and a library archive.  Otherwise,
-you can download the libraries from <http://www.nongnu.org/m17n/>.
+On GNU and Unix systems, Emacs needs optional libraries to correctly
+display such complex scripts as Indic and Khmer, and also for scripts
+that require Arabic shaping support (Arabic and Farsi).  If the
+HarfBuzz library is installed, Emacs will build with it and use it for
+this purpose.  HarfBuzz is the preferred shaping engine, both on Posix
+hosts and on MS-Windows, so we recommend installing it before building
+Emacs.  The alternative for GNU/Linux and Posix systems is to use the
+"m17n-db", "libm17n-flt", and "libotf" libraries.  (On some systems,
+particularly GNU/Linux, these libraries may be already present or
+available as additional packages.)  Note that if there is a separate
+'dev' or 'devel' package, for use at compilation time rather than run
+time, you will need that as well as the corresponding run time
+package; typically the dev package will contain header files and a
+library archive.  On MS-Windows, if HarfBuzz is not available, Emacs
+will use the Uniscribe shaping engine that is part of the OS.
 
 Note that Emacs cannot support complex scripts on a TTY, unless the
-terminal includes such a support.
+terminal includes such a support.  However, most modern terminal
+emulators, such as xterm, do support such scripts.
 
 * intlfonts-VERSION.tar.gz
 
@@ -139,7 +168,9 @@ lisp/ps-mule.el defines the *.bdf font files required for printing
 each character set.
 
 The intlfonts distribution contains its own installation instructions,
-in the intlfonts/README file.
+in the intlfonts/README file.  See also the Emacs Frequently Asked
+Questions info pages "(efaq) How to add fonts" for installation
+instructions.
 
 * Image support libraries
 
@@ -162,14 +193,15 @@ can be found (in the unlikely event that your distribution does not
 provide them).  By default, libraries marked with an X are required if
 X11 is being used.
 
-    libXaw3d          https://directory.fsf.org/project/xaw3d/
-  X libxpm for XPM:   http://www.x.org/releases/current/src/lib/
+    libXaw3d          https://directory.fsf.org/project/Xaw3d
+  X libxpm for XPM:   https://www.x.org/releases/current/src/lib/
   X libpng for PNG:   http://www.libpng.org/
-    libz (for PNG):   http://www.zlib.net/
-  X libjpeg for JPEG: http://www.ijg.org/
-  X libtiff for TIFF: http://www.remotesensing.org/libtiff/
-  X libgif for GIF:   http://sourceforge.net/projects/giflib/
-    librsvg2 for SVG: http://wiki.gnome.org/action/show/Projects/LibRsvg
+    libz (for PNG):   https://www.zlib.net/
+  X libjpeg for JPEG: https://www.ijg.org/
+  X libtiff for TIFF: http://www.simplesystems.org/libtiff/
+  X libgif for GIF:   https://giflib.sourceforge.net/
+    librsvg2 for SVG: https://wiki.gnome.org/Projects/LibRsvg
+    libwebp for WebP: https://developers.google.com/speed/webp/
 
 If you supply the appropriate --without-LIB option, 'configure' will
 omit the corresponding library from Emacs, even if that makes for a
@@ -198,13 +230,67 @@ need to compile it.  For example, to compile Emacs with support for X
 and graphics libraries, you may need to install the X development
 package(s), and development versions of the jpeg, png, etc. packages.
 
-The names of the packages that you need varies according to the
+The names of the packages that you need vary according to the
 GNU/Linux distribution that you use, and the options that you want to
 configure Emacs with.  On Debian-based systems, you can install all the
 packages needed to build the installed version of Emacs with a command
-like 'apt-get build-dep emacs24'.  On Red Hat systems, the
-corresponding command is 'yum-builddep emacs'.
+like 'apt-get build-dep emacs' (on older systems, replace 'emacs' with
+e.g. 'emacs25').  On Red Hat-based systems, the corresponding command is
+'dnf builddep emacs' (on older systems, use 'yum-builddep' instead).
 
+On FreeBSD, the command is 'pkg install -y `pkg rquery %dn emacs-devel`'.
+
+* Alternative window systems
+
+If you want to use Emacs on one of the alternative window systems
+available on GNU/Linux and some Unix systems, such as Wayland or
+Broadway, you can build the PGTK ("Pure GTK") port of Emacs, which
+utilizes the GTK+ toolkit to support those window systems.  To this
+end, invoke the configure script with the '--with-pgtk' option, like
+this:
+
+	./configure --with-pgtk
+
+This build is only supported with GTK+ version 3, and it is an error
+to specify any other X-specific configuration option when PGTK is
+enabled.
+
+If you use exclusively X, do not use the PGTK port.  There are a
+number of respects in which the regular --with-x-toolkit=gtk build
+works better.  The PGTK port should not be considered a simple upgrade
+from --with-x-toolkit=gtk.
+
+With the PGTK build, you will be able to switch between running Emacs
+on X, Wayland and Broadway using the 'GDK_BACKEND' environment
+variable.  GTK+ should automatically detect and use the correct value
+for your system, but you can also specify it manually.  For example,
+to force GTK+ to run under Broadway, start Emacs like this:
+
+	GDK_BACKEND=broadway emacs ...
+
+(where '...' denotes any further options you may want to pass to Emacs).
+
+The GNUstep build also supports the Wayland window system.  If that is
+what you want, see nextstep/INSTALL.
+
+* Native compilation of Lisp files
+
+In addition to byte-compiling files of Lisp code, Emacs can also produce
+"native code", which usually runs several times faster than the
+corresponding byte-compiled code.  To build Emacs with this feature,
+your system must have not only GCC (the C compiler) and Binutils (the
+assembler and linker) but also the 'libgccjit' shared library, which is
+part of the GCC distribution.  If these components are available,
+building Emacs will automatically produce natively compiled Lisp code.
+
+By default, Emacs natively compiles only pre-loaded Lisp files during
+the build process; other Lisp files are natively compiled
+"just-in-time", i.e., the first time they are loaded into the running
+Emacs.  If you want Emacs to natively compile all Lisp files during the
+build ("ahead of time"), use the 'configure' option
+'--with-native-compilation=aot'.  If you do not want natively compiled
+Lisp code even if your system satisfies the build requirements, use the
+'configure' option '--with-native-compilation=no'.
 
 DETAILED BUILDING AND INSTALLATION:
 
@@ -212,7 +298,7 @@ DETAILED BUILDING AND INSTALLATION:
 see nextstep/INSTALL.  For non-ancient versions of MS Windows, see
 the file nt/INSTALL.  For MS-DOS and MS Windows 3.X, see msdos/INSTALL.)
 
-1) See the basic installation summary above for the disk space requirements.
+1) See BASIC INSTALLATION above for getting and configuring Emacs.
 
 2) In the unlikely event that 'configure' does not detect your system
 type correctly, consult './etc/MACHINES' to see what --host, --build
@@ -293,15 +379,25 @@ or more of these options:
   --without-gif          for GIF image support
   --without-png          for PNG image support
   --without-rsvg         for SVG image support
-  --without-imagemagick  for Imagemagick support
+  --without-webp         for WebP image support
+
+Although ImageMagick support is disabled by default due to security
+and stability concerns, you can enable it with --with-imagemagick.
 
 Use --without-toolkit-scroll-bars to disable Motif or Xaw3d scroll bars.
 
 Use --without-xim to inhibit the default use of X Input Methods.
 In this case, the X resource useXIM can be used to turn on use of XIM.
 
-Use --disable-largefile to omit support for files larger than 2GB on
-systems which support that.
+Use --without-xinput2 to disable the use of version 2 of the X Input
+Extension.  This disables support for touchscreens, pinch gestures,
+and scroll wheels that report scroll deltas at pixel-level precision.
+
+Use --disable-largefile to omit support for files larger than 2GB, and
+--disable-year2038 to omit support for timestamps past the year 2038,
+on systems which allow omitting such support.  This may help when
+linking Emacs to a library with an ABI that requires a particular
+width for off_t or for time_t.
 
 Use --without-sound to disable sound support.
 
@@ -317,11 +413,23 @@ features enabled, you can combine --without-all with --with-FEATURE.
 For example, you can use --without-all --without-x --with-dbus to
 build with D-Bus support and nothing more.
 
+Use --with-gnutls=ifavailable to use GnuTLS if available but go ahead
+and build without it if not available.  This overrides Emacs's default
+behavior of refusing to build if GnuTLS is absent.  When X11 support
+is enabled, the libraries for gif, jpeg, png, tiff, and xpm are in the
+same strongly-recommended category as GnuTLS, and have similar options.
+
 Use --with-wide-int to implement Emacs values with the type 'long long',
 even on hosts where a narrower type would do.  With this option, on a
 typical 32-bit host, Emacs integers have 62 bits instead of 30.
 
 Use --with-cairo to compile Emacs with Cairo drawing.
+
+Use --with-cairo-xcb to also utilize the Cairo XCB backend on systems
+where it is available.  While such a configuration is moderately
+faster when running over X connections with high latency, it is likely
+to crash when a new frame is created on a display connection opened
+after a display connection is closed.
 
 Use --with-modules to build Emacs with support for dynamic modules.
 This needs a C compiler that supports '__attribute__ ((cleanup (...)))',
@@ -345,7 +453,7 @@ Use --enable-link-time-optimization to enable link-time optimization.
 With GCC, you need GCC 4.5.0 and later, and 'configure' arranges for
 linking to be parallelized if possible.  With Clang, you need GNU
 binutils with the gold linker and plugin support, along with the LLVM
-gold plugin <http://llvm.org/docs/GoldPlugin.html>.  Link time
+gold plugin <https://llvm.org/docs/GoldPlugin.html>.  Link time
 optimization is not the default as it tends to cause crashes and to
 make Emacs slower.
 
@@ -359,6 +467,12 @@ should put emacs and its data files.  This defaults to '/usr/local'.
   PREFIXDIR/libexec/emacs/VERSION/CONFIGURATION
   (where CONFIGURATION is the configuration name, like
   i686-pc-linux-gnu), unless the '--exec-prefix' option says otherwise.
+
+If you don't have write access to the default '/usr/local' tree, and
+cannot have root access (without which "make install" will fail),
+specify '--prefix=PREFIXDIR' where PREFIXDIR is a directory writable
+by your user, for example your HOME directory or some subdirectory of
+it.
 
 The '--exec-prefix=EXECDIR' option allows you to specify a separate
 portion of the directory tree for installing architecture-specific
@@ -415,12 +529,12 @@ shell such as Bash, which uses these variables:
 
   ./configure \
     CPPFLAGS='-I/foo/myinclude' LDFLAGS='-L/bar/mylib' \
-    CFLAGS='-O3' LIBS='-lfoo -lbar'
+    CFLAGS='-Og' LIBS='-lfoo -lbar'
 
 (this is all one shell command).  This tells 'configure' to instruct the
 preprocessor to look in the '/foo/myinclude' directory for header
 files (in addition to the standard directories), instruct the linker
-to look in '/bar/mylib' for libraries, pass the -O3 optimization
+to look in '/bar/mylib' for libraries, pass the -Og optimization
 switch to the compiler, and link against libfoo and libbar
 libraries in addition to the standard ones.
 
@@ -473,10 +587,18 @@ need to create them if you have nothing to put in them.
 wish to add to various termcap entries.  (This is unlikely to be necessary.)
 
 6) Run 'make' in the top directory of the Emacs distribution to finish
-building Emacs in the standard way.  The final executable file is
-named 'src/emacs'.  You can execute this file "in place" without
-copying it, if you wish; then it automatically uses the sibling
-directories ../lisp, ../lib-src, ../info.
+building Emacs in the standard way.  The final executable file is named
+'src/emacs'.  You can execute this file "in place" without copying it,
+if you wish; then it automatically uses the sibling directories ../lisp,
+../lib-src, ../info, ../native-lisp (if built with support for native
+compilation).
+
+If you build Emacs in a directory separate from the source directory
+("out-of-tree"), run 'make' in the build directory.  Then you can
+execute the 'src/emacs' file under that directory "in place".  However,
+in this case the Emacs executable, while still using the ../lisp and
+../info subdirectories of the source tree, will use the ../lib-src and
+../native-lisp subdirectories from the build tree.
 
 Or you can "install" the executable and the other files into their
 installed locations, with 'make install'.  By default, Emacs's files
@@ -493,6 +615,13 @@ are installed in the following directories:
 		allows you to have several versions of Emacs installed
 		at the same time; in particular, you don't have to
 		make Emacs unavailable while installing a new version.
+
+'/usr/local/lib/emacs/VERSION/native-lisp' holds the natively compiled
+		pre-loaded Emacs Lisp files.  If the build used the
+		'configure' option '--with-native-compilation=aot', then
+		this directory holds all natively compiled Lisp files.
+
+'~/.emacs.d/eln-cache/' holds the just-in-time natively compiled Lisp files.
 
 '/usr/local/share/emacs/VERSION/etc' holds the Emacs tutorial, the DOC
 		file, and other architecture-independent files Emacs
@@ -541,6 +670,12 @@ install Emacs's libraries and data files or where Emacs should search
 for its Lisp files by giving values for 'make' variables as part of
 the command.  See the section below called 'MAKE VARIABLES' for more
 information on this.
+
+If the directories where 'make install' installs files are not writable
+by your user, you might prefer invoking 'make && sudo make install'
+instead.  This first invokes 'make' to make sure all the required files
+are rebuilt with your user's permissions and ownership, and then
+installs them using the permissions of root.
 
 7) Check the file 'dir' in your site's info directory (usually
 /usr/local/share/info) to make sure that it has a menu entry for the

@@ -1,5 +1,5 @@
 /* Header for coding system handler.
-   Copyright (C) 2001-2017 Free Software Foundation, Inc.
+   Copyright (C) 2001-2025 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -27,6 +27,8 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #define EMACS_CODING_H
 
 #include "lisp.h"
+
+INLINE_HEADER_BEGIN
 
 /* Index to arguments of Fdefine_coding_system_internal.  */
 
@@ -94,7 +96,6 @@ enum define_coding_undecided_arg_index
    `mac' or a vector of coding systems (symbols).  */
 
 extern Lisp_Object Vcoding_system_hash_table;
-
 
 /* Enumeration of index to an attribute vector of a coding system.  */
 
@@ -165,35 +166,35 @@ enum coding_attr_index
 
 /* Return the name of a coding system specified by ID.  */
 #define CODING_ID_NAME(id) \
-  (HASH_KEY (XHASH_TABLE (Vcoding_system_hash_table), id))
+  HASH_KEY (XHASH_TABLE (Vcoding_system_hash_table), id)
 
 /* Return the attribute vector of a coding system specified by ID.  */
 
 #define CODING_ID_ATTRS(id)	\
-  (AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 0))
+  AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 0)
 
 /* Return the list of aliases of a coding system specified by ID.  */
 
 #define CODING_ID_ALIASES(id)	\
-  (AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 1))
+  AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 1)
 
 /* Return the eol-type of a coding system specified by ID.  */
 
 #define CODING_ID_EOL_TYPE(id)	\
-  (AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 2))
+  AREF (HASH_VALUE (XHASH_TABLE (Vcoding_system_hash_table), id), 2)
 
 
 /* Return the spec vector of CODING_SYSTEM_SYMBOL.  */
 
 #define CODING_SYSTEM_SPEC(coding_system_symbol)	\
-  (Fgethash (coding_system_symbol, Vcoding_system_hash_table, Qnil))
+  Fgethash (coding_system_symbol, Vcoding_system_hash_table, Qnil)
 
 
 /* Return the ID of CODING_SYSTEM_SYMBOL.  */
 
 #define CODING_SYSTEM_ID(coding_system_symbol)			\
   hash_lookup (XHASH_TABLE (Vcoding_system_hash_table),		\
-	       coding_system_symbol, NULL)
+	       coding_system_symbol)
 
 /* Return true if CODING_SYSTEM_SYMBOL is a coding system.  */
 
@@ -208,7 +209,7 @@ enum coding_attr_index
   do {							\
     if (CODING_SYSTEM_ID (x) < 0			\
 	&& NILP (Fcheck_coding_system (x)))		\
-      wrong_type_argument (Qcoding_system_p, (x));	\
+      wrong_type_argument (Qcoding_system_p, x);	\
   } while (false)
 
 
@@ -224,7 +225,7 @@ enum coding_attr_index
 	spec = CODING_SYSTEM_SPEC (x);			\
       }							\
     if (NILP (spec))					\
-      wrong_type_argument (Qcoding_system_p, (x));	\
+      wrong_type_argument (Qcoding_system_p, x);	\
   } while (false)
 
 
@@ -241,7 +242,7 @@ enum coding_attr_index
 	  id = CODING_SYSTEM_ID (x);				\
 	}							\
       if (id < 0)						\
-	wrong_type_argument (Qcoding_system_p, (x));	\
+	wrong_type_argument (Qcoding_system_p, x);		\
     } while (false)
 
 
@@ -427,6 +428,11 @@ struct coding_system
   /* Set to true if charbuf contains an annotation.  */
   bool_bf annotated : 1;
 
+  /* True if the decoded text should be inserted before markers in the
+     output buffer, if `dst_object' is a buffer.  Currently used only
+     when reading output from subprocesses.  */
+  bool_bf insert_before_markers : 1;
+
   /* Used internally in coding.c.  See the comment of detect_ascii.  */
   unsigned eol_seen : 3;
 
@@ -448,7 +454,7 @@ struct coding_system
 
   unsigned char *safe_charsets;
 
-  /* How may heading bytes we can skip for decoding.  This is set to
+  /* How many heading bytes we can skip for decoding.  This is set to
      -1 in setup_coding_system, and updated by detect_coding.  So,
      when this is equal to the byte length of the text being
      converted, we can skip the actual conversion process except for
@@ -638,11 +644,11 @@ struct coding_system
   } while (false)
 
 /* Encode the file name NAME using the specified coding system
-   for file names, if any.  */
+   for file names, if any.  May return NAME itself.  */
 #define ENCODE_FILE(NAME)  encode_file_name (NAME)
 
 /* Decode the file name NAME using the specified coding system
-   for file names, if any.  */
+   for file names, if any.  May return NAME itself.  */
 #define DECODE_FILE(NAME)  decode_file_name (NAME)
 
 /* Encode the string STR using the specified coding system
@@ -662,9 +668,22 @@ struct coding_system
 /* Note that this encodes utf-8, not utf-8-emacs, so it's not a no-op.  */
 #define ENCODE_UTF_8(str) code_convert_string_norecord (str, Qutf_8, true)
 
+/* Return true if VAL is a high surrogate.  VAL must be a 16-bit code
+   unit.  */
+
+#define UTF_16_HIGH_SURROGATE_P(val) \
+  (((val) & 0xFC00) == 0xD800)
+
+/* Return true if VAL is a low surrogate.  VAL must be a 16-bit code
+   unit.  */
+
+#define UTF_16_LOW_SURROGATE_P(val) \
+  (((val) & 0xFC00) == 0xDC00)
+
 /* Extern declarations.  */
 extern Lisp_Object code_conversion_save (bool, bool);
 extern bool encode_coding_utf_8 (struct coding_system *);
+extern bool utf8_string_p (Lisp_Object);
 extern void setup_coding_system (Lisp_Object, struct coding_system *);
 extern Lisp_Object coding_charset_list (struct coding_system *);
 extern Lisp_Object coding_system_charset_list (Lisp_Object);
@@ -672,23 +691,30 @@ extern Lisp_Object code_convert_string (Lisp_Object, Lisp_Object,
                                         Lisp_Object, bool, bool, bool);
 extern Lisp_Object code_convert_string_norecord (Lisp_Object, Lisp_Object,
                                                  bool);
+extern Lisp_Object encode_string_utf_8 (Lisp_Object, Lisp_Object, bool,
+					Lisp_Object, Lisp_Object);
+extern Lisp_Object decode_string_utf_8 (Lisp_Object, const char *, ptrdiff_t,
+					Lisp_Object, bool,
+					Lisp_Object, Lisp_Object);
 extern Lisp_Object encode_file_name (Lisp_Object);
 extern Lisp_Object decode_file_name (Lisp_Object);
 extern Lisp_Object raw_text_coding_system (Lisp_Object);
 extern bool raw_text_coding_system_p (struct coding_system *);
 extern Lisp_Object coding_inherit_eol_type (Lisp_Object, Lisp_Object);
 extern Lisp_Object complement_process_encoding_system (Lisp_Object);
+extern Lisp_Object make_string_from_utf8 (const char *, ptrdiff_t);
 
-extern void decode_coding_gap (struct coding_system *,
-			       ptrdiff_t, ptrdiff_t);
+extern void decode_coding_gap (struct coding_system *, ptrdiff_t);
 extern void decode_coding_object (struct coding_system *,
                                   Lisp_Object, ptrdiff_t, ptrdiff_t,
                                   ptrdiff_t, ptrdiff_t, Lisp_Object);
 extern void encode_coding_object (struct coding_system *,
                                   Lisp_Object, ptrdiff_t, ptrdiff_t,
                                   ptrdiff_t, ptrdiff_t, Lisp_Object);
+/* Defined in this file.  */
+INLINE int surrogates_to_codepoint (int, int);
 
-#if defined (WINDOWSNT) || defined (CYGWIN)
+#if defined (WINDOWSNT) || defined (CYGWIN) || defined HAVE_ANDROID
 
 /* These functions use Lisp string objects to store the UTF-16LE
    strings that modern versions of Windows expect.  These strings are
@@ -711,7 +737,7 @@ extern Lisp_Object from_unicode (Lisp_Object str);
 /* Convert WSTR to an Emacs string.  */
 extern Lisp_Object from_unicode_buffer (const wchar_t *wstr);
 
-#endif /* WINDOWSNT || CYGWIN */
+#endif /* WINDOWSNT || CYGWIN || HAVE_ANDROID */
 
 /* Macros for backward compatibility.  */
 
@@ -724,24 +750,42 @@ extern Lisp_Object from_unicode_buffer (const wchar_t *wstr);
 
 #define decode_coding_c_string(coding, src, bytes, dst_object)		\
   do {									\
-    (coding)->source = (src);						\
-    (coding)->src_chars = (coding)->src_bytes = (bytes);		\
-    decode_coding_object ((coding), Qnil, 0, 0, (bytes), (bytes),	\
-			  (dst_object));				\
+    (coding)->source = src;						\
+    (coding)->src_chars = (coding)->src_bytes = bytes;			\
+    decode_coding_object (coding, Qnil, 0, 0, bytes, bytes, dst_object); \
   } while (false)
 
 
+/* Return the Unicode code point for the given UTF-16 surrogates.  */
+
+INLINE int
+surrogates_to_codepoint (int low, int high)
+{
+  eassert (0 <= low && low <= 0xFFFF);
+  eassert (0 <= high && high <= 0xFFFF);
+  eassert (UTF_16_LOW_SURROGATE_P (low));
+  eassert (UTF_16_HIGH_SURROGATE_P (high));
+  return 0x10000 + (low - 0xDC00) + ((high - 0xD800) * 0x400);
+}
+
+/* Like build_string, but always returns a multibyte string, and is
+   optimized for speed when STR is a UTF-8 encoded text string.  */
+
+INLINE Lisp_Object
+build_string_from_utf8 (const char *str)
+{
+  return make_string_from_utf8 (str, strlen (str));
+}
+
+
 extern Lisp_Object preferred_coding_system (void);
-
-
-#ifdef emacs
 
 /* Coding system to be used to encode text for terminal display when
    terminal coding system is nil.  */
 extern struct coding_system safe_terminal_coding;
 
-#endif
-
 extern char emacs_mule_bytes[256];
+
+INLINE_HEADER_END
 
 #endif /* EMACS_CODING_H */

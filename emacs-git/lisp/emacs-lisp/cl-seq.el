@@ -1,6 +1,6 @@
 ;;; cl-seq.el --- Common Lisp features, part 3  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2017 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2025 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Old-Version: 2.02
@@ -69,10 +69,9 @@
                           (list 'or (list 'memq '(car cl-keys-temp)
                                           (list 'quote
                                                 (mapcar
-                                                 (function
-                                                  (lambda (x)
-                                                    (if (consp x)
-                                                        (car x) x)))
+                                                 (lambda (x)
+                                                   (if (consp x)
+                                                       (car x) x))
                                                  (append kwords
                                                          other-keys))))
                                 '(car (cdr (memq (quote :allow-other-keys)
@@ -113,6 +112,13 @@
 (defvar cl-key)
 
 ;;;###autoload
+(defun cl-endp (x)
+  "Return true if X is the empty list; false if it is a cons.
+Signal an error if X is not a list."
+  (cl-check-type x list)
+  (null x))
+
+;;;###autoload
 (defun cl-reduce (cl-func cl-seq &rest cl-keys)
   "Reduce two-argument FUNCTION across SEQ.
 \nKeywords supported:  :start :end :from-end :initial-value :key
@@ -122,9 +128,20 @@ second element of SEQ, then calling FUNCTION with that result and
 the third element of SEQ, then with that result and the fourth
 element of SEQ, etc.
 
-If :INITIAL-VALUE is specified, it is added to the front of SEQ.
-If SEQ is empty, return :INITIAL-VALUE and FUNCTION is not
-called.
+If :INITIAL-VALUE is specified, it is logically added to the
+front of SEQ (or the back if :FROM-END is non-nil).  If SEQ is
+empty, return :INITIAL-VALUE and FUNCTION is not called.
+
+If SEQ is empty and no :INITIAL-VALUE is specified, then return
+the result of calling FUNCTION with zero arguments.  This is the
+only case where FUNCTION is called with fewer than two arguments.
+
+If SEQ contains exactly one element and no :INITIAL-VALUE is
+specified, then return that element and FUNCTION is not called.
+
+If :FROM-END is non-nil, the reduction occurs from the back of
+the SEQ moving forward, and the order of arguments to the
+FUNCTION is also reversed.
 
 \n(fn FUNCTION SEQ [KEYWORD VALUE]...)"
   (cl--parsing-keywords (:from-end (:start 0) :end :initial-value :key) ()
@@ -435,14 +452,15 @@ to avoid corrupting the original SEQ.
   (apply 'cl-substitute cl-new nil cl-list :if-not cl-pred cl-keys))
 
 ;;;###autoload
-(defun cl-nsubstitute (cl-new cl-old cl-seq &rest cl-keys)
+(defun cl-nsubstitute (cl-new cl-old seq &rest cl-keys)
   "Substitute NEW for OLD in SEQ.
 This is a destructive function; it reuses the storage of SEQ whenever possible.
 \nKeywords supported:  :test :test-not :key :count :start :end :from-end
 \n(fn NEW OLD SEQ [KEYWORD VALUE]...)"
   (cl--parsing-keywords (:test :test-not :key :if :if-not :count
 			(:start 0) :end :from-end) ()
-    (let ((len (length cl-seq)))
+    (let* ((cl-seq (if (stringp seq) (string-to-vector seq) seq))
+           (len (length cl-seq)))
       (or (eq cl-old cl-new) (<= (or cl-count (setq cl-count len)) 0)
 	  (if (and (listp cl-seq) (or (not cl-from-end) (> cl-count (/ len 2))))
 	    (let ((cl-p (nthcdr cl-start cl-seq)))
@@ -466,8 +484,8 @@ This is a destructive function; it reuses the storage of SEQ whenever possible.
 		  (progn
 		    (aset cl-seq cl-start cl-new)
 		    (setq cl-count (1- cl-count))))
-	      (setq cl-start (1+ cl-start)))))))
-    cl-seq))
+	      (setq cl-start (1+ cl-start))))))
+      (if (stringp seq) (concat cl-seq) cl-seq))))
 
 ;;;###autoload
 (defun cl-nsubstitute-if (cl-new cl-pred cl-list &rest cl-keys)
@@ -650,13 +668,16 @@ This is a destructive function; it reuses the storage of SEQ if possible.
 \nKeywords supported:  :key
 \n(fn SEQ PREDICATE [KEYWORD VALUE]...)"
   (if (nlistp cl-seq)
-      (cl-replace cl-seq (apply 'cl-sort (append cl-seq nil) cl-pred cl-keys))
+      (if (stringp cl-seq)
+          (concat (apply #'cl-sort (vconcat cl-seq) cl-pred cl-keys))
+        (cl-replace cl-seq
+                    (apply #'cl-sort (append cl-seq nil) cl-pred cl-keys)))
     (cl--parsing-keywords (:key) ()
       (if (memq cl-key '(nil identity))
 	  (sort cl-seq cl-pred)
-	(sort cl-seq (function (lambda (cl-x cl-y)
-				 (funcall cl-pred (funcall cl-key cl-x)
-					  (funcall cl-key cl-y)))))))))
+        (sort cl-seq (lambda (cl-x cl-y)
+                       (funcall cl-pred (funcall cl-key cl-x)
+                                (funcall cl-key cl-y))))))))
 
 ;;;###autoload
 (defun cl-stable-sort (cl-seq cl-pred &rest cl-keys)
@@ -696,9 +717,7 @@ Return the sublist of LIST whose car is ITEM.
 	(while (and cl-list (not (cl--check-test cl-item (car cl-list))))
 	  (setq cl-list (cdr cl-list)))
 	cl-list)
-    (if (and (numberp cl-item) (not (integerp cl-item)))
-	(member cl-item cl-list)
-      (memq cl-item cl-list))))
+    (memql cl-item cl-list)))
 (autoload 'cl--compiler-macro-member "cl-macs")
 
 ;;;###autoload
@@ -737,7 +756,7 @@ Return the sublist of LIST whose car matches.
 			(not (cl--check-test cl-item (car (car cl-alist))))))
 	  (setq cl-alist (cdr cl-alist)))
 	(and cl-alist (car cl-alist)))
-    (if (and (numberp cl-item) (not (integerp cl-item)))
+    (if (and (numberp cl-item) (not (fixnump cl-item)))
 	(assoc cl-item cl-alist)
       (assq cl-item cl-alist))))
 (autoload 'cl--compiler-macro-assoc "cl-macs")
@@ -1030,10 +1049,11 @@ Atoms are compared by `eql'; cons cells are compared recursively.
   (and (not (consp cl-x)) (not (consp cl-y)) (cl--check-match cl-x cl-y)))
 
 
+(make-obsolete-variable 'cl-seq-load-hook
+                        "use `with-eval-after-load' instead." "28.1")
 (run-hooks 'cl-seq-load-hook)
 
 ;; Local variables:
-;; byte-compile-dynamic: t
 ;; generated-autoload-file: "cl-loaddefs.el"
 ;; End:
 

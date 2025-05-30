@@ -1,10 +1,11 @@
+# flexmember.m4
 # serial 5
-# Check for flexible array member support.
+dnl Copyright (C) 2006, 2009-2025 Free Software Foundation, Inc.
+dnl This file is free software; the Free Software Foundation
+dnl gives unlimited permission to copy and/or distribute it,
+dnl with or without modifications, as long as this notice is preserved.
 
-# Copyright (C) 2006, 2009-2017 Free Software Foundation, Inc.
-# This file is free software; the Free Software Foundation
-# gives unlimited permission to copy and/or distribute it,
-# with or without modifications, as long as this notice is preserved.
+# Check for flexible array member support.
 
 # Written by Paul Eggert.
 
@@ -34,12 +35,10 @@ AC_DEFUN([AC_C_FLEXIBLE_ARRAY_MEMBER],
     AC_DEFINE([FLEXIBLE_ARRAY_MEMBER], [],
       [Define to nothing if C supports flexible array members, and to
        1 if it does not.  That way, with a declaration like 'struct s
-       { int n; double d@<:@FLEXIBLE_ARRAY_MEMBER@:>@; };', the struct hack
+       { int n; short d@<:@FLEXIBLE_ARRAY_MEMBER@:>@; };', the struct hack
        can be used with pre-C99 compilers.
-       When computing the size of such an object, don't use 'sizeof (struct s)'
-       as it overestimates the size.  Use 'offsetof (struct s, d)' instead.
-       Don't use 'offsetof (struct s, d@<:@0@:>@)', as this doesn't work with
-       MSVC and with C++ compilers.])
+       Use 'FLEXSIZEOF (struct s, d, N * sizeof (short))' to calculate
+       the size in bytes of such a struct containing an N-element array.])
   else
     AC_DEFINE([FLEXIBLE_ARRAY_MEMBER], [1])
   fi

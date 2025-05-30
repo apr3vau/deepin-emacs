@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2017 Free Software
+@c Copyright (C) 1985--1987, 1993--1995, 1997, 2000--2025 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Modes
@@ -23,7 +23,7 @@ words as you type (@pxref{Auto Fill}).  Minor modes are independent of
 one another, and of the selected major mode.
 
 @menu
-* Major Modes::         Text mode vs. Lisp mode vs. C mode...
+* Major Modes::         Text mode vs.@: Lisp mode vs.@: C mode...
 * Minor Modes::         Each minor mode is a feature you can turn on
                           independently of any others.
 * Choosing Modes::      How modes are chosen when visiting files.
@@ -57,10 +57,10 @@ for specific programming languages.  These include Lisp mode (which
 has several variants), C mode, Fortran mode, and others.  The third
 group consists of major modes that are not associated directly with
 files; they are used in buffers created for specific purposes by
-Emacs, such as Dired mode for buffers made by Dired (@pxref{Dired}),
-Message mode for buffers made by @kbd{C-x m} (@pxref{Sending Mail}),
-and Shell mode for buffers used to communicate with an inferior shell
-process (@pxref{Interactive Shell}).
+Emacs.  Examples include Dired mode for buffers made by Dired
+(@pxref{Dired}), Message mode for buffers made by @kbd{C-x m}
+(@pxref{Sending Mail}), and Shell mode for buffers used to communicate
+with an inferior shell process (@pxref{Interactive Shell}).
 
   Usually, the major mode is automatically set by Emacs, when you
 first visit a file or create a buffer (@pxref{Choosing Modes}).  You
@@ -97,19 +97,18 @@ do something more suitable for the mode.  For instance, programming
 language modes bind @key{TAB} to indent the current line according to
 the rules of the language (@pxref{Indentation}).  The keys that are
 commonly changed are @key{TAB}, @key{DEL}, and @kbd{C-j}.  Many modes
-also define special commands of their own, usually bound in the prefix
-key @kbd{C-c}.  Major modes can also alter user options and variables;
-for instance, programming language modes typically set a buffer-local
-value for the variable @code{comment-start}, which determines how
-source code comments are delimited (@pxref{Comments}).
+also define special commands of their own, usually bound to key
+sequences whose prefix key is @kbd{C-c} (@pxref{Keys}).  Major modes
+can also alter user options and variables; for instance, programming
+language modes typically set a buffer-local value for the variable
+@code{comment-start}, which determines how source code comments are
+delimited (@pxref{Comments}).
 
-@findex describe-mode
-@kindex C-h m
   To view the documentation for the current major mode, including a
-list of its key bindings, type @code{C-h m} (@code{describe-mode}).
+list of its key bindings, type @kbd{C-h m} (@code{describe-mode}).
+@xref{Misc Help}.
 
 @cindex mode hook
-@vindex text-mode-hook
 @vindex prog-mode-hook
   Every major mode, apart from Fundamental mode, defines a @dfn{mode
 hook}, a customizable list of Lisp functions to run each time the mode
@@ -117,7 +116,7 @@ is enabled in a buffer.  @xref{Hooks}, for more information about
 hooks.  Each mode hook is named after its major mode, e.g., Fortran
 mode has @code{fortran-mode-hook}.  Furthermore, all text-based major
 modes run @code{text-mode-hook}, and many programming language modes
-@footnote{More specifically, the modes which are ''derived'' from
+@footnote{More specifically, the modes which are ``derived'' from
 @code{prog-mode} (@pxref{Derived Modes,,, elisp, The Emacs Lisp
 Reference Manual}).} (including all those distributed with Emacs) run
 @code{prog-mode-hook}, prior to running their own mode hooks.  Hook
@@ -127,8 +126,8 @@ see which mode is actually being entered.
   Mode hooks are commonly used to enable minor modes (@pxref{Minor
 Modes}).  For example, you can put the following lines in your init
 file to enable Flyspell minor mode in all text-based major modes
-(@pxref{Spelling}), and Eldoc minor mode in Emacs Lisp mode
-(@pxref{Lisp Doc}):
+(@pxref{Spelling}), and ElDoc minor mode in Emacs Lisp mode
+(@pxref{Programming Language Doc}):
 
 @example
 (add-hook 'text-mode-hook 'flyspell-mode)
@@ -208,7 +207,7 @@ amount of work you can lose in case of a crash.  @xref{Auto Save}.
 
 @item
 Electric Quote mode automatically converts quotation marks.  For
-example, it requotes text typed @t{`like this'} to text @t{‘like
+example, it requotes text typed @kbd{`like this'} to text @t{‘like
 this’}.  You can control what kind of text it operates in, and you can
 disable it entirely in individual buffers.  @xref{Quotation Marks}.
 
@@ -225,8 +224,6 @@ Font-Lock mode automatically highlights certain textual units found in
 programs.  It is enabled globally by default, but you can disable it
 in individual buffers.  @xref{Faces}.
 
-@findex display-line-numbers-mode
-@cindex display-line-numbers-mode
 @item
 Display Line Numbers mode is a convenience wrapper around
 @code{display-line-numbers}, setting it using the value of
@@ -299,6 +296,15 @@ but the tool bar is only displayed on graphical terminals.  @xref{Tool
 Bars}.
 
 @item
+Window Tool Bar mode gives windows a tool bar.  @xref{Window Tool Bar}.
+
+@item
+Tab Bar mode gives each frame a tab bar.  @xref{Tab Bars}.
+
+@item
+Tab Line mode gives each window a tab line.  @xref{Tab Line}.
+
+@item
 Transient Mark mode highlights the region, and makes many Emacs
 commands operate on the region when the mark is active.  It is enabled
 by default.  @xref{Mark}.
@@ -354,8 +360,12 @@ preferences.  If you personally want to use a minor mode for a
 particular file type, it is better to enable the minor mode via a
 major mode hook (@pxref{Major Modes}).
 
+  Second, Emacs checks whether the file's extension matches an entry
+in any directory-local @code{auto-mode-alist}.  These are found using
+the @file{.dir-locals.el} facility (@pxref{Directory Variables}).
+
 @vindex interpreter-mode-alist
-  Second, if there is no file variable specifying a major mode, Emacs
+  Third, if there is no file variable specifying a major mode, Emacs
 checks whether the file's contents begin with @samp{#!}.  If so, that
 indicates that the file can serve as an executable shell command,
 which works by running an interpreter named on the file's first line
@@ -373,7 +383,7 @@ same is true for man pages which start with the magic string
 @samp{'\"} to specify a list of troff preprocessors.
 
 @vindex magic-mode-alist
-  Third, Emacs tries to determine the major mode by looking at the
+  Fourth, Emacs tries to determine the major mode by looking at the
 text at the start of the buffer, based on the variable
 @code{magic-mode-alist}.  By default, this variable is @code{nil} (an
 empty list), so Emacs skips this step; however, you can customize it
@@ -401,7 +411,7 @@ where @var{match-function} is a Lisp function that is called at the
 beginning of the buffer; if the function returns non-@code{nil}, Emacs
 set the major mode with @var{mode-function}.
 
-  Fourth---if Emacs still hasn't found a suitable major mode---it
+  Fifth---if Emacs still hasn't found a suitable major mode---it
 looks at the file's name.  The correspondence between file names and
 major modes is controlled by the variable @code{auto-mode-alist}.  Its
 value is a list in which each element has this form,
@@ -422,11 +432,19 @@ For example, one element normally found in the list has the form
 @code{(@t{"\\.c\\'"} . c-mode)}, and it is responsible for selecting C
 mode for files whose names end in @file{.c}.  (Note that @samp{\\} is
 needed in Lisp syntax to include a @samp{\} in the string, which must
-be used to suppress the special meaning of @samp{.} in regexps.)  If
-the element has the form @code{(@var{regexp} @var{mode-function}
-@var{flag})} and @var{flag} is non-@code{nil}, then after calling
-@var{mode-function}, Emacs discards the suffix that matched
-@var{regexp} and searches the list again for another match.
+be used to suppress the special meaning of @samp{.} in regexps.)
+
+@cindex backup files, choosing a major mode
+@cindex encrypted files, choosing a major mode
+If the element has the form @w{@code{(@var{regexp} @var{mode-function}
+@var{flag})}} and @var{flag} is non-@code{nil}, then after calling
+@var{mode-function} (if it is non-@code{nil}), Emacs discards the
+suffix that matched @var{regexp} and searches the list again for
+another match.  This ``recursive extension stripping'' is used for
+files which have multiple extensions, and the ``outer'' extension
+hides the ``inner'' one that actually specifies the right mode.  For
+example, backup files and GPG-encrypted files with @file{.gpg}
+extension use this feature.
 
 @vindex auto-mode-case-fold
   On GNU/Linux and other systems with case-sensitive file names, Emacs
@@ -441,19 +459,68 @@ a single case-insensitive search through @code{auto-mode-alist}.
   Finally, if Emacs @emph{still} hasn't found a major mode to use, it
 compares the text at the start of the buffer to the variable
 @code{magic-fallback-mode-alist}.  This variable works like
-@code{magic-mode-alist}, described above, except that is consulted
-only after @code{auto-mode-alist}.  By default,
+@code{magic-mode-alist}, described above, except that it is consulted
+only @emph{after} @code{auto-mode-alist}.  By default,
 @code{magic-fallback-mode-alist} contains forms that check for image
 files, HTML/XML/SGML files, PostScript files, and Unix style Conf
 files.
+
+@cindex remapping of major modes
+@cindex major modes, remapping
+@vindex major-mode-remap-alist
+  Once a major mode is found, Emacs does a final check to see if the
+mode has been @dfn{remapped} by @code{major-mode-remap-alist}, in which
+case it uses the remapped mode instead.  This is used when several
+different major modes can be used for the same file type, so you can
+specify which mode you prefer.  Note that this remapping affects the
+major mode found by all of the methods described above, so, for example,
+the mode specified by the first line of the file will not necessarily be
+the mode actually turned on in the buffer visiting the file.  (This
+remapping also affects @code{revert-buffer}, @pxref{Reverting}.)  When
+several modes are available for the same file type, you can tell Emacs
+about your major-mode preferences by customizing
+@code{major-mode-remap-alist}.  For example, put this in your
+@file{~/.emacs} init file (@pxref{Init File})
+
+@lisp
+  (add-to-list 'major-mode-remap-alist '(c-mode . c-ts-mode))
+@end lisp
+
+@noindent
+to force Emacs to invoke @code{c-ts-mode} when @code{c-mode} is
+specified by @code{auto-mode-alist} or by file-local variables.
+Conversely,
+
+@lisp
+  (add-to-list 'major-mode-remap-alist '(c-mode))
+@end lisp
+
+@noindent
+will force Emacs to never remap @code{c-mode} to any other mode.
+
+  The default value of @code{major-mode-remap-alist} is @code{nil}, so
+no remapping takes place.  However, loading some Lisp packages or
+features might introduce mode remapping, because Emacs assumes that
+loading those means the user prefers using an alternative mode.  So for
+predictable behavior, we recommend that you always customize
+@code{major-mode-remap-alist} to express your firm preferences, because
+this variable overrides any remapping that Emacs might decide to perform
+internally.
 
 @findex normal-mode
   If you have changed the major mode of a buffer, you can return to
 the major mode Emacs would have chosen automatically, by typing
 @kbd{M-x normal-mode}.  This is the same function that
-@code{find-file} calls to choose the major mode.  It also processes
-the file's @samp{-*-} line or local variables list (if any).
-@xref{File Variables}.
+@code{find-file} calls to choose the major mode.  If the buffer is
+visiting a file, this command also processes the file's @samp{-*-}
+line and file-local variables list (if any).  @xref{File Variables}.
+If the buffer doesn't visit a file, the command processes only the
+major mode specification, if any, in the @samp{-*-} line and in the
+file-local variables list.  @kbd{M-x normal-mode} takes the mode
+remapping into consideration, so if you customized
+@code{major-mode-remap-alist} after the buffer's major mode was chosen
+by Emacs, @code{normal-mode} could turn on a mode that is different from
+the one Emacs chose originally.
 
 @vindex change-major-mode-with-file-name
   The commands @kbd{C-x C-w} and @code{set-visited-file-name} change to

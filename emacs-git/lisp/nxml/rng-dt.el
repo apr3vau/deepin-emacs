@@ -1,9 +1,9 @@
 ;;; rng-dt.el --- datatype library interface for RELAX NG  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003, 2007-2017 Free Software Foundation, Inc.
+;; Copyright (C) 2003, 2007-2025 Free Software Foundation, Inc.
 
 ;; Author: James Clark
-;; Keywords: wp, hypermedia, languages, XML, RelaxNG
+;; Keywords: text, hypermedia, languages, XML, RelaxNG
 
 ;; This file is part of GNU Emacs.
 
@@ -52,7 +52,7 @@ a datatype library.")
 	   (rng-dt-error "The string datatype does not take any parameters")))
 	((eq name 'token)
 	 (if (null params)
-	     '(t rng-collapse-space)
+             '(t string-clean-whitespace)
 	   (rng-dt-error "The token datatype does not take any parameters")))
 	(t
 	 (rng-dt-error "There is no built-in datatype %s" name))))
