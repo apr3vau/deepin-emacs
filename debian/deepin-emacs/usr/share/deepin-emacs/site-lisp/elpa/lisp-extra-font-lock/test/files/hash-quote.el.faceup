@@ -1,0 +1,10 @@
+«m:;; »«x:A #' should not trigger the normal quoting system.
+»
+«m:;; »«x:Special case for hash-quoted symbols.
+»#'«:lisp-extra-font-lock-quoted-function:symbol»
+
+«m:;; »«x:Ensure the lambda isn't highlighted as a constant.
+»(mapcar #'(lambda («v:x») (+ x 1)) '«:lisp-extra-font-lock-quoted:(1 2 3 4)»)
+
+«m:;; »«x:Embedded hash-quoted lambda.
+»'«:lisp-extra-font-lock-quoted:(alpha #'(lambda («v:x»)))»

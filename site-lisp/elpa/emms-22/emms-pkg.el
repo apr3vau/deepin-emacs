@@ -1,2 +1,0 @@
-;; Generated package description from .el  -*- emmsno-byte-compile: t -*-
-(define-package "emms" "22" "The Emacs Multimedia System" '((cl-lib "0.5") (nadvice "0.3") (seq "0")) :commit "338462506d7de508f7f74a01d15753f9113cd3cb" :authors '(("Jorgen Schäfer" . "forcer@forcix.cx")) :maintainer '("Yoni Rabkin" . "yrk@gnu.org") :keywords '("emms" "mp3" "ogg" "flac" "music" "mpeg" "video" "multimedia") :url "https://www.gnu.org/software/emms/")

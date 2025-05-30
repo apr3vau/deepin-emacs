@@ -1,0 +1,13 @@
+Package: deepin-emacs-dbgsym
+Package-Type: ddeb
+Source: deepin-emacs
+Version: 3.0+r2
+Auto-Built-Package: debug-symbols
+Architecture: arm64
+Maintainer: Deepin Packages Builder <packages@linuxdeepin.com>
+Installed-Size: 10076
+Depends: deepin-emacs (= 3.0+r2)
+Section: debug
+Priority: optional
+Description: debug symbols for deepin-emacs
+Build-Ids: 1622d384df30dcfc6ad035f689d15fc68de6e7bc 37816f6fedc2abe93668331ec1d9fc42bdaf725b 7c82af67c4a7aa420fa3e46010e7f5b69f86a14e 83b5ca9fec3e708cdde9da5aa753bcffecf3f16d d4750ba6c0e8e1572c382fdc4d9c83288f324a5d d9858fe6194b0b8a7a576a5c31c3ebc6624aa072

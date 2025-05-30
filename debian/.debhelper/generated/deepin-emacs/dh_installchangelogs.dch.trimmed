@@ -1,0 +1,27 @@
+deepin-emacs (3.0+r2) unstable; urgency=medium
+
+  * Bump version
+
+ -- April Lu <apr3vau@outlook.com>  Fri, 30 May 2025 12:30:00 +0800
+
+deepin-emacs (3.0+r1) UNRELEASED; urgency=medium
+
+  * Auto Build
+  * Auto Build
+
+ -- Deepin Packages Builder <jenkins@56c93f500729>  Fri, 20 Oct 2017 03:13:58 +0000
+
+deepin-emacs (2.0.1+20151112) unstable; urgency=medium
+
+  * Port to Debian.
+
+ -- Deepin Packages Builder <packages@linuxdeepin.com>  Tue, 17 Nov 2015 20:02:53 +0800
+
+deepin-emacs (2.0.1+20150119154558~c59343b47a) trusty; urgency=medium
+
+  * Build from git c59343b47a66ffb3bf79bfff5793e023fbc27661
+
+ -- Yueqian Zhang <zhangyueqian@linuxdeepin.com>  Mon, 19 Jan 2015 15:46:03 +0800
+
+# Older entries have been removed from this changelog.
+# To read the complete changelog use `apt changelog deepin-emacs`.
