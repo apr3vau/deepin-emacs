@@ -468,8 +468,7 @@
   (set-char-table-parent composition-ligature-table composition-function-table))
 
 (use-package awesome-tab
-  :init (unless (package-installed-p 'awesome-tab)
-          (package-vc-install "https://github.com/apr3vau/awesome-tab"))
+  ;; :init (unless (package-installed-p 'awesome-tab) (package-vc-install "https://github.com/apr3vau/awesome-tab"))
   :after nerd-icons
   :config (awesome-tab-mode 1))
 
@@ -504,8 +503,7 @@
 (define-key prog-mode-map (kbd "C-c C-k") 'compile)
 
 (use-package lisp-extra-font-lock
-  :init (unless (package-installed-p 'lisp-extra-font-lock)
-          (package-vc-install "https://github.com/apr3vau/lisp-extra-font-lock"))
+  ;; :init (unless (package-installed-p 'lisp-extra-font-lock) (package-vc-install "https://github.com/apr3vau/lisp-extra-font-lock"))
   :config (lisp-extra-font-lock-global-mode 1))
 
 ;; Others
@@ -528,20 +526,20 @@
 ;; LSP
 
 ;; From Centaur
-  (use-package eglot
-    ;; :ensure t
-    :hook ((prog-mode . (lambda ()
-                          (unless (derived-mode-p
-                                   'emacs-lisp-mode 'lisp-mode
-                                   'makefile-mode 'snippet-mode
-                                   'ron-mode)
-                            (eglot-ensure))))
-           ((markdown-mode yaml-mode yaml-ts-mode) . eglot-ensure))
-    :init
-    (setq read-process-output-max (* 1024 1024)) ; 1MB
-    (setq eglot-autoshutdown t
-          eglot-events-buffer-size 0
-          eglot-send-changes-idle-time 0.5))
+(use-package eglot
+  ;; :ensure t
+  :hook ((prog-mode . (lambda ()
+                        (unless (derived-mode-p
+                                 'emacs-lisp-mode 'lisp-mode
+                                 'makefile-mode 'snippet-mode
+                                 'ron-mode)
+                          (eglot-ensure))))
+         ((markdown-mode yaml-mode yaml-ts-mode) . eglot-ensure))
+  :init
+  (setq read-process-output-max (* 1024 1024)) ; 1MB
+  (setq eglot-autoshutdown t
+        eglot-events-buffer-size 0
+        eglot-send-changes-idle-time 0.5))
 
 (use-package consult-eglot
   ;; :ensure t
