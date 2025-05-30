@@ -27,7 +27,7 @@
           when (and (or (pathname-name file) (pathname-type file))
                     (not (member ".git" (pathname-directory file) :test #'string=))
                     (not (member "gnupg" (pathname-directory file) :test #'string=))
-		    (not (member ".elc" (pathname-type file) :test #'string=)))
+		    (not (string= "elc" (pathname-type file))))
             do (ensure-directories-exist new-file)
                (copy-file file new-file))
     new))
