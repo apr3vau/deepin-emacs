@@ -10,7 +10,7 @@
 
 ;;; PATH problem
 (use-package exec-path-from-shell
-  :ensure t
+  ;; :ensure t
   :config
   (when (memq window-system '(mac ns x))
     (exec-path-from-shell-initialize)))
@@ -52,38 +52,38 @@
 ;;; Theme
 
 (use-package doom-themes
-  :ensure t
+  ;; :ensure t
   :config (load-theme 'doom-one t))
 
 
 ;;; Completion
 
 (use-package corfu
-  :ensure t
+  ;; :ensure t
   :config
   (global-corfu-mode 1)
   (setq corfu-auto t
 	corfu-auto-prefix 0
         corfu-cycle t))
 (use-package corfu-terminal
-  :ensure t
+  ;; :ensure t
   :config (unless (display-graphic-p)
 	    (corfu-terminal-mode 1)))
 (use-package cape
-  :ensure t
+  ;; :ensure t
   :init
   (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
 (use-package vertico
-  :ensure t
+  ;; :ensure t
   :config
   (vertico-mode 1)
   (setq vertico-count 15))
 (use-package orderless
   :if window-system
-  :ensure t
+  ;; :ensure t
   :custom
   ;; Configure a custom style dispatcher (see the Consult wiki)
   ;; (orderless-style-dispatchers '(+orderless-consult-dispatch orderless-affix-dispatch))
@@ -196,14 +196,12 @@
   ;; You may want to use `embark-prefix-help-command' or which-key instead.
   ;; (keymap-set consult-narrow-map (concat consult-narrow-key " ?") #'consult-narrow-help)
   )
-(use-package dash-docs
-  :ensure t)
-(use-package consult-dash
-  :ensure t)
 (use-package consult-flycheck
-  :ensure t)
+  ;; :ensure t
+  )
 (use-package consult-projectile
-  :ensure t)
+  ;; :ensure t
+  )
 
 ;; local modes added to prog-mode hooks
 (add-to-list 'consult-preview-allowed-hooks 'hl-todo-mode)
@@ -217,7 +215,7 @@
 ;;; Icons
 
 (use-package kind-icon
-  :ensure t
+  ;; :ensure t
   :after company
   :config
   (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter)
@@ -229,24 +227,24 @@
 
 (when (display-graphic-p)
   (use-package nerd-icons
-    :ensure t
+    ;; :ensure t
     :config (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
               (nerd-icons-install-fonts t)))
   (use-package nerd-icons-completion
-    :ensure t
+    ;; :ensure t
     :after marginalia
     :config
     (nerd-icons-completion-mode)
     (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
   (use-package nerd-icons-ibuffer
-    :ensure t
+    ;; :ensure t
     :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
   (use-package nerd-icons-dired
-    :ensure t
+    ;; :ensure t
     :hook
     (dired-mode . nerd-icons-dired-mode))
   (use-package treemacs-nerd-icons
-    :ensure t
+    ;; :ensure t
     :config
     (treemacs-load-theme "nerd-icons")))
 
@@ -254,25 +252,25 @@
 ;;; Development Utils
 
 (use-package rainbow-delimiters
-  :ensure t
+  ;; :ensure t
   :hook
   (lisp-mode . rainbow-delimiters-mode)
   (emacs-lisp-mode . rainbow-delimiters-mode))
 (use-package treemacs
-  :ensure t
+  ;; :ensure t
   :config (global-set-key (kbd "M-0") 'treemacs-select-window))
 
 (use-package editorconfig
-  :ensure t
+  ;; :ensure t
   :config (editorconfig-mode 1))
 
 (use-package autorevert
-  :ensure nil
+  ;; :ensure nil
   :diminish
   :hook (after-init . global-auto-revert-mode))
 
 (use-package aggressive-indent
-  :ensure t
+  ;; :ensure t
   :diminish
   :hook ((after-init . global-aggressive-indent-mode))
   :config
@@ -289,7 +287,7 @@
     (add-to-list 'aggressive-indent-excluded-modes mode)))
 
 (use-package hungry-delete
-  :ensure t
+  ;; :ensure t
   :diminish
   :hook (after-init . global-hungry-delete-mode)
   :init (setq hungry-delete-chars-to-skip " \t\f\v"
@@ -297,23 +295,23 @@
               '(help-mode minibuffer-mode minibuffer-inactive-mode calc-mode)))
 
 (use-package subword
-  :ensure nil
+  ;; :ensure nil
   :diminish
   :hook ((prog-mode . subword-mode)
          (minibuffer-setup . subword-mode)))
 
 (use-package expand-region
-  :ensure t
+  ;; :ensure t
   :config (global-set-key (kbd "C-=") 'er/expand-region))
 
 (use-package yasnippet
-  :ensure t
+  ;; :ensure t
   :config
   (yas-global-mode)
   (global-set-key (kbd "C-x y") 'yas-insert-snippet))
 
 (use-package markdown-mode
-  :ensure t
+  ;; :ensure t
   :mode ("README\\.md\\'" . gfm-mode)
   :init (setq markdown-command "multimarkdown")
   :bind (:map markdown-mode-map
@@ -323,7 +321,7 @@
 ;;; UI
 
 (use-package anzu
-  :ensure t
+  ;; :ensure t
   :diminish
   :bind (([remap query-replace] . anzu-query-replace)
          ([remap query-replace-regexp] . anzu-query-replace-regexp)
@@ -334,65 +332,65 @@
 
 (use-package company-posframe
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config (company-posframe-mode 1))
 (use-package vertico-posframe
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config (vertico-posframe-mode 1))
 (use-package marginalia
-  :ensure t
+  ;; :ensure t
   :config (marginalia-mode 1))
 
 (use-package which-key
-  :ensure t
+  ;; :ensure t
   :config (which-key-mode 1))
 (use-package which-key-posframe
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config (which-key-posframe-mode 1))
 
 (use-package page-break-lines
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config (global-page-break-lines-mode 1))
 
 (use-package magit
-  :ensure t
+  ;; :ensure t
   :after transient-posframe-mode)
 
 (use-package highlight-thing
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config
   (global-highlight-thing-mode 1)
   (setq highlight-thing-delay-seconds 0))
 
 (use-package flycheck
-  :ensure t
+  ;; :ensure t
   :config
   (global-flycheck-mode 1)
   (define-key flycheck-mode-map (kbd "s-<") 'flycheck-previous-error)
   (define-key flycheck-mode-map (kbd "s->") 'flycheck-next-error))
 
 (use-package flycheck-posframe
-  :ensure t
+  ;; :ensure t
   :config (flycheck-posframe-mode 1))
 
 (use-package symbol-overlay
-  :ensure t
+  ;; :ensure t
   :config
   (add-hook 'fundamental-mode-hook 'symbol-overlay-mode)
   (global-set-key (kbd "C-<") 'symbol-overlay-jump-prev)
   (global-set-key (kbd "C->") 'symbol-overlay-jump-next))
 
 (use-package highlight-indent-guides
-  :ensure t
+  ;; :ensure t
   :config
   (add-hook 'prog-mode-hook 'highlight-indent-guides-mode))
 
 (use-package hide-mode-line
-  :ensure t
+  ;; :ensure t
   :hook (((treemacs-mode
            eshell-mode shell-mode
            term-mode vterm-mode eat-mode
@@ -404,7 +402,7 @@
 
 (use-package transient-posframe
   :if window-system
-  :ensure t
+  ;; :ensure t
   :diminish
   :custom-face
   (transient-posframe ((t (:inherit tooltip))))
@@ -417,16 +415,16 @@
 
 (use-package doom-modeline
   :if window-system
-  :ensure t
+  ;; :ensure t
   :config (doom-modeline-mode 1))
 
 (use-package minions
-  :ensure t
+  ;; :ensure t
   :config (minions-mode 1))
 
 (use-package composite
   :if window-system
-  :ensure nil
+  ;; :ensure nil
   :init (defvar composition-ligature-table (make-char-table nil))
   :hook (((prog-mode
            conf-mode nxml-mode markdown-mode help-mode
@@ -476,7 +474,7 @@
   :config (awesome-tab-mode 1))
 
 (use-package dashboard
-  :ensure t
+  ;; :ensure t
   :config
   (dashboard-setup-startup-hook)
   (setq dashboard-center-content t))
@@ -488,14 +486,14 @@
 ;; Lisp
 
 (use-package sly
-  :ensure t
+  ;; :ensure t
   :config
   (setq sly-lisp-implementations
         '((sbcl ("sbcl"))
           (ecl ("ecl")))
         inferior-lisp-program "sbcl"))
 (use-package sly-asdf
-  :ensure t
+  ;; :ensure t
   :config (add-to-list 'sly-contribs 'sly-asdf 'append))
 
 (define-key emacs-lisp-mode-map (kbd "C-c C-c") 'compile-defun)
@@ -511,43 +509,52 @@
   :config (lisp-extra-font-lock-global-mode 1))
 
 ;; Others
-(use-package cmake-mode :ensure t)
-(use-package yaml-mode :ensure t)
-(use-package swift-mode :ensure t)
-(use-package python-mode :ensure t)
-(use-package go-mode :ensure t)
-(use-package rust-mode :ensure t)
-(use-package web-mode :ensure t)
+(use-package cmake-mode ;; :ensure t
+  )
+(use-package yaml-mode ;; :ensure t
+  )
+(use-package swift-mode ;; :ensure t
+  )
+(use-package python-mode ;; :ensure t
+  )
+(use-package go-mode ;; :ensure t
+  )
+(use-package rust-mode ;; :ensure t
+  )
+(use-package web-mode ;; :ensure t
+  )
 
 
 ;; LSP
 
 ;; From Centaur
-(use-package eglot
-  :ensure t
-  :hook ((prog-mode . (lambda ()
-                        (unless (derived-mode-p
-                                 'emacs-lisp-mode 'lisp-mode
-                                 'makefile-mode 'snippet-mode
-                                 'ron-mode)
-                          (eglot-ensure))))
-         ((markdown-mode yaml-mode yaml-ts-mode) . eglot-ensure))
-  :init
-  (setq read-process-output-max (* 1024 1024)) ; 1MB
-  (setq eglot-autoshutdown t
-        eglot-events-buffer-size 0
-        eglot-send-changes-idle-time 0.5))
+  (use-package eglot
+    ;; :ensure t
+    :hook ((prog-mode . (lambda ()
+                          (unless (derived-mode-p
+                                   'emacs-lisp-mode 'lisp-mode
+                                   'makefile-mode 'snippet-mode
+                                   'ron-mode)
+                            (eglot-ensure))))
+           ((markdown-mode yaml-mode yaml-ts-mode) . eglot-ensure))
+    :init
+    (setq read-process-output-max (* 1024 1024)) ; 1MB
+    (setq eglot-autoshutdown t
+          eglot-events-buffer-size 0
+          eglot-send-changes-idle-time 0.5))
 
 (use-package consult-eglot
-  :ensure t
+  ;; :ensure t
   :after consult eglot
   :bind (:map eglot-mode-map
               ("C-M-." . consult-eglot-symbols)))
 
 
 ;; Media
-(use-package emms :ensure t)
-(use-package erc :ensure t)
+(use-package emms ;; :ensure t
+  )
+(use-package erc ;; :ensure t
+  )
 
 (when window-system
   (toggle-frame-maximized)
