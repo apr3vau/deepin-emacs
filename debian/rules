@@ -9,10 +9,10 @@ SRCDIR = $(CURDIR)/emacs-git
 
 override_dh_autoreconf:
 	git clone --depth 1 --branch "emacs-30.1.90" "https://github.com/emacs-mirror/emacs.git" $(SRCDIR)
-	cd $(SRCDIR) && export CC="gcc-13" && ./autogen.sh
+	cd $(SRCDIR) && export CC="gcc-12" && ./autogen.sh
 
 override_dh_auto_configure:
-	cd $(SRCDIR) && export CC="gcc-13" && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter --with-native-compilation=aot
+	cd $(SRCDIR) && export CC="gcc-12" && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter --with-native-compilation=aot
 
 override_dh_auto_build:
 	cd $(SRCDIR) && make -j6
