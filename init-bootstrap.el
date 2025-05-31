@@ -1,4 +1,4 @@
-;;; deepin-emacs --- Summary
+;;; deepin-emacs --- Summary -*- lexical-binding: t -*-
 ;; Emacs in deepin package.
 
 ;;; Commentary:
@@ -6,6 +6,7 @@
 ;;; Code:
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(setq native-comp-speed -1)
 
 
 ;;; PATH problem
@@ -43,18 +44,19 @@
 (auto-save-mode 1)
 (setq auto-save-timeout 5)
 
-(setq fast-but-imprecise-scrolling t)
-(setq redisplay-skip-fontification-on-input t)
-(setq inhibit-startup-message t)
+(setq fast-but-imprecise-scrolling t
+      scroll-conservatively 101
+      redisplay-skip-fontification-on-input t
+      inhibit-startup-message t
 
-(setq tab-always-indent 'complete)
+      tab-always-indent 'complete)
 
 
 ;;; Theme
 
 (use-package doom-themes
   :ensure t
-  :config (load-theme 'doom-one t))
+  :config (load-theme 'doom-dracula t))
 
 
 ;;; Completion
@@ -67,9 +69,9 @@
 	corfu-auto-prefix 0
         corfu-cycle t))
 (use-package corfu-terminal
+  :if (null window-system)
   :ensure t
-  :config (unless (display-graphic-p)
-	    (corfu-terminal-mode 1)))
+  :config (corfu-terminal-mode 1))
 (use-package cape
   :ensure t
   :init
@@ -96,6 +98,7 @@
 
 ;;; Consult
 
+;; From Centaur
 (use-package consult
   ;; Replace bindings. Lazily loaded by `use-package'.
   :bind (;; C-c bindings in `mode-specific-map'
@@ -202,7 +205,7 @@
   )
 (use-package consult-projectile
   :ensure t
-  )
+  :bind (("M-s p" . consult-projectile)))
 
 ;; local modes added to prog-mode hooks
 (add-to-list 'consult-preview-allowed-hooks 'hl-todo-mode)
@@ -212,62 +215,260 @@
 (add-to-list 'consult-preview-allowed-hooks 'global-hl-todo-mode)
 
 
+;;; Icons
+
+(use-package kind-icon
+  :if (null window-system)
+  :ensure t
+  :after company
+  :config
+  (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter)
+  ;; We don't use company.
+  ;; (let* ((kind-func (lambda (cand) (company-call-backend 'kind cand)))
+  ;;        (formatter (kind-icon-margin-formatter `((company-kind . ,kind-func)))))
+  ;;   (defun my-company-kind-icon-margin (cand _selected)
+  ;;     (funcall formatter cand))
+  ;;   (setq company-format-margin-function #'my-company-kind-icon-margin))
+  )
+
+(use-package nerd-icons
+  :if window-system
+  :ensure t
+  :config (when (and window-system
+                     (null (find-font (font-spec :name "Symbols Nerd Font Mono"))))
+            (nerd-icons-install-fonts t)))
+
+(use-package nerd-icons-completion
+  :if window-system
+  :ensure t
+  :after marginalia
+  :config
+  (nerd-icons-completion-mode 1)
+  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
+
+(use-package nerd-icons-corfu
+  :if window-system
+  :ensure t
+  :config (add-to-list 'corfu-margin-formatters #'nerd-icons-corfu-formatter))
+
+(use-package nerd-icons-ibuffer
+  :if window-system
+  :ensure t
+  :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
+
+(use-package nerd-icons-dired
+  :if window-system
+  :ensure t
+  :hook
+  (dired-mode . nerd-icons-dired-mode))
+(use-package treemacs-nerd-icons
+  :if window-system
+  :ensure t
+  :config
+  (treemacs-load-theme "nerd-icons"))
+
+
+;;; UI
+
+;; Scrolling
+(use-package ultra-scroll
+  :init (unless (package-installed-p 'ultra-scroll) (package-vc-install "https://github.com/jdtsmith/ultra-scroll"))
+  :config (ultra-scroll-mode 1))
+
+;; Extra info
+(use-package anzu
+  :ensure t
+  :diminish
+  :bind (([remap query-replace] . anzu-query-replace)
+         ([remap query-replace-regexp] . anzu-query-replace-regexp)
+         :map isearch-mode-map
+         ([remap isearch-query-replace] . anzu-isearch-query-replace)
+         ([remap isearch-query-replace-regexp] . anzu-isearch-query-replace-regexp))
+  :hook (after-init . global-anzu-mode))
+
+(use-package helpful
+  :ensure t
+  :config
+  (global-set-key (kbd "C-h f") #'helpful-callable)
+  (global-set-key (kbd "C-h v") #'helpful-variable)
+  (global-set-key (kbd "C-h k") #'helpful-key)
+  (global-set-key (kbd "C-h x") #'helpful-command)
+  (global-set-key (kbd "C-c C-d") #'helpful-at-point)
+  (global-set-key (kbd "C-h F") #'helpful-function))
+
+(use-package which-key
+  :ensure t
+  :config (which-key-mode 1))
 
 (use-package marginalia
   :ensure t
   :config (marginalia-mode 1))
 
-
-;;; Icons
+;; Prettifier
 
-(use-package kind-icon
+(use-package page-break-lines
+  :if window-system
   :ensure t
-  :after company
+  :config (global-page-break-lines-mode 1))
+
+(use-package highlight-thing
+  :if window-system
+  :ensure t
   :config
-  (add-to-list 'corfu-margin-formatters #'kind-icon-margin-formatter)
-  (let* ((kind-func (lambda (cand) (company-call-backend 'kind cand)))
-         (formatter (kind-icon-margin-formatter `((company-kind . ,kind-func)))))
-    (defun my-company-kind-icon-margin (cand _selected)
-      (funcall formatter cand))
-    (setq company-format-margin-function #'my-company-kind-icon-margin)))
+  (global-highlight-thing-mode 1)
+  (setq highlight-thing-delay-seconds 0
+        highlight-thing-excluded-major-modes '(dired-mode)))
 
-(when (display-graphic-p)
-  (use-package nerd-icons
-    :ensure t
-    :config (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
-              (nerd-icons-install-fonts t)))
-  (use-package nerd-icons-completion
-    :ensure t
-    :config
-    (nerd-icons-completion-mode)
-    (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
-  (use-package nerd-icons-ibuffer
-    :ensure t
-    :hook (ibuffer-mode . nerd-icons-ibuffer-mode))
-  (use-package nerd-icons-dired
-    :ensure t
-    :hook
-    (dired-mode . nerd-icons-dired-mode))
-  (use-package treemacs-nerd-icons
-    :ensure t
-    :config
-    (treemacs-load-theme "nerd-icons")))
+(use-package symbol-overlay
+  :ensure t
+  :config
+  (add-hook 'fundamental-mode-hook 'symbol-overlay-mode)
+  (global-set-key (kbd "C-<") 'symbol-overlay-jump-prev)
+  (global-set-key (kbd "C->") 'symbol-overlay-jump-next))
+
+(use-package highlight-indent-guides
+  :ensure t
+  :config
+  (add-hook 'prog-mode-hook 'highlight-indent-guides-mode))
+
+;; Posframe
+
+(use-package company-posframe
+  :if window-system
+  :ensure t
+  :config (company-posframe-mode 1))
+(use-package vertico-posframe
+  :if window-system
+  :ensure t
+  :config (vertico-posframe-mode 1))
+
+(use-package which-key-posframe
+  :if window-system
+  :ensure t
+  :config (which-key-posframe-mode 1))
+
+(use-package flycheck-posframe
+  :ensure t
+  :after flycheck
+  :config (flycheck-posframe-mode 1))
+
+(use-package transient-posframe
+  :if window-system
+  :ensure t
+  :diminish
+  :custom-face
+  (transient-posframe ((t (:inherit tooltip))))
+  (transient-posframe-border ((t (:inherit posframe-border :background unspecified))))
+  :init (setq transient-mode-line-format nil
+              transient-posframe-poshandler 'posframe-poshandler-frame-center
+              transient-posframe-parameters '((left-fringe . 8)
+                                              (right-fringe . 8)))
+  :config (transient-posframe-mode 1))
+
+;; Tabbar and Modeline
+
+(use-package awesome-tab
+  :init (unless (package-installed-p 'awesome-tab) (package-vc-install "https://github.com/apr3vau/awesome-tab"))
+  :after nerd-icons
+  :config (awesome-tab-mode 1))
+
+(use-package hide-mode-line
+  :ensure t
+  :hook (((treemacs-mode
+           eshell-mode shell-mode
+           term-mode vterm-mode eat-mode
+           embark-collect-mode
+           pdf-annot-list-mode) . turn-on-hide-mode-line-mode)
+         (dired-mode . (lambda()
+                         (and (bound-and-true-p hide-mode-line-mode)
+                              (turn-off-hide-mode-line-mode))))))
+
+(use-package doom-modeline
+  :if window-system
+  :ensure t
+  :config (doom-modeline-mode 1))
+
+(use-package minions
+  :ensure t
+  :config (minions-mode 1))
+
+;; Ligatures
+;; From Centaur
+(use-package composite
+  :if window-system
+  :ensure nil
+  :init (defvar composition-ligature-table (make-char-table nil))
+  :hook (((prog-mode
+           conf-mode nxml-mode markdown-mode help-mode
+           shell-mode eshell-mode term-mode vterm-mode)
+          . (lambda () (setq-local composition-function-table composition-ligature-table))))
+  :config
+  ;; support ligatures, some toned down to prevent hang
+  (let ((alist
+         '((33  . ".\\(?:\\(==\\|[!=]\\)[!=]?\\)")
+           (35  . ".\\(?:\\(###?\\|_(\\|[(:=?[_{]\\)[#(:=?[_{]?\\)")
+           (36  . ".\\(?:\\(>\\)>?\\)")
+           (37  . ".\\(?:\\(%\\)%?\\)")
+           (38  . ".\\(?:\\(&\\)&?\\)")
+           (42  . ".\\(?:\\(\\*\\*\\|[*>]\\)[*>]?\\)")
+           ;; (42 . ".\\(?:\\(\\*\\*\\|[*/>]\\).?\\)")
+           (43  . ".\\(?:\\([>]\\)>?\\)")
+           ;; (43 . ".\\(?:\\(\\+\\+\\|[+>]\\).?\\)")
+           (45  . ".\\(?:\\(-[->]\\|<<\\|>>\\|[-<>|~]\\)[-<>|~]?\\)")
+           ;; (46 . ".\\(?:\\(\\.[.<]\\|[-.=]\\)[-.<=]?\\)")
+           (46  . ".\\(?:\\(\\.<\\|[-=]\\)[-<=]?\\)")
+           (47  . ".\\(?:\\(//\\|==\\|[=>]\\)[/=>]?\\)")
+           ;; (47 . ".\\(?:\\(//\\|==\\|[*/=>]\\).?\\)")
+           (48  . ".\\(?:x[a-zA-Z]\\)")
+           (58  . ".\\(?:\\(::\\|[:<=>]\\)[:<=>]?\\)")
+           (59  . ".\\(?:\\(;\\);?\\)")
+           (60  . ".\\(?:\\(!--\\|\\$>\\|\\*>\\|\\+>\\|-[-<>|]\\|/>\\|<[-<=]\\|=[<>|]\\|==>?\\||>\\||||?\\|~[>~]\\|[$*+/:<=>|~-]\\)[$*+/:<=>|~-]?\\)")
+           (61  . ".\\(?:\\(!=\\|/=\\|:=\\|<<\\|=[=>]\\|>>\\|[=>]\\)[=<>]?\\)")
+           (62  . ".\\(?:\\(->\\|=>\\|>[-=>]\\|[-:=>]\\)[-:=>]?\\)")
+           (63  . ".\\(?:\\([.:=?]\\)[.:=?]?\\)")
+           (91  . ".\\(?:\\(|\\)[]|]?\\)")
+           ;; (92 . ".\\(?:\\([\\n]\\)[\\]?\\)")
+           (94  . ".\\(?:\\(=\\)=?\\)")
+           (95  . ".\\(?:\\(|_\\|[_]\\)_?\\)")
+           (119 . ".\\(?:\\(ww\\)w?\\)")
+           (123 . ".\\(?:\\(|\\)[|}]?\\)")
+           (124 . ".\\(?:\\(->\\|=>\\||[-=>]\\||||*>\\|[]=>|}-]\\).?\\)")
+           (126 . ".\\(?:\\(~>\\|[-=>@~]\\)[-=>@~]?\\)"))))
+    (dolist (char-regexp alist)
+      (set-char-table-range composition-ligature-table (car char-regexp)
+                            `([,(cdr char-regexp) 0 font-shape-gstring]))))
+  (set-char-table-parent composition-ligature-table composition-function-table))
+
+(use-package dashboard
+  :ensure t
+  :config
+  (dashboard-setup-startup-hook)
+  (setq dashboard-center-content t))
+
+;; (add-to-list 'load-path (expand-file-name "~/.emacs.d/elpa/awesome-tab/"))
 
 
-;;; Development Utils
+;;; Coding
 
-(use-package rainbow-delimiters
+;; Helper
+(use-package magit
   :ensure t
-  :hook
-  (lisp-mode . rainbow-delimiters-mode)
-  (emacs-lisp-mode . rainbow-delimiters-mode))
+  :after transient-posframe-mode)
+
+(use-package flycheck
+  :ensure t
+  :config
+  (global-flycheck-mode 1)
+  (define-key flycheck-mode-map (kbd "s-<") 'flycheck-previous-error)
+  (define-key flycheck-mode-map (kbd "s->") 'flycheck-next-error))
+
 (use-package treemacs
   :ensure t
-  :config (global-set-key (kbd "M-0") 'treemacs-select-window))
+  :bind (("M-0" . treemacs-select-window)))
 
-(use-package editorconfig
+(use-package yafolding
   :ensure t
-  :config (editorconfig-mode 1))
+  :hook ((prog-mode . yafolding-mode)))
 
 (use-package autorevert
   :ensure nil
@@ -322,168 +523,6 @@
   :bind (:map markdown-mode-map
 	      ("C-c C-e" . markdown-do)))
 
-
-;;; UI
-
-(use-package anzu
-  :ensure t
-  :diminish
-  :bind (([remap query-replace] . anzu-query-replace)
-         ([remap query-replace-regexp] . anzu-query-replace-regexp)
-         :map isearch-mode-map
-         ([remap isearch-query-replace] . anzu-isearch-query-replace)
-         ([remap isearch-query-replace-regexp] . anzu-isearch-query-replace-regexp))
-  :hook (after-init . global-anzu-mode))
-
-(use-package company-posframe
-  :if window-system
-  :ensure t
-  :config (company-posframe-mode 1))
-(use-package vertico-posframe
-  :if window-system
-  :ensure t
-  :config (vertico-posframe-mode 1))
-
-(use-package which-key
-  :ensure t
-  :config (which-key-mode 1))
-(use-package which-key-posframe
-  :if window-system
-  :ensure t
-  :config (which-key-posframe-mode 1))
-
-(use-package page-break-lines
-  :if window-system
-  :ensure t
-  :config (global-page-break-lines-mode 1))
-
-(use-package magit
-  :ensure t
-  :after transient-posframe-mode)
-
-(use-package highlight-thing
-  :if window-system
-  :ensure t
-  :config
-  (global-highlight-thing-mode 1)
-  (setq highlight-thing-delay-seconds 0))
-
-(use-package flycheck
-  :ensure t
-  :config
-  (global-flycheck-mode 1)
-  (define-key flycheck-mode-map (kbd "s-<") 'flycheck-previous-error)
-  (define-key flycheck-mode-map (kbd "s->") 'flycheck-next-error))
-
-(use-package flycheck-posframe
-  :ensure t
-  :config (flycheck-posframe-mode 1))
-
-(use-package symbol-overlay
-  :ensure t
-  :config
-  (add-hook 'fundamental-mode-hook 'symbol-overlay-mode)
-  (global-set-key (kbd "C-<") 'symbol-overlay-jump-prev)
-  (global-set-key (kbd "C->") 'symbol-overlay-jump-next))
-
-(use-package highlight-indent-guides
-  :ensure t
-  :config
-  (add-hook 'prog-mode-hook 'highlight-indent-guides-mode))
-
-(use-package hide-mode-line
-  :ensure t
-  :hook (((treemacs-mode
-           eshell-mode shell-mode
-           term-mode vterm-mode eat-mode
-           embark-collect-mode
-           pdf-annot-list-mode) . turn-on-hide-mode-line-mode)
-         (dired-mode . (lambda()
-                         (and (bound-and-true-p hide-mode-line-mode)
-                              (turn-off-hide-mode-line-mode))))))
-
-(use-package transient-posframe
-  :if window-system
-  :ensure t
-  :diminish
-  :custom-face
-  (transient-posframe ((t (:inherit tooltip))))
-  (transient-posframe-border ((t (:inherit posframe-border :background unspecified))))
-  :init (setq transient-mode-line-format nil
-              transient-posframe-poshandler 'posframe-poshandler-frame-center
-              transient-posframe-parameters '((left-fringe . 8)
-                                              (right-fringe . 8)))
-  :config (transient-posframe-mode 1))
-
-(use-package doom-modeline
-  :if window-system
-  :ensure t
-  :config (doom-modeline-mode 1))
-
-(use-package minions
-  :ensure t
-  :config (minions-mode 1))
-
-(use-package composite
-  :if window-system
-  :ensure nil
-  :init (defvar composition-ligature-table (make-char-table nil))
-  :hook (((prog-mode
-           conf-mode nxml-mode markdown-mode help-mode
-           shell-mode eshell-mode term-mode vterm-mode)
-          . (lambda () (setq-local composition-function-table composition-ligature-table))))
-  :config
-  ;; support ligatures, some toned down to prevent hang
-  (let ((alist
-         '((33  . ".\\(?:\\(==\\|[!=]\\)[!=]?\\)")
-           (35  . ".\\(?:\\(###?\\|_(\\|[(:=?[_{]\\)[#(:=?[_{]?\\)")
-           (36  . ".\\(?:\\(>\\)>?\\)")
-           (37  . ".\\(?:\\(%\\)%?\\)")
-           (38  . ".\\(?:\\(&\\)&?\\)")
-           (42  . ".\\(?:\\(\\*\\*\\|[*>]\\)[*>]?\\)")
-           ;; (42 . ".\\(?:\\(\\*\\*\\|[*/>]\\).?\\)")
-           (43  . ".\\(?:\\([>]\\)>?\\)")
-           ;; (43 . ".\\(?:\\(\\+\\+\\|[+>]\\).?\\)")
-           (45  . ".\\(?:\\(-[->]\\|<<\\|>>\\|[-<>|~]\\)[-<>|~]?\\)")
-           ;; (46 . ".\\(?:\\(\\.[.<]\\|[-.=]\\)[-.<=]?\\)")
-           (46  . ".\\(?:\\(\\.<\\|[-=]\\)[-<=]?\\)")
-           (47  . ".\\(?:\\(//\\|==\\|[=>]\\)[/=>]?\\)")
-           ;; (47 . ".\\(?:\\(//\\|==\\|[*/=>]\\).?\\)")
-           (48  . ".\\(?:x[a-zA-Z]\\)")
-           (58  . ".\\(?:\\(::\\|[:<=>]\\)[:<=>]?\\)")
-           (59  . ".\\(?:\\(;\\);?\\)")
-           (60  . ".\\(?:\\(!--\\|\\$>\\|\\*>\\|\\+>\\|-[-<>|]\\|/>\\|<[-<=]\\|=[<>|]\\|==>?\\||>\\||||?\\|~[>~]\\|[$*+/:<=>|~-]\\)[$*+/:<=>|~-]?\\)")
-           (61  . ".\\(?:\\(!=\\|/=\\|:=\\|<<\\|=[=>]\\|>>\\|[=>]\\)[=<>]?\\)")
-           (62  . ".\\(?:\\(->\\|=>\\|>[-=>]\\|[-:=>]\\)[-:=>]?\\)")
-           (63  . ".\\(?:\\([.:=?]\\)[.:=?]?\\)")
-           (91  . ".\\(?:\\(|\\)[]|]?\\)")
-           ;; (92 . ".\\(?:\\([\\n]\\)[\\]?\\)")
-           (94  . ".\\(?:\\(=\\)=?\\)")
-           (95  . ".\\(?:\\(|_\\|[_]\\)_?\\)")
-           (119 . ".\\(?:\\(ww\\)w?\\)")
-           (123 . ".\\(?:\\(|\\)[|}]?\\)")
-           (124 . ".\\(?:\\(->\\|=>\\||[-=>]\\||||*>\\|[]=>|}-]\\).?\\)")
-           (126 . ".\\(?:\\(~>\\|[-=>@~]\\)[-=>@~]?\\)"))))
-    (dolist (char-regexp alist)
-      (set-char-table-range composition-ligature-table (car char-regexp)
-                            `([,(cdr char-regexp) 0 font-shape-gstring]))))
-  (set-char-table-parent composition-ligature-table composition-function-table))
-
-(use-package awesome-tab
-  :init (unless (package-installed-p 'awesome-tab) (package-vc-install "https://github.com/apr3vau/awesome-tab"))
-  :after nerd-icons
-  :config (awesome-tab-mode 1))
-
-(use-package dashboard
-  :ensure t
-  :config
-  (dashboard-setup-startup-hook)
-  (setq dashboard-center-content t))
-
-;; (add-to-list 'load-path (expand-file-name "~/.emacs.d/elpa/awesome-tab/"))
-
-
-;;; Coding
 ;; Lisp
 
 (use-package sly
@@ -521,6 +560,9 @@
 (use-package python-mode
   :ensure t
   )
+(use-package pyvenv
+  :ensure t
+  )
 (use-package go-mode
   :ensure t
   )
@@ -533,7 +575,6 @@
 
 
 ;; LSP
-
 ;; From Centaur
 (use-package eglot
   :ensure t
@@ -558,6 +599,11 @@
 
 
 ;; Media
+
+(use-package dirvish
+  :ensure t
+  :config (dirvish-override-dired-mode 1))
+
 (use-package emms
   :ensure t
   )
@@ -567,8 +613,8 @@
 
 (when window-system
   (toggle-frame-maximized)
-  (set-frame-parameter nil 'alpha-background 92)
-  (add-to-list 'default-frame-alist '(alpha-background . 92))
+  (set-frame-parameter nil 'alpha-background 95)
+  (add-to-list 'default-frame-alist '(alpha-background . 95))
   )
 
 (provide 'init)

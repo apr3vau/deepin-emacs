@@ -55,8 +55,11 @@
     (loop for line = (read-line in nil)
           while line
           unless (or (search ":ensure" line)
-                     (search "package-vc-install" line))
+                     (search "package-vc-install" line)
+                     (search "native-comp-speed" line))
             do (write-line line out))))
 
+(format t "[Lisp] Remove ~~/.emacs.d/ to avoid local conflict...~&")
 (delete-directory "~/.emacs.d/" :recursive t)
+
 (format t "[Lisp] Lisp script finished.~&")

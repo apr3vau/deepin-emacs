@@ -2,87 +2,79 @@
 
 **Description**: Is a customized emacs for Deepin
 
-Emacs is hackable OS for top hackers, most of emacs extensions are written in elisp.
-Deepin Emacs merged many extensions from [AndyStewart](http://www.emacswiki.org/emacs/AndyStewart),
-you can find all extensions under [site-lisp](https://gitcafe.com/Deepin/deepin-emacs/tree/master/site-lisp).
+Emacs is hackable OS for top hackers, most of emacs extensions are
+written in elisp. This version of Deepin Emacs fully uses the most
+updated features and community support, with minimal design as
+well. We believe it can give you better experience.
 
-Deepin Emacs’s target is to build a development environment that users don’t need to config elisp code line by line.
-Deepin Emacs provides below features:
+Deepin Emacs’s target is to build a development environment that users
+don’t need to config elisp code line by line, all configurations are
+initially prepared.  Deepin Emacs provides below features:
 
-- Code auto completion with most languages. (by autocomplete extensions)
+- Code auto completion with most languages. (by corfu extension and complete-at-point feature)
 - Code template system. (by yasnippet extension)
-- Anything search system. (by helm extensions)
-- Auto save when figure idle.
-- Line number support. (by linum extension)
-- Kill ring search. (by kill-ring-search extension)
-- File manager. (by dired extension)
+- Anything search system. (by consult extension)
+- Kill ring search. (by consult extension)
+- File manager. (by dirvish extension)
 - Music player. (by emms extensions)
 - Pdf viewer. (by doc-view extension)
-- Irc client. (by rcirc and erc extension)
+- Irc client. (by erc extension)
 - Minibuffer tray and disable fringe. (by minibuffer-tray extension)
-- Oddmuse wiki editor. (by yaoddmuse extension)
-- Remember window position. (by winpoint extension)
-- Web browser. (by w3m extension)
-- Code speed bar. (by speedbar extension)
-- Tab manager. (by tabbar extension)
-- Terminal manager. (by multi-term extension)
-- Powerful syntax edit. (by paredit extension)
-- One key system. (by one-key extensions)
-- Point translate system. (by sdcv extension)
+- Web browser. (by eww extension)
+- Tab manager. (by awesome-tab extension)
+- Powerful syntax edit. (by electric-pair extension)
 - Org GTD manager. (by org extensions)
-- News reader. (by newsticker extension)
-- Code search and replace. (by moccur extension)
-- RFC reader. (by irfc extension)
-- Edit multiple regions in the same way simultaneously. (by iedit.el)
-- Quick global jump. (by ace-jump extension)
-- Apt search. (by apt-utils extension)
+- News reader. (by gnus extension)
+- Code search and replace.
+- Quick global jump. (by isearch and consult extension)
 - Man manual reader. (by woman extension)
-- IDE features. (by ecb extension)
+- Project navigator. (by treemacs extension)
 - API document helper. (by eldoc extension)
 - Tag search. (by etags extension)
-- Fly make checker. (by flymake extension)
+- Code checker. (by flycheck extension)
 - Git manage. (by magit extension)
 - Mailing reader. (by gnus extension)
-- Code function expander. (by hideshow extension)
-- Command completion. (by icicles extensions)
+- Code folding. (by yafolding extension)
+- Command completion. (by vertico and orderless extensions)
 - Info reader. (by info extension)
-- Vi-reader. (by less extension)
-- Elisp package manager. (by auto-install and package extension)
-- Regex real-time matcher. (by rebuilder extension)
+- Elisp package manager. (by use-package and package extension)
+- Regex real-time matcher. (by consult extension)
 - Smooth scroll. (by smooth-scrolling extension)
-- Donkey download manager. (by mldonkey extension)
-- English completion helper. (by predictive extension)
-- Webkit browser. (by webkit extension)
 
 ## Dependencies
 
-### Build dependencies
+### Packaging dependencies
 
- - build-essential (>= 12.1)
- - git (>= 1:2.6.2-1)
- - autoconf (>= 2.69-9)
- - texinfo (>= 6.0.0.dfsg.1-3)
+ - debhelper
+ - dh-autoreconf
+ - devscripts
+ - build-essential
+ - git
+ - autoconf
+ - texinfo
+ - libxaw7-dev
+ - libxpm-dev
+ - libpng12-dev
+ - libjpeg-dev
+ - libtiff5-dev
+ - libgif-dev
+ - libncurses5-dev
+ - libdbus-1-dev
+ - libgtk-3-dev
+ - libgnutls28-dev
+ - librsvg2-common
  - libtree-sitter-dev
+ - gcc-14
+ - libgccjit-14-dev
+ - sbcl
+ - emacs
 
 ### Runtime dependencies
 
- - libxaw7-dev (>= 2:1.0.13-1)
- - libxpm-dev (>= 1:3.5.11-1)
- - libpng12-dev (>= 1.2.50-2)
- - libjpeg-dev (>= 1:1.4.1-2)
- - libtiff5-dev (>= 4.0.5-1)
- - libgif-dev (>= 4.1.6-11)
- - libncurses5-dev (>= 6.0+20151024-2)
- - libdbus-1-dev (>= 1.10.2-1)
- - libgtk-3-dev (>= 3.18.4-1)
+ - gcc-14
  - libgccjit0
- - libgnutls28-dev
- - librsvg2-common
  - ripgrep
- - w3m (>= 0.5.3-25)
- - w3m-img (>= 0.5.3-25)
- - pyflakes (>= 1.0.0-4）
- - locate (>= 4.4.2-10)
+ - locate
 
 ## Install rtags for C/C++
 git clone --recursive https://github.com/Andersbakken/rtags.git
@@ -93,9 +85,9 @@ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
 make
 sudo make install
 
-## Installation
+## Packaging
 
-### Debian 8.0 (jessie)
+### Debian-like system
 
 Install prerequisites
 ```
@@ -113,32 +105,20 @@ $ sudo apt-get install \
                libncurses5-dev \
                libdbus-1-dev \
                libgtk-3-dev \
+               gcc-14 \
                libgccjit0 \
                libgnutls28-dev \
-               w3m \
-               w3m-img \
-               python3-pyflakes \
-               elpa-pdf-tools-server \
-               locate
-```
-```
-$ sudo apt-get install python3-pip && sudo pip install jedi epc mocker --break-system-packages
+               librsvg2-common \
+               sbcl \
+               ripgrep \
+               locate \
+               fakeroot \
+               devscripts
 ```
 
-Compile emacs git
+Run `debuild`
 ```
-$ sudo mkdir -p /usr/share/deepin-emacs/common
-$ cd ./emacs-git && ./autogen.sh
-$ ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 && make && sudo make install
-```
-
-Install Deepin emacs
-```
-$ sudo cp ./site-start.el /usr/share/deepin-emacs/common/share/emacs/site-lisp/
-$ sudo cp -r ./site-lisp /usr/share/deepin-emacs
-$ sudo ln -s /usr/share/deepin-emacs/common/bin/emacs /usr/bin/deepin-emacs
-$ sudo cp ./deepin-emacs.svg /usr/share/icons/hicolor/scalable/apps/
-$ sudo cp ./deepin-emacs.desktop /usr/share/applications/
+cd deepin-emacs && debuild 
 ```
 
 ## Usage
