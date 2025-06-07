@@ -1,4 +1,4 @@
-;;; deepin-emacs --- Summary -*- lexical-binding: t -*-
+;; deepin-emacs --- Summary -*- lexical-binding: t -*-
 ;; Emacs in deepin package.
 
 ;;; Commentary:
@@ -10,11 +10,10 @@
 
 
 ;;; PATH problem
+
 (use-package exec-path-from-shell
   :ensure t
-  :config
-  (when (memq window-system '(mac ns x))
-    (exec-path-from-shell-initialize)))
+  :config (exec-path-from-shell-initialize))
 
 
 ;;; Emacs default settings
@@ -38,11 +37,13 @@
 (put 'upcase-region 'disabled nil)
 (put 'downcase-region 'disabled nil)
 
-(when (executable-find "rg")
-  (setq xref-search-program 'ripgrep))
+(use-package xref
+  :config (when (executable-find "rg")
+            (setq xref-search-program 'ripgrep)))
 
-(auto-save-mode 1)
-(setq auto-save-timeout 5)
+(use-package auto-save
+  :hook (after-init . auto-save-mode)
+  :config (setq auto-save-timeout 5))
 
 (setq fast-but-imprecise-scrolling t
       scroll-conservatively 101
@@ -126,7 +127,7 @@
          ("M-g e" . consult-compile-error)
          ("M-g f" . consult-flycheck)               ;; Alternative: consult-flycheck
          ("M-g g" . consult-goto-line)             ;; orig. goto-line
-         ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+         ("M-g M-g" . consult-goto-Line)           ;; orig. goto-line
          ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
          ("M-g m" . consult-mark)
          ("M-g k" . consult-global-mark)
@@ -243,8 +244,8 @@
   :ensure t
   :after marginalia
   :config
-  (nerd-icons-completion-mode 1)
-  (add-hook 'marginalia-mode-hook #'nerd-icons-completion-marginalia-setup))
+  (add-hook 'after-init-hook 'nerd-icons-completion-mode)
+  (add-hook 'marginalia-mode-hook 'nerd-icons-completion-marginalia-setup))
 
 (use-package nerd-icons-corfu
   :if window-system
@@ -259,8 +260,7 @@
 (use-package nerd-icons-dired
   :if window-system
   :ensure t
-  :hook
-  (dired-mode . nerd-icons-dired-mode))
+  :hook (dired-mode . nerd-icons-dired-mode))
 (use-package treemacs-nerd-icons
   :if window-system
   :ensure t
@@ -273,7 +273,7 @@
 ;; Scrolling
 (use-package ultra-scroll
   :init (unless (package-installed-p 'ultra-scroll) (package-vc-install "https://github.com/jdtsmith/ultra-scroll"))
-  :config (ultra-scroll-mode 1))
+  :hook (after-init . ultra-scroll-mode))
 
 ;; Extra info
 (use-package anzu
@@ -298,59 +298,62 @@
 
 (use-package which-key
   :ensure t
-  :config (which-key-mode 1))
+  :hook (after-init . which-key-mode))
 
 (use-package marginalia
   :ensure t
-  :config (marginalia-mode 1))
+  :hook (after-init . marginalia-mode))
 
 ;; Prettifier
 
 (use-package page-break-lines
   :if window-system
   :ensure t
-  :config (global-page-break-lines-mode 1))
+  :hook (after-init . global-page-break-lines-mode))
 
 (use-package highlight-thing
   :if window-system
   :ensure t
+  :hook (after-init . global-highlight-thing-mode)
   :config
-  (global-highlight-thing-mode 1)
   (setq highlight-thing-delay-seconds 0
         highlight-thing-excluded-major-modes '(dired-mode)))
 
 (use-package symbol-overlay
   :ensure t
-  :config
-  (add-hook 'fundamental-mode-hook 'symbol-overlay-mode)
-  (global-set-key (kbd "C-<") 'symbol-overlay-jump-prev)
-  (global-set-key (kbd "C->") 'symbol-overlay-jump-next))
+  :hook (fundamental . symbol-overlay-mode)
+  :bind (("C-<" . symbol-overlay-jump-prev)
+         ("C->" . symbol-overlay-jump-next)))
 
 (use-package highlight-indent-guides
   :ensure t
-  :config
-  (add-hook 'prog-mode-hook 'highlight-indent-guides-mode))
+  :hook (prog-mode . highlight-indent-guides-mode)
+  :config (setq highlight-indent-guides-method 'bitmap
+                highlight-indent-guides-bitmap-function 'highlight-indent-guides--bitmap-line
+                highlight-indent-guides-auto-odd-face-perc 60
+                highlight-indent-guides-auto-even-face-perc 30
+                highlight-indent-guides-auto-character-face-perc 90))
 
 ;; Posframe
 
 (use-package company-posframe
   :if window-system
   :ensure t
-  :config (company-posframe-mode 1))
+  :hook (after-init . company-posframe-mode))
 (use-package vertico-posframe
   :if window-system
   :ensure t
-  :config (vertico-posframe-mode 1))
+  :hook (after-init . vertico-posframe-mode))
 
 (use-package which-key-posframe
   :if window-system
   :ensure t
-  :config (which-key-posframe-mode 1))
+  :hook (after-init . which-key-posframe-mode))
 
 (use-package flycheck-posframe
   :ensure t
   :after flycheck
-  :config (flycheck-posframe-mode 1))
+  :hook (after-init . flycheck-posframe-mode))
 
 (use-package transient-posframe
   :if window-system
@@ -370,7 +373,7 @@
 (use-package awesome-tab
   :init (unless (package-installed-p 'awesome-tab) (package-vc-install "https://github.com/apr3vau/awesome-tab"))
   :after nerd-icons
-  :config (awesome-tab-mode 1))
+  :hook (after-init . awesome-tab-mode))
 
 (use-package hide-mode-line
   :ensure t
@@ -386,11 +389,11 @@
 (use-package doom-modeline
   :if window-system
   :ensure t
-  :config (doom-modeline-mode 1))
+  :hook (after-init . doom-modeline-mode))
 
 (use-package minions
   :ensure t
-  :config (minions-mode 1))
+  :hook (after-init . minions-mode))
 
 ;; Ligatures
 ;; From Centaur
@@ -444,6 +447,15 @@
   :config
   (dashboard-setup-startup-hook)
   (setq dashboard-center-content t))
+
+(use-package ace-window
+  :ensure t
+  :custom-face
+  (aw-leading-char-face ((t (:inherit font-lock-keyword-face :foreground unspecified :bold t :height 3.0))))
+  (aw-minibuffer-leading-char-face ((t (:inherit font-lock-keyword-face :bold t :height 1.0))))
+  (aw-mode-line-face ((t (:inherit mode-line-emphasis :bold t))))
+  :bind (([remap other-window] . ace-window))
+  :hook (emacs-startup . ace-window-display-mode))
 
 ;; (add-to-list 'load-path (expand-file-name "~/.emacs.d/elpa/awesome-tab/"))
 
@@ -510,18 +522,15 @@
   :ensure t
   :config (global-set-key (kbd "C-=") 'er/expand-region))
 
+(use-package rainbow-delimiters
+  :ensure t
+  :hook (prog-mode . rainbow-delimiters-mode))
+
 (use-package yasnippet
   :ensure t
   :config
   (yas-global-mode)
   (global-set-key (kbd "C-x y") 'yas-insert-snippet))
-
-(use-package markdown-mode
-  :ensure t
-  :mode ("README\\.md\\'" . gfm-mode)
-  :init (setq markdown-command "multimarkdown")
-  :bind (:map markdown-mode-map
-	      ("C-c C-e" . markdown-do)))
 
 ;; Lisp
 
@@ -548,6 +557,12 @@
   :config (lisp-extra-font-lock-global-mode 1))
 
 ;; Others
+(use-package markdown-mode
+  :ensure t
+  :mode ("README\\.md\\'" . gfm-mode)
+  :init (setq markdown-command "multimarkdown")
+  :bind (:map markdown-mode-map
+	      ("C-c C-e" . markdown-do)))
 (use-package cmake-mode
   :ensure t
   )
@@ -571,31 +586,203 @@
   )
 (use-package web-mode
   :ensure t
-  )
+  :mode
+  (("\\.html\\'" . web-mode)
+   ("\\.phtml\\'" . web-mode)
+   ("\\.php\\'" . web-mode)
+   ("\\.tpl\\'" . web-mode)
+   ("\\.[agj]sp\\'" . web-mode)
+   ("\\.as[cp]x\\'" . web-mode)
+   ("\\.erb\\'" . web-mode)
+   ("\\.mustache\\'" . web-mode)
+   ("\\.djhtml\\'" . web-mode)))
 
 
 ;; LSP
 ;; From Centaur
-(use-package eglot
+(use-package lsp-mode
   :ensure t
-  :hook ((prog-mode . (lambda ()
-                        (unless (derived-mode-p
-                                 'emacs-lisp-mode 'lisp-mode
-                                 'makefile-mode 'snippet-mode
-                                 'ron-mode)
-                          (eglot-ensure))))
-         ((markdown-mode yaml-mode yaml-ts-mode) . eglot-ensure))
-  :init
+  :diminish
+  :defines (lsp-diagnostics-disabled-modes lsp-clients-python-library-directories)
+  :autoload lsp-enable-which-key-integration
+  :commands (lsp-format-buffer lsp-organize-imports)
+  :preface
+  ;; Performace tuning
+  ;; @see https://emacs-lsp.github.io/lsp-mode/page/performance/
   (setq read-process-output-max (* 1024 1024)) ; 1MB
-  (setq eglot-autoshutdown t
-        eglot-events-buffer-size 0
-        eglot-send-changes-idle-time 0.5))
+  (setenv "LSP_USE_PLISTS" "true")
+  :hook ((prog-mode . (lambda ()
+                        (unless (derived-mode-p 'emacs-lisp-mode 'lisp-mode 'makefile-mode 'snippet-mode)
+                          (lsp-deferred))))
+         ((markdown-mode yaml-mode yaml-ts-mode) . lsp-deferred))
+  :bind (:map lsp-mode-map
+              ("C-c C-d" . lsp-describe-thing-at-point)
+              ([remap xref-find-definitions] . lsp-find-definition)
+              ([remap xref-find-references] . lsp-find-references))
+  :init (setq lsp-use-plists t
 
-(use-package consult-eglot
+              lsp-keymap-prefix "C-c l"
+              lsp-keep-workspace-alive nil
+              lsp-signature-auto-activate nil
+              lsp-modeline-code-actions-enable nil
+              lsp-modeline-diagnostics-enable nil
+              lsp-modeline-workspace-status-enable nil
+
+              lsp-semantic-tokens-enable t
+              lsp-progress-spinner-type 'progress-bar-filled
+
+              lsp-enable-file-watchers nil
+              lsp-enable-folding nil
+              lsp-enable-symbol-highlighting nil
+              lsp-enable-text-document-color nil
+
+              lsp-enable-indentation nil
+              lsp-enable-on-type-formatting nil
+
+              ;; For diagnostics
+              lsp-diagnostics-disabled-modes '(markdown-mode gfm-mode)
+
+              ;; For clients
+              lsp-clients-python-library-directories '("/usr/local/" "/usr/"))
+  :config
+  (use-package consult-lsp
+    :ensure t
+    :bind (:map lsp-mode-map
+                ("C-M-." . consult-lsp-symbols)))
+
+  (with-no-warnings
+
+    ;; Disable `lsp-mode' in `git-timemachine-mode'
+    (defun my-lsp--init-if-visible (fn &rest args)
+      (unless (bound-and-true-p git-timemachine-mode)
+        (apply fn args)))
+    (advice-add #'lsp--init-if-visible :around #'my-lsp--init-if-visible)
+
+    ;; Enable `lsp-mode' in sh/bash/zsh
+    (defun my-lsp-bash-check-sh-shell (&rest _)
+      (and (memq major-mode '(sh-mode bash-ts-mode))
+           (memq sh-shell '(sh bash zsh))))
+    (advice-add #'lsp-bash-check-sh-shell :override #'my-lsp-bash-check-sh-shell)
+    (add-to-list 'lsp-language-id-configuration '(bash-ts-mode . "shellscript"))))
+
+(use-package lsp-ui
   :ensure t
-  :after consult eglot
-  :bind (:map eglot-mode-map
-              ("C-M-." . consult-eglot-symbols)))
+  :custom-face
+  (lsp-ui-sideline-code-action ((t (:inherit warning))))
+  :bind (("C-c u" . lsp-ui-imenu)
+         :map lsp-ui-mode-map
+         ("s-<return>" . lsp-ui-sideline-apply-code-actions)
+         ([remap xref-find-definitions] . lsp-ui-peek-find-definitions)
+         ([remap xref-find-references] . lsp-ui-peek-find-references))
+  :hook (lsp-mode . lsp-ui-mode)
+  :init
+  (setq lsp-ui-sideline-show-diagnostics nil
+        lsp-ui-sideline-ignore-duplicate t
+        lsp-ui-sideline-show-hover nil
+        lsp-ui-sideline-show-symbol nil
+        lsp-ui-doc-delay 0.1
+        lsp-ui-doc-show-with-cursor t
+        lsp-ui-imenu-auto-refresh 'after-save
+        lsp-ui-imenu-colors `(,(face-foreground 'font-lock-keyword-face)
+                              ,(face-foreground 'font-lock-string-face)
+                              ,(face-foreground 'font-lock-constant-face)
+                              ,(face-foreground 'font-lock-variable-name-face)))
+  :config
+  (with-no-warnings
+    ;; Display peek in child frame if possible
+    ;; @see https://github.com/emacs-lsp/lsp-ui/issues/441
+    (defvar lsp-ui-peek--buffer nil)
+    (defun lsp-ui-peek--peek-display (fn src1 src2)
+      (if window-system
+          (let* ((win-width (frame-width))
+                 (lsp-ui-peek-list-width (/ (frame-width) 2))
+                 (string (-some--> (-zip-fill "" src1 src2)
+                           (--map (lsp-ui-peek--adjust win-width it) it)
+                           (-map-indexed 'lsp-ui-peek--make-line it)
+                           (-concat it (lsp-ui-peek--make-footer)))))
+            (setq lsp-ui-peek--buffer (get-buffer-create " *lsp-peek--buffer*"))
+            (posframe-show lsp-ui-peek--buffer
+                           :string (mapconcat 'identity string "")
+                           :min-width (frame-width)
+                           :internal-border-color (face-background 'posframe-border nil t)
+                           :internal-border-width 1
+                           :poshandler #'posframe-poshandler-frame-center))
+        (funcall fn src1 src2)))
+    (defun lsp-ui-peek--peek-destroy (fn)
+      (if window-system
+          (progn
+            (when (bufferp lsp-ui-peek--buffer)
+              (posframe-hide lsp-ui-peek--buffer))
+            (setq lsp-ui-peek--last-xref nil))
+        (funcall fn)))
+    (advice-add #'lsp-ui-peek--peek-new :around #'lsp-ui-peek--peek-display)
+    (advice-add #'lsp-ui-peek--peek-hide :around #'lsp-ui-peek--peek-destroy)
+
+    ;; Handle docs
+    (defun my-lsp-ui-doc--handle-hr-lines nil
+      (let (bolp next before after)
+        (goto-char 1)
+        (while (setq next (next-single-property-change (or next 1) 'markdown-hr))
+          (when (get-text-property next 'markdown-hr)
+            (goto-char next)
+            (setq bolp (bolp)
+                  before (char-before))
+            (delete-region (point) (save-excursion (forward-visible-line 1) (point)))
+            (setq after (char-after (1+ (point))))
+            (insert
+             (concat
+              (and bolp (not (equal before ?\n)) (propertize "\n" 'face '(:height 0.5)))
+              (propertize "\n" 'face '(:height 0.5))
+              (propertize " "
+                          ;; :align-to is added with lsp-ui-doc--fix-hr-props
+                          'display '(space :height (1))
+                          'lsp-ui-doc--replace-hr t
+                          'face `(:background ,(face-foreground 'font-lock-comment-face nil t)))
+              ;; :align-to is added here too
+              (propertize " " 'display '(space :height (1)))
+              (and (not (equal after ?\n)) (propertize " \n" 'face '(:height 0.5)))))))))
+    (advice-add #'lsp-ui-doc--handle-hr-lines :override #'my-lsp-ui-doc--handle-hr-lines)))
+
+;; `lsp-mode' and `treemacs' integration
+(use-package lsp-treemacs
+  :ensure t
+  :after lsp-mode
+  :bind (:map lsp-mode-map
+              ("C-<f8>" . lsp-treemacs-errors-list)
+              ("M-<f8>" . lsp-treemacs-symbols)
+              ("s-<f8>" . lsp-treemacs-java-deps-list))
+  :config
+  (lsp-treemacs-sync-mode 1)
+  (with-eval-after-load 'ace-window
+    (when (boundp 'aw-ignored-buffers)
+      (push 'lsp-treemacs-symbols-mode aw-ignored-buffers)
+      (push 'lsp-treemacs-java-deps-mode aw-ignored-buffers))))
+
+;; Python
+(use-package lsp-pyright
+  :ensure t
+  :preface (((python-mode python-ts-mode) . (lambda ()
+                                              (require 'lsp-pyright)
+                                              (add-hook 'after-save-hook #'lsp-pyright-format-buffer t t))))
+  :init
+  (when (executable-find "python3")
+    (setq lsp-pyright-python-executable-cmd "python3"))
+
+  (defun lsp-pyright-format-buffer ()
+    "Use `yapf' to format the buffer."
+    (interactive)
+    (when (and (executable-find "yapf") buffer-file-name)
+      (call-process "yapf" nil nil nil "-i" buffer-file-name))))
+
+;; Julia
+(use-package lsp-julia
+  :ensure t
+  :hook (julia-mode . (lambda () (require 'lsp-julia))))
+
+;; Java
+(use-package lsp-java
+  :ensure t
+  :hook ((java-mode java-ts-mode jdee-mode) . (lambda () (require 'lsp-java))))
 
 
 ;; Media

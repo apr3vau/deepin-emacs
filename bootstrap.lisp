@@ -35,8 +35,9 @@
 (format t "[Lisp] Cleaning old elpa/ and old ~~/.emacs.d/...~&")
 (when (probe-file "./site-lisp/elpa/")
   (delete-directory "./site-lisp/elpa/" :recursive t))
-(when (probe-file "~/.emacs.d/")
-  (delete-directory "~/.emacs.d/" :recursive t))
+(when (and (probe-file "~/.emacs.d")
+           (not (probe-file "~/.emacs.d.bak")))
+  (rename-file "~/.emacs.d" "~/.emacs.d.bak"))
 (ensure-directories-exist "~/.emacs.d/")
 (ensure-directories-exist "site-lisp/")
 
@@ -61,5 +62,7 @@
 
 (format t "[Lisp] Remove ~~/.emacs.d/ to avoid local conflict...~&")
 (delete-directory "~/.emacs.d/" :recursive t)
+(when (probe-file "~/.emacs.d.bak")
+  (rename-file "~/.emacs.d.bak" "~/.emacs.d"))
 
 (format t "[Lisp] Lisp script finished.~&")
