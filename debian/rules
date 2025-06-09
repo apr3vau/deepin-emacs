@@ -1,0 +1,29 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+#export DH_VERBOSE=1
+
+%:
+	dh $@ --with autoreconf
+
+SRCDIR = $(CURDIR)/emacs-git
+
+override_dh_autoreconf:
+	git clone --depth 1 --branch "emacs-30.1.90" "https://github.com/emacs-mirror/emacs.git" $(SRCDIR)
+	cd $(SRCDIR) && export CC="gcc-12" && ./autogen.sh
+
+override_dh_auto_configure:
+	cd $(SRCDIR) && export CC="gcc-12" && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter --with-native-compilation=aot
+
+override_dh_auto_build:
+	cd $(SRCDIR) && make -j6
+	cd $(CURDIR) && sbcl --script bootstrap.lisp
+
+override_dh_auto_install:
+	dh_auto_install
+	cd $(SRCDIR) && make DESTDIR=$(CURDIR)/debian/deepin-emacs/ install  
+	mkdir -p debian/deepin-emacs/usr/bin
+
+override_dh_clean:
+	dh_clean
+	rm -rf $(CURDIR)/site-lisp
+	rm -rf $(SRCDIR)
