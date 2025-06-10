@@ -64,26 +64,17 @@ initially prepared.  Deepin Emacs provides below features:
  - libgnutls28-dev
  - librsvg2-common
  - libtree-sitter-dev
- - gcc-14
- - libgccjit-14-dev
+ - gcc-12
+ - libgccjit-12-dev
  - sbcl
  - emacs
 
 ### Runtime dependencies
 
- - gcc-14
+ - gcc-12
  - libgccjit0
  - ripgrep
  - locate
-
-## Install rtags for C/C++
-git clone --recursive https://github.com/Andersbakken/rtags.git
-cd rtags
-mkdir build
-cd build
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ..
-make
-sudo make install
 
 ## Packaging
 
@@ -105,7 +96,17 @@ $ sudo apt-get install \
                libncurses5-dev \
                libdbus-1-dev \
                libgtk-3-dev \
-               gcc-14 \
+               libgpm-dev \
+               libasound2-dev \
+               libm17n-dev \
+               libotf-dev \
+               xaw3dg-dev \
+               liblockfile-dev \
+               sharutils \
+               librsvg2-dev \
+               libtree-sitter-dev \
+               gcc-12 \
+               libgccjit-12-dev \
                libgccjit0 \
                libgnutls28-dev \
                librsvg2-common \
@@ -136,13 +137,6 @@ Any usage issues can ask for help via
 * [IRC channel](https://webchat.freenode.net/?channels=deepin)
 * [Forum](https://bbs.deepin.org)
 * [WiKi](http://wiki.deepin.org/)
-
-## Getting involved
-
-We encourage you to report issues and contribute changes
-
-* [Contribution guide for users](http://wiki.deepin.org/index.php?title=Contribution_Guidelines_for_Users)
-* [Contribution guide for developers](http://wiki.deepin.org/index.php?title=Contribution_Guidelines_for_Developers).
 
 ## License
 
