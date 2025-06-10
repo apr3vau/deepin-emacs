@@ -6,7 +6,6 @@
 ;;; Code:
 (require 'package)
 (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
-(setq native-comp-speed -1)
 
 
 ;;; PATH problem
