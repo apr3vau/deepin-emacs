@@ -12,12 +12,11 @@ override_dh_autoreconf:
 	cd $(SRCDIR) && export CC="gcc-12" && ./autogen.sh
 
 override_dh_auto_configure:
-	cd $(SRCDIR) && export CC="gcc-12" && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter --with-native-compilation=aot
+	cd $(SRCDIR) && export CC="gcc-12" && ./configure --prefix=/usr/share/deepin-emacs/common --with-x-toolkit=gtk3 --without-xim --with-tree-sitter --with-native-compilation=yes
 
 override_dh_auto_build:
-	cd $(CURDIR) && bash bootstrap.sh
 	cd $(SRCDIR) && make -j6
-	#cd $(CURDIR) && sbcl --script bootstrap.lisp
+	cd $(CURDIR) && bash bootstrap.sh
 
 override_dh_auto_install:
 	dh_auto_install

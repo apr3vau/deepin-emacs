@@ -66,7 +66,6 @@ initially prepared.  Deepin Emacs provides below features:
  - libtree-sitter-dev
  - gcc-12
  - libgccjit-12-dev
- - sbcl
  - emacs
 
 ### Runtime dependencies
@@ -110,7 +109,6 @@ $ sudo apt-get install \
                libgccjit0 \
                libgnutls28-dev \
                librsvg2-common \
-               sbcl \
                ripgrep \
                locate \
                fakeroot \
