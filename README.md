@@ -112,7 +112,8 @@ $ sudo apt-get install \
                ripgrep \
                locate \
                fakeroot \
-               devscripts
+               devscripts \
+               emacs
 ```
 
 Run `debuild`
