@@ -77,7 +77,7 @@ initially prepared.  Deepin Emacs provides below features:
 
 ## Packaging
 
-### Debian-like system
+### deepin
 
 Install prerequisites
 ```
@@ -123,7 +123,7 @@ cd deepin-emacs && debuild
 
 ## Usage
 
-Run deepin emacs with the command below
+Run deepin-emacs with the command below
 ```
 $ deepin-emacs
 ```
