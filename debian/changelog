@@ -2,7 +2,7 @@ deepin-emacs (3.0+r2) unstable; urgency=medium
 
   * Bump version
 
- -- April Lu <apr3vau@outlook.com>  Fri, 30 May 2025 12:30:00 +0800
+ -- Deepin Packages Builder <jenkins@56c93f500729>  Fri, 30 May 2025 12:30:00 +0800
 
 deepin-emacs (3.0+r1) UNRELEASED; urgency=medium
 
